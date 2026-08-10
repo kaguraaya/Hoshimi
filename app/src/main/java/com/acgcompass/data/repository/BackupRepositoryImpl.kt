@@ -9,6 +9,7 @@ import com.acgcompass.data.backup.BackupEnvelope
 import com.acgcompass.data.backup.BackupMerger
 import com.acgcompass.data.backup.BackupSerializer
 import com.acgcompass.data.backup.CsvExporter
+import com.acgcompass.data.backup.RatedWorkCsvRow
 import com.acgcompass.data.backup.TasteTagCsvRow
 import com.acgcompass.data.backup.toBackup
 import com.acgcompass.data.backup.toEntity
@@ -158,7 +159,11 @@ class BackupRepositoryImpl @Inject constructor(
                     val titles = envelope.works.associate { it.id to it.canonicalTitle }
                     CsvExporter.exportBacklog(envelope.backlog, titles)
                 }
-                CsvKind.RATINGS -> CsvExporter.exportPersonalRatings(envelope.userCollections)
+                CsvKind.RATINGS -> {
+                    val titles = envelope.works.associate { it.id to it.canonicalTitle }
+                    CsvExporter.exportPersonalRatings(envelope.userCollections, titles)
+                }
+                CsvKind.RATED_WORKS -> CsvExporter.exportRatedWorks(envelope.toRatedWorkCsvRows())
                 CsvKind.TIME_MACHINE -> {
                     val titles = envelope.works.associate { it.id to it.canonicalTitle }
                     CsvExporter.exportTimeMachine(
@@ -244,14 +249,6 @@ class BackupRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun parseFeatureTags(json: String): List<Pair<String, Int>> = runCatching {
-        Json.parseToJsonElement(json).jsonArray.mapNotNull { element ->
-            val value = element.jsonObject
-            val name = value["name"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-            name to (value["count"]?.jsonPrimitive?.intOrNull ?: 0)
-        }
-    }.getOrDefault(emptyList())
-
     private data class TasteTagAggregate(
         val rawTag: String,
         val workIds: MutableSet<String> = linkedSetOf(),
@@ -284,3 +281,41 @@ class BackupRepositoryImpl @Inject constructor(
         tagDimensionDao.upsertAll(envelope.tagDimensions.map { it.toEntity() })
     }
 }
+
+internal fun BackupEnvelope.toRatedWorkCsvRows(): List<RatedWorkCsvRow> {
+    val worksById = works.associateBy { it.id }
+    val tagNamesById = tags.associate { it.id to it.name }
+    val tagsByWork = linkedMapOf<String, MutableSet<String>>()
+
+    workTags.forEach { link ->
+        val name = tagNamesById[link.tagId]?.trim()?.takeIf(String::isNotEmpty) ?: return@forEach
+        tagsByWork.getOrPut(link.workId) { linkedSetOf() }.add(name)
+    }
+    workFeatures.forEach { feature ->
+        val workTagNames = tagsByWork.getOrPut(feature.subjectId) { linkedSetOf() }
+        parseFeatureTags(feature.tagCountsJson).forEach { (name, _) ->
+            name.trim().takeIf(String::isNotEmpty)?.let(workTagNames::add)
+        }
+    }
+
+    return userCollections.mapNotNull { collection ->
+        val rating = collection.rating ?: return@mapNotNull null
+        val workId = collection.localWorkId
+        val work = worksById[workId] ?: worksById[collection.sourceItemId]
+        RatedWorkCsvRow(
+            workId = workId,
+            title = work?.canonicalTitle?.takeIf(String::isNotBlank) ?: workId,
+            rating = rating,
+            sourceUpdatedAt = collection.sourceUpdatedAt?.takeIf(String::isNotBlank),
+            tags = (tagsByWork[workId].orEmpty() + tagsByWork[collection.sourceItemId].orEmpty()).distinct(),
+        )
+    }
+}
+
+private fun parseFeatureTags(json: String): List<Pair<String, Int>> = runCatching {
+    Json.parseToJsonElement(json).jsonArray.mapNotNull { element ->
+        val value = element.jsonObject
+        val name = value["name"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+        name to (value["count"]?.jsonPrimitive?.intOrNull ?: 0)
+    }
+}.getOrDefault(emptyList())

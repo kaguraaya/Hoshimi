@@ -38,14 +38,14 @@ interface BackupRepository {
     /**
      * 导出指定数据表为 CSV 文本；不包含任何凭据。
      *
-     * @param kind 要导出的表（待补池 / 评分 / 时光机变更）。
+     * @param kind 要导出的数据类型。
      * @return 成功时为 CSV 文本；失败时为 [AppResult.Failure]。
      */
     suspend fun exportCsv(kind: CsvKind): AppResult<String>
 }
 
 /** CSV 导出的数据表种类。 */
-enum class CsvKind { BACKLOG, RATINGS, TIME_MACHINE, TASTE_PROFILE }
+enum class CsvKind { BACKLOG, RATINGS, RATED_WORKS, TIME_MACHINE, TASTE_PROFILE }
 
 /**
  * 导入合并结果报告。

@@ -58,13 +58,17 @@ object CsvExporter {
     }
 
     /** 个人评分 CSV。公共来源评分不混入，避免把聚合评分误认为用户自己的记录。 */
-    fun exportPersonalRatings(collections: List<BackupUserCollection>): String {
-        val header = listOf("作品ID", "来源", "个人评分", "状态", "短评", "同步时间")
+    fun exportPersonalRatings(
+        collections: List<BackupUserCollection>,
+        titlesById: Map<String, String> = emptyMap(),
+    ): String {
+        val header = listOf("作品ID", "作品名", "来源", "个人评分", "状态", "短评", "同步时间")
         val rows = collections
             .filter { it.rating != null || !it.comment.isNullOrBlank() }
             .map { collection ->
                 listOf(
                     collection.localWorkId,
+                    titlesById[collection.localWorkId].orEmpty(),
                     collection.source,
                     collection.rating?.toString().orEmpty(),
                     collection.status.orEmpty(),
@@ -74,6 +78,22 @@ object CsvExporter {
             }
         return buildCsv(header, rows)
     }
+
+    /** 已评分作品明细。评分时间只使用来源记录时间，不以本地导入或同步时间代替。 */
+    fun exportRatedWorks(rows: List<RatedWorkCsvRow>): String = buildCsv(
+        header = listOf("作品ID", "作品名", "个人评分", "评分时间（来源记录）", "标签名"),
+        rows = rows
+            .sortedWith(compareBy<RatedWorkCsvRow> { it.title }.thenBy { it.sourceUpdatedAt.orEmpty() })
+            .map { row ->
+                listOf(
+                    row.workId,
+                    row.title,
+                    row.rating.toString(),
+                    row.sourceUpdatedAt.orEmpty(),
+                    row.tags.distinct().sorted().joinToString("、"),
+                )
+            },
+    )
 
     /** 时光机 CSV 同时包含当前基线、快照和真实变更，确保页面有基线内容时导出不为空。 */
     fun exportTimeMachine(
@@ -210,4 +230,12 @@ data class TasteTagCsvRow(
     val lowScoreCount: Int,
     val inPersonalSnapshot: Boolean,
     val updatedAt: Long,
+)
+
+data class RatedWorkCsvRow(
+    val workId: String,
+    val title: String,
+    val rating: Int,
+    val sourceUpdatedAt: String?,
+    val tags: List<String>,
 )

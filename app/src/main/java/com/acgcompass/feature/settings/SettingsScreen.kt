@@ -372,6 +372,7 @@ private fun rememberSettingsActions(
                     val name = when (kind) {
                         com.acgcompass.domain.repository.CsvKind.BACKLOG -> "hoshimi-backlog.csv"
                         com.acgcompass.domain.repository.CsvKind.RATINGS -> "hoshimi-ratings.csv"
+                        com.acgcompass.domain.repository.CsvKind.RATED_WORKS -> "hoshimi-rated-works.csv"
                         com.acgcompass.domain.repository.CsvKind.TIME_MACHINE -> "hoshimi-timemachine.csv"
                         com.acgcompass.domain.repository.CsvKind.TASTE_PROFILE -> "hoshimi-taste-profile.csv"
                     }
@@ -1362,6 +1363,10 @@ private fun DataManagementActions(actions: SettingsActions) {
         onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.RATINGS) },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("导出 CSV · 评分", maxLines = 1) }
+    OutlinedButton(
+        onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.RATED_WORKS) },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("导出 CSV · 已评分作品", maxLines = 1) }
     OutlinedButton(
         onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.TIME_MACHINE) },
         modifier = Modifier.fillMaxWidth(),
