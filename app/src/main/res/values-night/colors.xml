@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 启动窗口底色（暗色）取品牌深色 surface，避免冷启动时闪现亮色。 -->
+    <color name="launch_background">#12131A</color>
+    <!-- 图标底色（暗夜）：黑。大四芒主体在黑底上反色为白（承接 F 图标重设计）。 -->
+    <color name="ic_launcher_background">#12131A</color>
+
+    <!-- 原生 SplashScreen 配色（暗色）——黑底白星、深蓝小四芒，与旧 Compose HoshimiSplash 暗色一致。 -->
+    <color name="splash_disc">#181A24</color>
+    <color name="splash_star_big">#FFFFFF</color>
+    <color name="splash_star_small">#2B3F70</color>
+</resources>

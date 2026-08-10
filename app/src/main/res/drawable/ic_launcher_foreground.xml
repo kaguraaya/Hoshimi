@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Hoshimi 前景（八芒星 · 日间）：小四芒（浅蓝，垫底）+ 大四芒（黑，主体）。底为白，故主体反色为黑。 -->
+    <!-- 小四芒（斜向短芒）：#2/#3 放大到半跨 ~14.28（原 9），对齐开屏 splash 的小/大 = 0.476 比例。 -->
+    <path
+        android:fillColor="#7FB3FF"
+        android:pathData="M68.3,39.7 L61.9,54 L68.3,68.3 L54,61.9 L39.7,68.3 L46.1,54 L39.7,39.7 L54,46.1 Z" />
+    <!-- 大四芒（正向长芒，主体） -->
+    <path
+        android:fillColor="#141821"
+        android:pathData="M54,24 L60,48 L84,54 L60,60 L54,84 L48,60 L24,54 L48,48 Z" />
+</vector>

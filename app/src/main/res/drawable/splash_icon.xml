@@ -1,0 +1,36 @@
+<!--
+  ：原生开屏图标（八芒星）。供 avd_splash.xml 作动画目标；几何与 ic_launcher_foreground 一致
+  （大四芒主体 + 小四芒点缀），viewport 108 与 launcher 前景同尺，保证观感一致。
+  两个 path 各带 name，animated-vector 通过 name 定位做旋转/淡入。分组 rootGroup 提供整体缩放/透明的锚点。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:name="rootGroup"
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- 小四芒（斜向短芒，垫底）：与 launcher 前景同 pathData（半跨 ~14.28）。 -->
+        <group
+            android:name="smallGroup"
+            android:pivotX="54"
+            android:pivotY="54">
+            <path
+                android:name="smallStar"
+                android:fillColor="@color/splash_star_small"
+                android:pathData="M68.3,39.7 L61.9,54 L68.3,68.3 L54,61.9 L39.7,68.3 L46.1,54 L39.7,39.7 L54,46.1 Z" />
+        </group>
+        <!-- 大四芒（正向长芒，主体）：与 launcher 前景同 pathData。 -->
+        <group
+            android:name="bigGroup"
+            android:pivotX="54"
+            android:pivotY="54">
+            <path
+                android:name="bigStar"
+                android:fillColor="@color/splash_star_big"
+                android:pathData="M54,24 L60,48 L84,54 L60,60 L54,84 L48,60 L24,54 L48,48 Z" />
+        </group>
+    </group>
+</vector>

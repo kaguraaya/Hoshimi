@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy backup rules (Android 11 / API 30 and below).
+  : plaintext (and even encrypted) credentials must NEVER be written to default backups.
+  The encrypted credential SharedPreferences file is excluded so it is never captured by Auto Backup.
+-->
+<full-backup-content>
+    <exclude
+        domain="sharedpref"
+        path="acg_compass_credentials.xml" />
+</full-backup-content>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Base application theme. The real visual identity is supplied by Jetpack Compose
+        (Material 3 + dynamic color) in core/designsystem. This XML theme only provides a
+        clean launch surface. It is DayNight-aware via a values-night override plus a DayNight
+        windowBackground color (@color/launch_background) so the launch window matches the system
+        light/dark mode BEFORE Compose draws — fixing the bright flash on dark-mode cold start
+        Light variant below; dark variant in values-night/themes.xml.
+    -->
+    <style name="Theme.AcgCompass" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+
+    <!--
+        ：动态开屏主题（androidx core-splashscreen 兼容属性，无 android: 前缀，覆盖 API 26+）。
+        照搬 Kotatsu 方案：动效由**系统冷启动开屏窗口**直接播放 @drawable/avd_splash（animated-vector），
+        不再用 Compose 手写 HoshimiSplash——从根上消除「首帧与 Compose 争抢主线程导致掉帧」与
+        「方形静态 launcher 图标闪现」两个问题。windowSplashScreenIconBackgroundColor 给出圆形图标底
+        （@color/splash_disc，DayNight），使呈现的是圆形动态图标而非方形。底色仍复用 @color/launch_background（承接 O）。
+        API 31+ 的原生 android: 属性映射见 values-v31/themes.xml。
+    -->
+    <style name="Theme.Hoshimi.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launch_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/avd_splash</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splash_disc</item>
+        <item name="windowSplashScreenAnimationDuration">@integer/splash_screen_duration</item>
+        <item name="postSplashScreenTheme">@style/Theme.AcgCompass</item>
+    </style>
+</resources>

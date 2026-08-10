@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 原生开屏动画时长（毫秒）。与 avd_splash 的最长子动画（640ms）一致，保证系统窗口播完整段动效。 -->
+    <integer name="splash_screen_duration">640</integer>
+</resources>

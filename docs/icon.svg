@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-label="Hoshimi app icon">
+  <!-- Reconstructed from the app's adaptive launcher icon (ic_launcher_foreground.xml + ic_launcher_background). -->
+  <rect width="108" height="108" rx="24" fill="#FFFFFF"/>
+  <!-- 小四芒（浅蓝，垫底） -->
+  <path d="M68.3,39.7 L61.9,54 L68.3,68.3 L54,61.9 L39.7,68.3 L46.1,54 L39.7,39.7 L54,46.1 Z" fill="#7FB3FF"/>
+  <!-- 大四芒（黑，主体） -->
+  <path d="M54,24 L60,48 L84,54 L60,60 L54,84 L48,60 L24,54 L48,48 Z" fill="#141821"/>
+</svg>

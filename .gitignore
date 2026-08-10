@@ -1,0 +1,46 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!buildSrc/src/main/java/com/acgcompass/build/
+!buildSrc/src/main/java/com/acgcompass/build/*.java
+
+# Android / IDE
+*.iml
+.idea/
+.cxx/
+local.properties
+captures/
+.externalNativeBuild/
+
+# Kotlin
+.kotlin/
+
+# Build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Keystore / secrets — never commit credentials
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+*.env
+
+# Network captures (contain Bangumi token / personal collection)
+*.har
+
+# JVM crash dumps
+hs_err_pid*.log
+replay_pid*.log
+hs_err_pid*.mdmp

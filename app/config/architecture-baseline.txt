@@ -1,0 +1,17 @@
+# Existing cross-layer imports. The architecture test permits these only as legacy debt.
+feature/backlog/BacklogViewModel.kt|import com.acgcompass.data.local.dao.UserCollectionDao
+feature/backlog/BacklogViewModel.kt|import com.acgcompass.data.local.entity.UserCollectionEntity
+feature/backlog/BacklogViewModel.kt|import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
+feature/explore/ExploreQueueViewModel.kt|import com.acgcompass.data.local.dao.RecommendationExposureDao
+feature/explore/ExploreQueueViewModel.kt|import com.acgcompass.data.local.dao.UserCollectionDao
+feature/explore/ExploreQueueViewModel.kt|import com.acgcompass.data.local.entity.RecommendationExposureEntity
+feature/explore/ExploreQueueViewModel.kt|import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
+feature/library/MyLibraryViewModel.kt|import com.acgcompass.data.local.dao.UserCollectionDao
+feature/mine/MineViewModel.kt|import com.acgcompass.data.local.dao.UserCollectionDao
+feature/recommender/RecommenderViewModel.kt|import com.acgcompass.data.local.dao.RecommendationExposureDao
+feature/recommender/RecommenderViewModel.kt|import com.acgcompass.data.local.dao.UserCollectionDao
+feature/recommender/RecommenderViewModel.kt|import com.acgcompass.data.local.entity.RecommendationExposureEntity
+feature/timemachine/TimeMachineViewModel.kt|import com.acgcompass.data.local.dao.UserCollectionDao
+feature/timemachine/TimeMachineViewModel.kt|import com.acgcompass.data.local.entity.UserCollectionEntity
+feature/home/HomeContract.kt|com.acgcompass.data.local.entity.UserCollectionEntity
+feature/home/HomeViewModel.kt|com.acgcompass.data.local.dao.UserCollectionDao

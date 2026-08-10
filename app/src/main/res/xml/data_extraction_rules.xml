@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Data extraction rules (Android 12 / API 31 and above) for cloud backup and device-to-device transfer.
+  : plaintext (and encrypted) credentials must NEVER leave the device via default backups.
+  The encrypted credential SharedPreferences file is excluded from both cloud backup and transfer.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="sharedpref"
+            path="acg_compass_credentials.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude
+            domain="sharedpref"
+            path="acg_compass_credentials.xml" />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        ：API 31+ 原生 SplashScreen 属性映射（照搬 Kotatsu 的 values-v31 做法）。
+        API 31 起系统读取带 android: 前缀的窗口属性，直接在冷启动窗口内播放 avd_splash（animated-vector），
+        零 Compose 首帧竞争（消除掉帧）、以圆形图标底呈现（消除方形静态图标闪现）。
+        底色 / 图标底色沿用 DayNight 颜色资源（暗色由 values-night 提供）。
+    -->
+    <style name="Theme.Hoshimi.Splash" parent="Theme.SplashScreen">
+        <item name="android:windowSplashScreenBackground">@color/launch_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_splash</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_disc</item>
+        <item name="android:windowSplashScreenAnimationDuration">@integer/splash_screen_duration</item>
+        <item name="postSplashScreenTheme">@style/Theme.AcgCompass</item>
+    </style>
+</resources>

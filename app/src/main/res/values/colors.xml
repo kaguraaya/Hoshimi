@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 图标底色（日间）：白。大四芒主体在白底上反色为黑（承接 F 图标重设计）。 -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- 启动窗口底色（亮色）取品牌浅色 surface，与 Compose 首帧保持一致。 -->
+    <color name="launch_background">#FDFBFF</color>
+
+    <!--
+        ：原生 SplashScreen（androidx core-splashscreen）配色（日间）。
+        splash_disc = 圆形图标底（windowSplashScreenIconBackgroundColor，形成「圆形动态图标」轮廓，消除方形闪现）；
+        splash_star_big/small = 大/小四芒填色。取值与旧 Compose HoshimiSplash 一致，动效观感不变。
+    -->
+    <color name="splash_disc">#EFF3FB</color>
+    <color name="splash_star_big">#141821</color>
+    <color name="splash_star_small">#7FB3FF</color>
+</resources>

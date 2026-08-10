@@ -1,0 +1,79 @@
+<!--
+  ：原生开屏动效（animated-vector）。取代旧 Compose HoshimiSplash——在系统冷启动开屏窗口内直接播放，
+  不与 Compose 首帧争抢主线程（消除掉帧），且由 windowSplashScreenAnimatedIcon 承载（消除方形静态图标闪现）。
+
+  动效（≈640ms，对齐旧 Compose 时长）：
+  - rootGroup：整体缩放 0.82→1（scaleX/scaleY），FastOutSlowIn。
+  - bigStar / smallStar：fillAlpha 0→1（淡入）。注意 VectorDrawable 的 <group> 无 alpha 属性，
+    透明度只能作用在 <path> 的 fillAlpha 上。
+  - bigGroup：大四芒**逆时针**旋转 90°→0（Android 正值=顺时针，故递减=逆时针），定格 0°=静态大星（轴对齐）。
+  - smallGroup：小四芒**顺时针**旋转 -90°→0（递增=顺时针），定格 group=0 → 有效角=烘焙 45°（对角），
+    与大星错开、与静态 splash_icon 完全一致。两 group 均以 rotation=0 收尾 → 末帧 == 静态图标，无重叠/无跳变。
+-->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:drawable="@drawable/splash_icon">
+
+    <target android:name="rootGroup">
+        <aapt:attr name="android:animation">
+            <set>
+                <objectAnimator
+                    android:propertyName="scaleX"
+                    android:duration="640"
+                    android:valueFrom="0.82"
+                    android:valueTo="1"
+                    android:interpolator="@android:interpolator/fast_out_slow_in" />
+                <objectAnimator
+                    android:propertyName="scaleY"
+                    android:duration="640"
+                    android:valueFrom="0.82"
+                    android:valueTo="1"
+                    android:interpolator="@android:interpolator/fast_out_slow_in" />
+            </set>
+        </aapt:attr>
+    </target>
+
+    <target android:name="bigStar">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="fillAlpha"
+                android:duration="240"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="smallStar">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="fillAlpha"
+                android:duration="240"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="bigGroup">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="rotation"
+                android:duration="640"
+                android:valueFrom="90"
+                android:valueTo="0"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="smallGroup">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="rotation"
+                android:duration="640"
+                android:valueFrom="-90"
+                android:valueTo="0"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+</animated-vector>

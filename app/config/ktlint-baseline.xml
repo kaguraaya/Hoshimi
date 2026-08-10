@@ -1,0 +1,1122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/androidTest/java/com/acgcompass/core/designsystem/DesignSystemUiTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/androidTest/java/com/acgcompass/data/local/migration/DatabaseMigrationRowPreservationTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="89" column="55" source="standard:comment-wrapping" />
+    </file>
+    <file name="src/androidTest/java/com/acgcompass/data/local/migration/Migration10To11Test.kt">
+        <error line="80" column="9" source="standard:function-signature" />
+        <error line="81" column="9" source="standard:function-signature" />
+        <error line="82" column="9" source="standard:function-signature" />
+        <error line="83" column="9" source="standard:function-signature" />
+        <error line="83" column="24" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/common/ResultExt.kt">
+        <error line="40" column="62" source="standard:function-signature" />
+        <error line="53" column="62" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/common/logging/RedactingLogger.kt">
+        <error line="39" column="72" source="standard:function-signature" />
+        <error line="43" column="72" source="standard:function-signature" />
+        <error line="47" column="72" source="standard:function-signature" />
+        <error line="51" column="72" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/designsystem/AiCard.kt">
+        <error line="139" column="5" source="standard:function-signature" />
+        <error line="140" column="5" source="standard:function-signature" />
+        <error line="140" column="35" source="standard:function-signature" />
+        <error line="158" column="5" source="standard:function-signature" />
+        <error line="159" column="5" source="standard:function-signature" />
+        <error line="159" column="35" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/designsystem/WorkCard.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="20" column="1" source="standard:no-unused-imports" />
+        <error line="55" column="5" source="standard:function-signature" />
+        <error line="56" column="5" source="standard:function-signature" />
+        <error line="57" column="5" source="standard:function-signature" />
+        <error line="57" column="30" source="standard:function-signature" />
+        <error line="179" column="5" source="standard:function-signature" />
+        <error line="180" column="5" source="standard:function-signature" />
+        <error line="181" column="5" source="standard:function-signature" />
+        <error line="181" column="35" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/network/HttpClientFactory.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/network/RetrofitFactory.kt">
+        <error line="24" column="93" source="standard:function-signature" />
+        <error line="31" column="9" source="standard:function-signature" />
+        <error line="32" column="9" source="standard:function-signature" />
+        <error line="33" column="9" source="standard:function-signature" />
+        <error line="33" column="43" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/network/SourceRequest.kt">
+        <error line="54" column="13" source="standard:function-signature" />
+        <error line="55" column="13" source="standard:function-signature" />
+        <error line="55" column="41" source="standard:function-signature" />
+        <error line="56" column="31" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/network/di/InterceptorModule.kt">
+        <error line="36" column="62" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/network/di/NetworkModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="54" column="22" source="standard:function-signature" />
+        <error line="79" column="22" source="standard:function-signature" />
+        <error line="97" column="9" source="standard:function-signature" />
+        <error line="98" column="9" source="standard:function-signature" />
+        <error line="98" column="20" source="standard:function-signature" />
+        <error line="99" column="27" source="standard:function-signature" />
+        <error line="105" column="9" source="standard:function-signature" />
+        <error line="106" column="9" source="standard:function-signature" />
+        <error line="106" column="20" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/network/interceptor/UserAgentInterceptor.kt">
+        <error line="52" column="13" source="standard:function-signature" />
+        <error line="53" column="13" source="standard:function-signature" />
+        <error line="53" column="47" source="standard:function-signature" />
+        <error line="54" column="21" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/ui/AcgScreenScaffold.kt">
+        <error line="48" column="87" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/core/ui/StateScaffold.kt">
+        <error line="194" column="5" source="standard:function-signature" />
+        <error line="195" column="5" source="standard:function-signature" />
+        <error line="196" column="5" source="standard:function-signature" />
+        <error line="197" column="5" source="standard:function-signature" />
+        <error line="197" column="31" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/backup/BackupMerger.kt">
+        <error line="62" column="1" source="standard:max-line-length" />
+        <error line="62" column="42" source="standard:argument-list-wrapping" />
+        <error line="62" column="58" source="standard:argument-list-wrapping" />
+        <error line="62" column="77" source="standard:argument-list-wrapping" />
+        <error line="62" column="99" source="standard:argument-list-wrapping" />
+        <error line="62" column="110" source="standard:argument-list-wrapping" />
+        <error line="62" column="125" source="standard:argument-list-wrapping" />
+        <error line="64" column="38" source="standard:argument-list-wrapping" />
+        <error line="64" column="66" source="standard:argument-list-wrapping" />
+        <error line="65" column="28" source="standard:argument-list-wrapping" />
+        <error line="72" column="26" source="standard:argument-list-wrapping" />
+        <error line="72" column="42" source="standard:argument-list-wrapping" />
+        <error line="73" column="45" source="standard:argument-list-wrapping" />
+        <error line="75" column="1" source="standard:max-line-length" />
+        <error line="75" column="44" source="standard:argument-list-wrapping" />
+        <error line="75" column="62" source="standard:argument-list-wrapping" />
+        <error line="75" column="83" source="standard:argument-list-wrapping" />
+        <error line="75" column="107" source="standard:argument-list-wrapping" />
+        <error line="75" column="108" source="standard:wrapping" />
+        <error line="75" column="118" source="standard:argument-list-wrapping" />
+        <error line="75" column="119" source="standard:wrapping" />
+        <error line="75" column="134" source="standard:argument-list-wrapping" />
+        <error line="78" column="1" source="standard:max-line-length" />
+        <error line="78" column="41" source="standard:argument-list-wrapping" />
+        <error line="78" column="56" source="standard:argument-list-wrapping" />
+        <error line="78" column="74" source="standard:argument-list-wrapping" />
+        <error line="78" column="95" source="standard:argument-list-wrapping" />
+        <error line="78" column="106" source="standard:argument-list-wrapping" />
+        <error line="78" column="122" source="standard:argument-list-wrapping" />
+        <error line="79" column="1" source="standard:max-line-length" />
+        <error line="79" column="44" source="standard:argument-list-wrapping" />
+        <error line="79" column="62" source="standard:argument-list-wrapping" />
+        <error line="79" column="83" source="standard:argument-list-wrapping" />
+        <error line="79" column="107" source="standard:argument-list-wrapping" />
+        <error line="79" column="108" source="standard:wrapping" />
+        <error line="79" column="118" source="standard:argument-list-wrapping" />
+        <error line="79" column="119" source="standard:wrapping" />
+        <error line="79" column="136" source="standard:argument-list-wrapping" />
+        <error line="80" column="1" source="standard:max-line-length" />
+        <error line="80" column="44" source="standard:argument-list-wrapping" />
+        <error line="80" column="63" source="standard:argument-list-wrapping" />
+        <error line="80" column="84" source="standard:argument-list-wrapping" />
+        <error line="80" column="108" source="standard:argument-list-wrapping" />
+        <error line="80" column="119" source="standard:argument-list-wrapping" />
+        <error line="80" column="127" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/backup/BackupSerializer.kt">
+        <error line="34" column="54" source="standard:function-signature" />
+        <error line="43" column="52" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/backup/CsvExporter.kt">
+        <error line="20" column="9" source="standard:function-signature" />
+        <error line="21" column="9" source="standard:function-signature" />
+        <error line="21" column="54" source="standard:function-signature" />
+        <error line="24" column="21" source="standard:argument-list-wrapping" />
+        <error line="24" column="27" source="standard:argument-list-wrapping" />
+        <error line="24" column="34" source="standard:argument-list-wrapping" />
+        <error line="24" column="42" source="standard:argument-list-wrapping" />
+        <error line="24" column="50" source="standard:argument-list-wrapping" />
+        <error line="24" column="56" source="standard:argument-list-wrapping" />
+        <error line="24" column="64" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/credential/CredentialStoreImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="71" column="64" source="standard:function-signature" />
+        <error line="95" column="65" source="standard:function-signature" />
+        <error line="115" column="67" source="standard:function-signature" />
+        <error line="129" column="60" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/credential/SecretBundle.kt">
+        <error line="35" column="33" source="standard:function-signature" />
+        <error line="40" column="39" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/credential/SourceId.kt">
+        <error line="29" column="51" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/datastore/SettingsDataStore.kt">
+        <error line="61" column="1" source="standard:max-line-length" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/AcgCompassDatabase.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/converter/Converters.kt">
+        <error line="27" column="56" source="standard:function-signature" />
+        <error line="31" column="54" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/di/DatabaseModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/entity/AiResultEntity.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/entity/TagClassificationPlanEntity.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/entity/TagDimensionEntity.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/entity/WorkEntity.kt">
+        <error line="3" column="1" source="standard:no-unused-imports" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/entity/WorkFeatureEntity.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/AiResultMapper.kt">
+        <error line="18" column="42" source="standard:function-signature" />
+        <error line="36" column="42" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/BacklogMapper.kt">
+        <error line="14" column="48" source="standard:function-signature" />
+        <error line="26" column="48" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/ImportMapper.kt">
+        <error line="18" column="48" source="standard:function-signature" />
+        <error line="29" column="48" source="standard:function-signature" />
+        <error line="40" column="46" source="standard:function-signature" />
+        <error line="51" column="46" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/RatingMapper.kt">
+        <error line="19" column="49" source="standard:function-signature" />
+        <error line="51" column="18" source="standard:function-signature" />
+        <error line="72" column="18" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/RouteNodeMapper.kt">
+        <error line="18" column="44" source="standard:function-signature" />
+        <error line="29" column="44" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/SnapshotMapper.kt">
+        <error line="16" column="42" source="standard:function-signature" />
+        <error line="24" column="42" source="standard:function-signature" />
+        <error line="32" column="44" source="standard:function-signature" />
+        <error line="44" column="44" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/SourceLinkMapper.kt">
+        <error line="26" column="5" source="standard:function-signature" />
+        <error line="27" column="5" source="standard:function-signature" />
+        <error line="28" column="5" source="standard:function-signature" />
+        <error line="28" column="49" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/TagMapper.kt">
+        <error line="27" column="42" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/TasteProfileMapper.kt">
+        <error line="18" column="50" source="standard:function-signature" />
+        <error line="25" column="95" source="standard:function-signature" />
+        <error line="39" column="50" source="standard:function-signature" />
+        <error line="57" column="30" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/mapper/WorkMapper.kt">
+        <error line="32" column="63" source="standard:function-signature" />
+        <error line="65" column="5" source="standard:function-signature" />
+        <error line="66" column="5" source="standard:function-signature" />
+        <error line="66" column="33" source="standard:function-signature" />
+        <error line="67" column="16" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/migration/BackupGuard.kt">
+        <error line="52" column="95" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/migration/DataStoreMigrationVersionStore.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="41" column="52" source="standard:function-signature" />
+        <error line="66" column="56" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/migration/DatabasePreMigrationBackup.kt">
+        <error line="122" column="1" source="standard:indent" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/local/migration/NoOpBackupGuard.kt">
+        <error line="12" column="24" source="standard:no-trailing-spaces" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/AiEngineImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/AiHttpCaller.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="40" column="52" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/AiJsonCoercion.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/AiProviderRegistry.kt">
+        <error line="28" column="46" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/GeminiProvider.kt">
+        <error line="64" column="63" source="standard:function-signature" />
+        <error line="96" column="9" source="standard:function-signature" />
+        <error line="96" column="34" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/ProviderId.kt">
+        <error line="23" column="53" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/di/AiModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/ai/prompt/SpoilerGuard.kt">
+        <error line="72" column="42" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/anilist/AniListMappers.kt">
+        <error line="54" column="51" source="standard:function-signature" />
+        <error line="118" column="56" source="standard:function-signature" />
+        <error line="131" column="74" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/anilist/di/AniListModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="29" column="9" source="standard:function-signature" />
+        <error line="30" column="9" source="standard:function-signature" />
+        <error line="30" column="20" source="standard:function-signature" />
+        <error line="31" column="21" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/bangumi/BangumiApi.kt">
+        <error line="30" column="9" source="standard:function-signature" />
+        <error line="31" column="9" source="standard:function-signature" />
+        <error line="31" column="31" source="standard:function-signature" />
+        <error line="86" column="9" source="standard:function-signature" />
+        <error line="86" column="31" source="standard:function-signature" />
+        <error line="115" column="9" source="standard:function-signature" />
+        <error line="115" column="31" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/bangumi/BangumiDtos.kt">
+        <error line="192" column="1" source="standard:no-consecutive-blank-lines" />
+        <error line="225" column="1" source="standard:no-consecutive-blank-lines" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/bangumi/BangumiMappers.kt">
+        <error line="90" column="60" source="standard:function-signature" />
+        <error line="94" column="73" source="standard:function-signature" />
+        <error line="144" column="76" source="standard:function-signature" />
+        <error line="153" column="1" source="standard:no-consecutive-blank-lines" />
+        <error line="176" column="39" source="standard:function-signature" />
+        <error line="180" column="55" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/bangumi/BangumiOAuthDtos.kt">
+        <error line="1" column="1" source="standard:filename" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/bangumi/BangumiRemoteDataSource.kt">
+        <error line="244" column="1" source="standard:no-consecutive-blank-lines" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/bangumi/di/BangumiModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="31" column="75" source="standard:function-signature" />
+        <error line="43" column="83" source="standard:function-signature" />
+        <error line="55" column="85" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/jikan/JikanApi.kt">
+        <error line="37" column="9" source="standard:function-signature" />
+        <error line="38" column="9" source="standard:function-signature" />
+        <error line="38" column="31" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/jikan/JikanMappers.kt">
+        <error line="50" column="50" source="standard:function-signature" />
+        <error line="118" column="72" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/jikan/di/JikanModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="31" column="71" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/mal/MalMappers.kt">
+        <error line="44" column="48" source="standard:function-signature" />
+        <error line="106" column="70" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/mal/MalOAuthClient.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="56" column="9" source="standard:function-signature" />
+        <error line="57" column="9" source="standard:function-signature" />
+        <error line="57" column="37" source="standard:function-signature" />
+        <error line="58" column="42" source="standard:function-signature" />
+        <error line="101" column="9" source="standard:function-signature" />
+        <error line="101" column="30" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/mal/MalPkce.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="43" column="9" source="standard:function-signature" />
+        <error line="44" column="9" source="standard:function-signature" />
+        <error line="44" column="45" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/mal/MalRemoteDataSource.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="46" column="39" source="standard:function-signature" />
+        <error line="53" column="9" source="standard:function-signature" />
+        <error line="54" column="9" source="standard:function-signature" />
+        <error line="55" column="9" source="standard:function-signature" />
+        <error line="55" column="29" source="standard:function-signature" />
+        <error line="56" column="37" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/mal/MalTokenDtos.kt">
+        <error line="1" column="1" source="standard:filename" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/mal/di/MalModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="34" column="67" source="standard:function-signature" />
+        <error line="42" column="77" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/vndb/VndbApi.kt">
+        <error line="27" column="9" source="standard:function-signature" />
+        <error line="28" column="9" source="standard:function-signature" />
+        <error line="28" column="31" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/vndb/VndbDtos.kt">
+        <error line="180" column="1" source="standard:max-line-length" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/vndb/VndbMappers.kt">
+        <error line="127" column="68" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/remote/vndb/di/VndbModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="29" column="69" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/BacklogRepositoryImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="58" column="9" source="standard:function-signature" />
+        <error line="59" column="9" source="standard:function-signature" />
+        <error line="59" column="27" source="standard:function-signature" />
+        <error line="72" column="9" source="standard:function-signature" />
+        <error line="73" column="9" source="standard:function-signature" />
+        <error line="74" column="9" source="standard:function-signature" />
+        <error line="74" column="31" source="standard:function-signature" />
+        <error line="106" column="64" source="standard:function-signature" />
+        <error line="140" column="81" source="standard:function-signature" />
+        <error line="181" column="80" source="standard:function-signature" />
+        <error line="208" column="9" source="standard:function-signature" />
+        <error line="209" column="9" source="standard:function-signature" />
+        <error line="209" column="61" source="standard:function-signature" />
+        <error line="224" column="68" source="standard:function-signature" />
+        <error line="234" column="68" source="standard:function-signature" />
+        <error line="266" column="9" source="standard:function-signature" />
+        <error line="267" column="9" source="standard:function-signature" />
+        <error line="268" column="9" source="standard:function-signature" />
+        <error line="268" column="32" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/BackupRepositoryImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="64" column="88" source="standard:function-signature" />
+        <error line="104" column="79" source="standard:function-signature" />
+        <error line="130" column="71" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/ImportRepositoryImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="56" column="61" source="standard:function-signature" />
+        <error line="61" column="73" source="standard:function-signature" />
+        <error line="72" column="32" source="standard:function-signature" />
+        <error line="99" column="9" source="standard:function-signature" />
+        <error line="100" column="9" source="standard:function-signature" />
+        <error line="101" column="9" source="standard:function-signature" />
+        <error line="101" column="19" source="standard:function-signature" />
+        <error line="151" column="26" source="standard:function-signature" />
+        <error line="164" column="86" source="standard:function-signature" />
+        <error line="186" column="84" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/RouteMapRepositoryImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="45" column="73" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/TasteProfileRepositoryImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="58" column="62" source="standard:function-signature" />
+        <error line="72" column="9" source="standard:function-signature" />
+        <error line="72" column="41" source="standard:function-signature" />
+        <error line="73" column="34" source="standard:function-signature" />
+        <error line="79" column="74" source="standard:function-signature" />
+        <error line="142" column="102" source="standard:function-signature" />
+        <error line="153" column="93" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/TimeMachineRepositoryImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="97" column="62" source="standard:function-signature" />
+        <error line="116" column="100" source="standard:function-signature" />
+        <error line="128" column="68" source="standard:function-signature" />
+        <error line="141" column="56" source="standard:function-signature" />
+        <error line="144" column="96" source="standard:function-signature" />
+        <error line="156" column="56" source="standard:function-signature" />
+        <error line="168" column="62" source="standard:function-signature" />
+        <error line="188" column="42" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/WorkFeatureRepositoryImpl.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="77" column="22" source="standard:statement-wrapping" />
+        <error line="77" column="76" source="standard:statement-wrapping" />
+        <error line="142" column="9" source="standard:function-signature" />
+        <error line="143" column="9" source="standard:function-signature" />
+        <error line="144" column="9" source="standard:function-signature" />
+        <error line="144" column="35" source="standard:function-signature" />
+        <error line="145" column="23" source="standard:function-signature" />
+        <error line="170" column="77" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/repository/di/RepositoryModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/sync/BangumiSyncManager.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="182" column="1" source="standard:max-line-length" />
+        <error line="182" column="34" source="standard:argument-list-wrapping" />
+        <error line="182" column="45" source="standard:argument-list-wrapping" />
+        <error line="182" column="60" source="standard:argument-list-wrapping" />
+        <error line="182" column="79" source="standard:argument-list-wrapping" />
+        <error line="182" column="98" source="standard:argument-list-wrapping" />
+        <error line="182" column="115" source="standard:argument-list-wrapping" />
+        <error line="182" column="128" source="standard:argument-list-wrapping" />
+        <error line="182" column="129" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/sync/BangumiSyncWorker.kt">
+        <error line="27" column="44" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/sync/SyncStatusRepository.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="45" column="34" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/data/sync/TasteProfileAutoUpdater.kt">
+        <error line="141" column="9" source="standard:function-signature" />
+        <error line="142" column="9" source="standard:function-signature" />
+        <error line="143" column="9" source="standard:function-signature" />
+        <error line="143" column="38" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/ai/SpoilerRadar.kt">
+        <error line="30" column="54" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/fallback/LocalFallbackRadar.kt">
+        <error line="138" column="57" source="standard:function-signature" />
+        <error line="154" column="9" source="standard:function-signature" />
+        <error line="155" column="9" source="standard:function-signature" />
+        <error line="156" column="9" source="standard:function-signature" />
+        <error line="156" column="37" source="standard:function-signature" />
+        <error line="183" column="9" source="standard:function-signature" />
+        <error line="184" column="9" source="standard:function-signature" />
+        <error line="184" column="48" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/funfeature/DustMuseum.kt">
+        <error line="21" column="23" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/funfeature/MoodRiskAdvisor.kt">
+        <error line="73" column="64" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/matching/CrossSourceMerge.kt">
+        <error line="89" column="1" source="standard:max-line-length" />
+        <error line="89" column="32" source="standard:parameter-list-wrapping" />
+        <error line="89" column="32" source="standard:function-signature" />
+        <error line="89" column="74" source="standard:parameter-list-wrapping" />
+        <error line="89" column="74" source="standard:function-signature" />
+        <error line="89" column="114" source="standard:parameter-list-wrapping" />
+        <error line="89" column="114" source="standard:function-signature" />
+        <error line="148" column="98" source="standard:function-signature" />
+        <error line="211" column="18" source="standard:statement-wrapping" />
+        <error line="211" column="28" source="standard:statement-wrapping" />
+        <error line="211" column="38" source="standard:statement-wrapping" />
+        <error line="212" column="18" source="standard:statement-wrapping" />
+        <error line="212" column="28" source="standard:statement-wrapping" />
+        <error line="212" column="38" source="standard:statement-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/matching/LinkResolution.kt">
+        <error line="1" column="1" source="standard:filename" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/matching/MatchDecision.kt">
+        <error line="53" column="5" source="standard:function-signature" />
+        <error line="54" column="5" source="standard:function-signature" />
+        <error line="54" column="41" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/matching/MediaTypePriority.kt">
+        <error line="29" column="75" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/matching/TitleNormalizer.kt">
+        <error line="53" column="51" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/matching/TitleSimilarity.kt">
+        <error line="67" column="41" source="standard:discouraged-comment-location" />
+        <error line="68" column="38" source="standard:discouraged-comment-location" />
+        <error line="70" column="41" source="standard:discouraged-comment-location" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/BacklogItem.kt">
+        <error line="14" column="50" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/ImportModels.kt">
+        <error line="21" column="55" source="standard:function-signature" />
+        <error line="43" column="58" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/RouteNode.kt">
+        <error line="37" column="59" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/Snapshot.kt">
+        <error line="13" column="54" source="standard:function-signature" />
+        <error line="43" column="52" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/SourceId.kt">
+        <error line="33" column="51" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/Tag.kt">
+        <error line="24" column="54" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/TagNoise.kt">
+        <error line="13" column="37" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/TasteProfile.kt">
+        <error line="15" column="51" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/model/Work.kt">
+        <error line="19" column="52" source="standard:function-signature" />
+        <error line="39" column="55" source="standard:function-signature" />
+        <error line="55" column="57" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/repository/DetailRepository.kt">
+        <error line="9" column="9" source="standard:function-signature" />
+        <error line="10" column="9" source="standard:function-signature" />
+        <error line="11" column="9" source="standard:function-signature" />
+        <error line="11" column="39" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/repository/RouteMapRepository.kt">
+        <error line="11" column="25" source="standard:no-trailing-spaces" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/taste/AdvancedTasteProfile.kt">
+        <error line="70" column="57" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/taste/BuildTasteProfileUseCase.kt">
+        <error line="260" column="36" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/taste/WorkFeatureRepository.kt">
+        <error line="14" column="1" source="standard:no-consecutive-blank-lines" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/usecase/GenerateSpoilerRadarUseCase.kt">
+        <error line="100" column="9" source="standard:function-signature" />
+        <error line="101" column="9" source="standard:function-signature" />
+        <error line="101" column="48" source="standard:function-signature" />
+        <error line="155" column="59" source="standard:function-signature" />
+        <error line="189" column="63" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/usecase/ImportTextParser.kt">
+        <error line="204" column="49" source="standard:statement-wrapping" />
+        <error line="211" column="54" source="standard:statement-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/usecase/PersonalTasteScorer.kt">
+        <error line="90" column="35" source="standard:statement-wrapping" />
+        <error line="90" column="48" source="standard:statement-wrapping" />
+        <error line="90" column="80" source="standard:statement-wrapping" />
+        <error line="91" column="34" source="standard:statement-wrapping" />
+        <error line="91" column="47" source="standard:statement-wrapping" />
+        <error line="91" column="78" source="standard:statement-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/usecase/ScoringHabitCalculator.kt">
+        <error line="42" column="9" source="standard:function-signature" />
+        <error line="43" column="9" source="standard:function-signature" />
+        <error line="43" column="27" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/usecase/SnapshotDiff.kt">
+        <error line="37" column="9" source="standard:function-signature" />
+        <error line="38" column="9" source="standard:function-signature" />
+        <error line="38" column="40" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/domain/usecase/TasteStatsCalculator.kt">
+        <error line="51" column="42" source="standard:no-trailing-spaces" />
+        <error line="128" column="55" source="standard:function-signature" />
+        <error line="155" column="9" source="standard:function-signature" />
+        <error line="156" column="9" source="standard:function-signature" />
+        <error line="156" column="39" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/backlog/BacklogContract.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/backlog/BacklogScreen.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="35" column="1" source="standard:no-unused-imports" />
+        <error line="44" column="1" source="standard:no-unused-imports" />
+        <error line="403" column="1" source="standard:max-line-length" />
+        <error line="403" column="22" source="standard:argument-list-wrapping" />
+        <error line="403" column="30" source="standard:argument-list-wrapping" />
+        <error line="403" column="75" source="standard:argument-list-wrapping" />
+        <error line="403" column="125" source="standard:argument-list-wrapping" />
+        <error line="417" column="1" source="standard:max-line-length" />
+        <error line="440" column="5" source="standard:function-signature" />
+        <error line="441" column="5" source="standard:function-signature" />
+        <error line="441" column="28" source="standard:function-signature" />
+        <error line="489" column="5" source="standard:function-signature" />
+        <error line="490" column="5" source="standard:function-signature" />
+        <error line="490" column="30" source="standard:function-signature" />
+        <error line="522" column="5" source="standard:function-signature" />
+        <error line="523" column="5" source="standard:function-signature" />
+        <error line="524" column="5" source="standard:function-signature" />
+        <error line="524" column="36" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/backlog/BacklogViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="21" column="1" source="standard:no-unused-imports" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/detail/RouteMapSection.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="81" column="69" source="standard:function-signature" />
+        <error line="192" column="5" source="standard:function-signature" />
+        <error line="193" column="5" source="standard:function-signature" />
+        <error line="194" column="5" source="standard:function-signature" />
+        <error line="194" column="35" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/discover/DiscoverBoards.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="98" column="5" source="standard:function-signature" />
+        <error line="99" column="5" source="standard:function-signature" />
+        <error line="99" column="25" source="standard:function-signature" />
+        <error line="132" column="80" source="standard:function-signature" />
+        <error line="201" column="19" source="standard:trailing-comma-on-declaration-site" />
+        <error line="487" column="56" source="standard:function-signature" />
+        <error line="520" column="88" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/discover/DiscoverContract.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="128" column="58" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/discover/DiscoverScreen.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/discover/DiscoverViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="210" column="17" source="standard:property-naming" />
+        <error line="342" column="35" source="standard:statement-wrapping" />
+        <error line="342" column="57" source="standard:statement-wrapping" />
+        <error line="342" column="65" source="standard:statement-wrapping" />
+        <error line="354" column="1" source="standard:max-line-length" />
+        <error line="354" column="65" source="standard:argument-list-wrapping" />
+        <error line="354" column="75" source="standard:argument-list-wrapping" />
+        <error line="354" column="80" source="standard:argument-list-wrapping" />
+        <error line="354" column="83" source="standard:argument-list-wrapping" />
+        <error line="354" column="95" source="standard:argument-list-wrapping" />
+        <error line="354" column="120" source="standard:argument-list-wrapping" />
+        <error line="390" column="1" source="standard:max-line-length" />
+        <error line="390" column="65" source="standard:argument-list-wrapping" />
+        <error line="390" column="75" source="standard:argument-list-wrapping" />
+        <error line="390" column="80" source="standard:argument-list-wrapping" />
+        <error line="390" column="83" source="standard:argument-list-wrapping" />
+        <error line="390" column="110" source="standard:argument-list-wrapping" />
+        <error line="390" column="135" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/explore/ExploreQueueScreen.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="5" column="1" source="standard:no-unused-imports" />
+        <error line="13" column="1" source="standard:no-unused-imports" />
+        <error line="147" column="1" source="standard:max-line-length" />
+        <error line="147" column="37" source="standard:argument-list-wrapping" />
+        <error line="147" column="58" source="standard:argument-list-wrapping" />
+        <error line="147" column="83" source="standard:argument-list-wrapping" />
+        <error line="147" column="112" source="standard:argument-list-wrapping" />
+        <error line="147" column="127" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/explore/ExploreQueueViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/home/HomeContract.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="240" column="24" source="standard:function-signature" />
+        <error line="271" column="1" source="standard:no-consecutive-blank-lines" />
+        <error line="428" column="1" source="standard:no-consecutive-blank-lines" />
+        <error line="496" column="5" source="standard:function-signature" />
+        <error line="497" column="5" source="standard:function-signature" />
+        <error line="497" column="26" source="standard:function-signature" />
+        <error line="512" column="45" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/home/HomeModulesScreen.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="50" column="1" source="standard:max-line-length" />
+        <error line="50" column="22" source="standard:argument-list-wrapping" />
+        <error line="50" column="38" source="standard:argument-list-wrapping" />
+        <error line="50" column="69" source="standard:argument-list-wrapping" />
+        <error line="50" column="75" source="standard:argument-list-wrapping" />
+        <error line="50" column="78" source="standard:argument-list-wrapping" />
+        <error line="50" column="136" source="standard:argument-list-wrapping" />
+        <error line="108" column="1" source="standard:max-line-length" />
+        <error line="108" column="34" source="standard:argument-list-wrapping" />
+        <error line="108" column="48" source="standard:argument-list-wrapping" />
+        <error line="108" column="92" source="standard:argument-list-wrapping" />
+        <error line="108" column="119" source="standard:argument-list-wrapping" />
+        <error line="108" column="121" source="standard:argument-list-wrapping" />
+        <error line="108" column="122" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/home/HomeScreen.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="34" column="1" source="standard:no-unused-imports" />
+        <error line="368" column="5" source="standard:function-signature" />
+        <error line="369" column="5" source="standard:function-signature" />
+        <error line="369" column="30" source="standard:function-signature" />
+        <error line="466" column="5" source="standard:function-signature" />
+        <error line="467" column="5" source="standard:function-signature" />
+        <error line="468" column="5" source="standard:function-signature" />
+        <error line="468" column="25" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/home/HomeViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/imports/ImportScreen.kt">
+        <error line="37" column="5" source="standard:function-signature" />
+        <error line="38" column="5" source="standard:function-signature" />
+        <error line="39" column="5" source="standard:function-signature" />
+        <error line="39" column="50" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/imports/ImportViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="46" column="17" source="standard:property-naming" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/library/MyLibraryContract.kt">
+        <error line="36" column="54" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/library/MyLibraryViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/mine/AboutScreen.kt">
+        <error line="52" column="5" source="standard:function-signature" />
+        <error line="53" column="5" source="standard:function-signature" />
+        <error line="53" column="35" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/mine/MineContract.kt">
+        <error line="193" column="70" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/mine/MineScreen.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="12" column="1" source="standard:no-unused-imports" />
+        <error line="13" column="1" source="standard:no-unused-imports" />
+        <error line="22" column="1" source="standard:no-unused-imports" />
+        <error line="27" column="1" source="standard:no-unused-imports" />
+        <error line="359" column="1" source="standard:max-line-length" />
+        <error line="359" column="18" source="standard:argument-list-wrapping" />
+        <error line="359" column="50" source="standard:argument-list-wrapping" />
+        <error line="359" column="64" source="standard:argument-list-wrapping" />
+        <error line="359" column="127" source="standard:argument-list-wrapping" />
+        <error line="373" column="5" source="standard:function-signature" />
+        <error line="374" column="5" source="standard:function-signature" />
+        <error line="374" column="37" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/mine/MineViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="97" column="1" source="standard:max-line-length" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/onboarding/OnboardingViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/recommender/RecommenderScreen.kt">
+        <error line="26" column="1" source="standard:no-unused-imports" />
+        <error line="49" column="71" source="standard:function-signature" />
+        <error line="215" column="5" source="standard:function-signature" />
+        <error line="216" column="5" source="standard:function-signature" />
+        <error line="217" column="5" source="standard:function-signature" />
+        <error line="217" column="26" source="standard:function-signature" />
+        <error line="313" column="5" source="standard:function-signature" />
+        <error line="314" column="5" source="standard:function-signature" />
+        <error line="314" column="34" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/recommender/RecommenderViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="23" column="1" source="standard:no-unused-imports" />
+        <error line="350" column="1" source="standard:max-line-length" />
+        <error line="350" column="77" source="standard:argument-list-wrapping" />
+        <error line="350" column="78" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/timemachine/TimeMachineContract.kt">
+        <error line="138" column="40" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/timemachine/TimeMachineScreen.kt">
+        <error line="17" column="1" source="standard:no-unused-imports" />
+        <error line="22" column="1" source="standard:no-unused-imports" />
+        <error line="177" column="5" source="standard:function-signature" />
+        <error line="178" column="5" source="standard:function-signature" />
+        <error line="179" column="5" source="standard:function-signature" />
+        <error line="179" column="35" source="standard:function-signature" />
+    </file>
+    <file name="src/main/java/com/acgcompass/feature/timemachine/TimeMachineViewModel.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="180" column="28" source="standard:function-signature" />
+        <error line="287" column="1" source="standard:max-line-length" />
+    </file>
+    <file name="src/test/java/com/acgcompass/core/network/DataSourceOrchestratorPropertyTest.kt">
+        <error line="37" column="1" source="standard:no-consecutive-blank-lines" />
+    </file>
+    <file name="src/test/java/com/acgcompass/core/network/HttpErrorMapperPropertyTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/test/java/com/acgcompass/core/network/NetworkFactoryTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/backup/BackupSerializerTest.kt">
+        <error line="16" column="43" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/credential/CredentialIsolationPropertyTest.kt">
+        <error line="136" column="62" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/local/mapper/MapperTest.kt">
+        <error line="87" column="51" source="standard:no-multi-spaces" />
+        <error line="88" column="54" source="standard:no-multi-spaces" />
+        <error line="89" column="56" source="standard:no-multi-spaces" />
+        <error line="90" column="46" source="standard:no-multi-spaces" />
+        <error line="163" column="24" source="standard:argument-list-wrapping" />
+        <error line="163" column="39" source="standard:argument-list-wrapping" />
+        <error line="164" column="27" source="standard:argument-list-wrapping" />
+        <error line="164" column="44" source="standard:argument-list-wrapping" />
+        <error line="164" column="54" source="standard:argument-list-wrapping" />
+        <error line="164" column="71" source="standard:argument-list-wrapping" />
+        <error line="167" column="24" source="standard:argument-list-wrapping" />
+        <error line="167" column="39" source="standard:argument-list-wrapping" />
+        <error line="168" column="25" source="standard:argument-list-wrapping" />
+        <error line="168" column="40" source="standard:argument-list-wrapping" />
+        <error line="168" column="53" source="standard:argument-list-wrapping" />
+        <error line="168" column="70" source="standard:argument-list-wrapping" />
+        <error line="171" column="24" source="standard:argument-list-wrapping" />
+        <error line="171" column="39" source="standard:argument-list-wrapping" />
+        <error line="172" column="25" source="standard:argument-list-wrapping" />
+        <error line="172" column="40" source="standard:argument-list-wrapping" />
+        <error line="172" column="53" source="standard:argument-list-wrapping" />
+        <error line="172" column="70" source="standard:argument-list-wrapping" />
+        <error line="179" column="56" source="standard:no-multi-spaces" />
+        <error line="186" column="24" source="standard:argument-list-wrapping" />
+        <error line="186" column="39" source="standard:argument-list-wrapping" />
+        <error line="187" column="27" source="standard:argument-list-wrapping" />
+        <error line="187" column="43" source="standard:argument-list-wrapping" />
+        <error line="187" column="56" source="standard:argument-list-wrapping" />
+        <error line="187" column="72" source="standard:argument-list-wrapping" />
+        <error line="190" column="24" source="standard:argument-list-wrapping" />
+        <error line="190" column="39" source="standard:argument-list-wrapping" />
+        <error line="191" column="27" source="standard:argument-list-wrapping" />
+        <error line="191" column="43" source="standard:argument-list-wrapping" />
+        <error line="191" column="56" source="standard:argument-list-wrapping" />
+        <error line="191" column="73" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/local/migration/DatabasePreMigrationBackupTest.kt">
+        <error line="158" column="106" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/remote/anilist/AniListMappersTest.kt">
+        <error line="126" column="1" source="standard:max-line-length" />
+        <error line="126" column="37" source="standard:argument-list-wrapping" />
+        <error line="126" column="45" source="standard:argument-list-wrapping" />
+        <error line="126" column="69" source="standard:argument-list-wrapping" />
+        <error line="126" column="85" source="standard:argument-list-wrapping" />
+        <error line="126" column="86" source="standard:argument-list-wrapping" />
+        <error line="126" column="100" source="standard:argument-list-wrapping" />
+        <error line="126" column="123" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/remote/mal/MalPkceTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/remote/vndb/VndbMappersTest.kt">
+        <error line="141" column="1" source="standard:no-consecutive-blank-lines" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/repository/BacklogRepositoryImplTest.kt">
+        <error line="36" column="73" source="standard:function-signature" />
+        <error line="163" column="26" source="standard:statement-wrapping" />
+        <error line="163" column="61" source="standard:statement-wrapping" />
+        <error line="212" column="26" source="standard:statement-wrapping" />
+        <error line="212" column="66" source="standard:statement-wrapping" />
+        <error line="213" column="38" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/repository/ImportRepositoryImplTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="28" column="1" source="standard:no-unused-imports" />
+        <error line="44" column="33" source="standard:function-signature" />
+        <error line="73" column="57" source="standard:discouraged-comment-location" />
+        <error line="74" column="57" source="standard:discouraged-comment-location" />
+        <error line="75" column="43" source="standard:no-multi-spaces" />
+        <error line="75" column="58" source="standard:discouraged-comment-location" />
+        <error line="104" column="57" source="standard:discouraged-comment-location" />
+        <error line="184" column="77" source="standard:function-signature" />
+        <error line="188" column="83" source="standard:function-signature" />
+        <error line="190" column="94" source="standard:function-signature" />
+        <error line="212" column="33" source="standard:statement-wrapping" />
+        <error line="212" column="104" source="standard:statement-wrapping" />
+        <error line="213" column="31" source="standard:statement-wrapping" />
+        <error line="213" column="71" source="standard:statement-wrapping" />
+        <error line="220" column="66" source="standard:statement-wrapping" />
+        <error line="220" column="92" source="standard:statement-wrapping" />
+        <error line="220" column="107" source="standard:statement-wrapping" />
+        <error line="221" column="66" source="standard:statement-wrapping" />
+        <error line="221" column="92" source="standard:statement-wrapping" />
+        <error line="221" column="107" source="standard:statement-wrapping" />
+        <error line="222" column="66" source="standard:statement-wrapping" />
+        <error line="222" column="91" source="standard:statement-wrapping" />
+        <error line="222" column="106" source="standard:statement-wrapping" />
+        <error line="233" column="63" source="standard:statement-wrapping" />
+        <error line="233" column="85" source="standard:statement-wrapping" />
+        <error line="233" column="98" source="standard:statement-wrapping" />
+        <error line="235" column="44" source="standard:statement-wrapping" />
+        <error line="237" column="63" source="standard:statement-wrapping" />
+        <error line="237" column="85" source="standard:statement-wrapping" />
+        <error line="237" column="98" source="standard:statement-wrapping" />
+        <error line="238" column="63" source="standard:statement-wrapping" />
+        <error line="238" column="85" source="standard:statement-wrapping" />
+        <error line="238" column="98" source="standard:statement-wrapping" />
+        <error line="240" column="87" source="standard:statement-wrapping" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/repository/RouteMapRepositoryImplTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/repository/TimeMachineRepositoryImplTest.kt">
+        <error line="28" column="9" source="standard:function-signature" />
+        <error line="29" column="9" source="standard:function-signature" />
+        <error line="30" column="9" source="standard:function-signature" />
+        <error line="31" column="9" source="standard:function-signature" />
+        <error line="32" column="9" source="standard:function-signature" />
+        <error line="32" column="31" source="standard:function-signature" />
+        <error line="33" column="9" source="standard:function-signature" />
+        <error line="133" column="67" source="standard:function-signature" />
+        <error line="138" column="64" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/data/taste/AiTagResolveTest.kt">
+        <error line="18" column="72" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/matching/CrossSourceMergeTest.kt">
+        <error line="61" column="9" source="standard:function-signature" />
+        <error line="62" column="9" source="standard:function-signature" />
+        <error line="63" column="9" source="standard:function-signature" />
+        <error line="64" column="9" source="standard:function-signature" />
+        <error line="64" column="45" source="standard:function-signature" />
+        <error line="65" column="20" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/matching/MatchThresholdOverridePropertyTest.kt">
+        <error line="3" column="1" source="standard:no-consecutive-blank-lines" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/matching/MatchingTest.kt">
+        <error line="142" column="66" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/matching/MediaTypePriorityTest.kt">
+        <error line="19" column="77" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/matching/TitleNormalizerPropertyTest.kt">
+        <error line="33" column="34" source="standard:no-multi-spaces" />
+        <error line="33" column="50" source="standard:discouraged-comment-location" />
+        <error line="34" column="34" source="standard:no-multi-spaces" />
+        <error line="34" column="50" source="standard:discouraged-comment-location" />
+        <error line="35" column="34" source="standard:no-multi-spaces" />
+        <error line="35" column="50" source="standard:discouraged-comment-location" />
+        <error line="36" column="34" source="standard:no-multi-spaces" />
+        <error line="36" column="50" source="standard:discouraged-comment-location" />
+        <error line="37" column="38" source="standard:no-multi-spaces" />
+        <error line="37" column="42" source="standard:discouraged-comment-location" />
+        <error line="38" column="37" source="standard:no-multi-spaces" />
+        <error line="38" column="43" source="standard:discouraged-comment-location" />
+        <error line="39" column="41" source="standard:discouraged-comment-location" />
+        <error line="40" column="38" source="standard:no-multi-spaces" />
+        <error line="40" column="42" source="standard:discouraged-comment-location" />
+        <error line="41" column="37" source="standard:no-multi-spaces" />
+        <error line="41" column="51" source="standard:discouraged-comment-location" />
+        <error line="75" column="28" source="standard:no-multi-spaces" />
+        <error line="75" column="37" source="standard:discouraged-comment-location" />
+        <error line="76" column="23" source="standard:no-multi-spaces" />
+        <error line="76" column="42" source="standard:discouraged-comment-location" />
+        <error line="77" column="43" source="standard:no-multi-spaces" />
+        <error line="77" column="47" source="standard:discouraged-comment-location" />
+        <error line="78" column="42" source="standard:no-multi-spaces" />
+        <error line="78" column="47" source="standard:discouraged-comment-location" />
+        <error line="79" column="21" source="standard:no-multi-spaces" />
+        <error line="79" column="44" source="standard:discouraged-comment-location" />
+        <error line="80" column="30" source="standard:no-multi-spaces" />
+        <error line="80" column="37" source="standard:discouraged-comment-location" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/taste/TasteCalibrationDiagnosticTest.kt">
+        <error line="20" column="102" source="standard:function-signature" />
+        <error line="29" column="88" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/taste/TasteEngineAnchorTest.kt">
+        <error line="24" column="9" source="standard:function-signature" />
+        <error line="25" column="9" source="standard:function-signature" />
+        <error line="26" column="9" source="standard:function-signature" />
+        <error line="27" column="9" source="standard:function-signature" />
+        <error line="27" column="27" source="standard:function-signature" />
+        <error line="36" column="88" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/taste/TasteLooValidationTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="149" column="1" source="standard:max-line-length" />
+        <error line="149" column="38" source="standard:argument-list-wrapping" />
+        <error line="149" column="99" source="standard:wrapping" />
+        <error line="149" column="134" source="standard:wrapping" />
+        <error line="149" column="146" source="standard:argument-list-wrapping" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/usecase/AggregateRatingsNoFabricationPropertyTest.kt">
+        <error line="47" column="54" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/usecase/AggregateRatingsUseCaseTest.kt">
+        <error line="46" column="73" source="standard:no-multi-spaces" />
+        <error line="46" column="78" source="standard:discouraged-comment-location" />
+        <error line="55" column="77" source="standard:no-multi-spaces" />
+        <error line="55" column="78" source="standard:discouraged-comment-location" />
+        <error line="56" column="77" source="standard:no-multi-spaces" />
+        <error line="56" column="78" source="standard:discouraged-comment-location" />
+        <error line="71" column="75" source="standard:no-multi-spaces" />
+        <error line="71" column="78" source="standard:discouraged-comment-location" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/usecase/GenerateSpoilerRadarUseCaseTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="31" column="85" source="standard:function-signature" />
+        <error line="175" column="95" source="standard:function-signature" />
+        <error line="190" column="91" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/usecase/SnapshotDiffTest.kt">
+        <error line="17" column="9" source="standard:function-signature" />
+        <error line="18" column="9" source="standard:function-signature" />
+        <error line="19" column="9" source="standard:function-signature" />
+        <error line="20" column="9" source="standard:function-signature" />
+        <error line="21" column="9" source="standard:function-signature" />
+        <error line="21" column="31" source="standard:function-signature" />
+        <error line="22" column="9" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/domain/usecase/TasteStatsCalculatorTest.kt">
+        <error line="51" column="64" source="standard:discouraged-comment-location" />
+        <error line="87" column="84" source="standard:discouraged-comment-location" />
+    </file>
+    <file name="src/test/java/com/acgcompass/feature/discover/DiscoverBoardsTest.kt">
+        <error line="61" column="49" source="standard:discouraged-comment-location" />
+        <error line="203" column="85" source="standard:discouraged-comment-location" />
+    </file>
+    <file name="src/test/java/com/acgcompass/feature/discover/DiscoverContractTest.kt">
+        <error line="21" column="9" source="standard:function-signature" />
+        <error line="22" column="9" source="standard:function-signature" />
+        <error line="23" column="9" source="standard:function-signature" />
+        <error line="23" column="27" source="standard:function-signature" />
+        <error line="33" column="9" source="standard:function-signature" />
+        <error line="34" column="9" source="standard:function-signature" />
+        <error line="35" column="9" source="standard:function-signature" />
+        <error line="35" column="45" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/feature/home/HomeContractTest.kt">
+        <error line="23" column="9" source="standard:function-signature" />
+        <error line="24" column="9" source="standard:function-signature" />
+        <error line="25" column="9" source="standard:function-signature" />
+        <error line="25" column="48" source="standard:function-signature" />
+        <error line="35" column="9" source="standard:function-signature" />
+        <error line="36" column="9" source="standard:function-signature" />
+        <error line="37" column="9" source="standard:function-signature" />
+        <error line="38" column="9" source="standard:function-signature" />
+        <error line="38" column="39" source="standard:function-signature" />
+        <error line="39" column="22" source="standard:function-signature" />
+    </file>
+    <file name="src/test/java/com/acgcompass/feature/home/HomeDailyDrawTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/test/java/com/acgcompass/feature/mine/MineContractTest.kt">
+        <error line="20" column="9" source="standard:function-signature" />
+        <error line="21" column="9" source="standard:function-signature" />
+        <error line="22" column="9" source="standard:function-signature" />
+        <error line="22" column="46" source="standard:function-signature" />
+        <error line="23" column="22" source="standard:function-signature" />
+    </file>
+</baseline>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Android 13+ 主题图标：单色轮廓（系统按主题/明暗自动着色，是最稳的图标跟随方式）。形状与前景一致：八芒星（大四芒 + 小四芒）。 -->
+    <!-- monochrome 图层按 Android 规范用纯白填充——系统仅取其形状/alpha 作遮罩，再叠加主题色；纯白可让各 ROM 着色最准（原深蓝 #1F2A44 在个别 ROM 上会影响着色权重）。 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M68.3,39.7 L61.9,54 L68.3,68.3 L54,61.9 L39.7,68.3 L46.1,54 L39.7,39.7 L54,46.1 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24 L60,48 L84,54 L60,60 L54,84 L48,60 L24,54 L48,48 Z" />
+</vector>

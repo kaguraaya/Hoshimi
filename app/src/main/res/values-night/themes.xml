@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        暗色模式启动主题。深色父级 + 深色启动底色（@color/launch_background 的 night 变体），
+        使暗色系统下冷启动窗口直接是深色，避免先闪一下亮色再切暗。
+    -->
+    <style name="Theme.AcgCompass" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+</resources>
