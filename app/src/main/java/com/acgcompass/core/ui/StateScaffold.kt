@@ -1,20 +1,29 @@
 package com.acgcompass.core.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.acgcompass.core.common.AppError
@@ -181,29 +190,41 @@ fun ErrorCard(
 }
 
 /**
- * 空状态组件。展示友好说明与「下一步」操作按钮，引导用户行动
- * （无数据 / 无网络 / 未配置 key / 无搜索结果 / 无 AI key 等场景）。
+ * Empty state: tonal icon badge + message + one call to action.
  *
- * @param cta     下一步操作；其 [Cta.label] 作为按钮文案。
- * @param message 友好说明文案，默认「暂无内容」。
- * @param onCta   按钮点击回调，回传触发的 [cta]。
- *
+ * The CTA is a tonal button (an empty state is a suggestion, not the screen's primary action).
  */
 @Composable
 fun EmptyState(cta: Cta, modifier: Modifier = Modifier, message: String = "暂无内容", onCta: (Cta) -> Unit = {}) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .padding(horizontal = 32.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Inbox,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+        }
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 16.dp),
         )
-        Button(
+        FilledTonalButton(
             onClick = { onCta(cta) },
             modifier = Modifier.padding(top = 16.dp),
         ) {

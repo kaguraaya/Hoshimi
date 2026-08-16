@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -18,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
@@ -100,8 +103,8 @@ fun AcgApp(
         // 统一 inset 单一来源模型。
         // 外层 Scaffold 用**默认** contentWindowInsets（消费状态栏 + 导航栏 + 底栏高度），
         // 把消费后的 inset 通过 innerPadding 下发，并用 consumeWindowInsets 标记已消费，
-        // 使各页 TopAppBar / 内容统一用零 inset，不再各自消费状态栏（之前各页独立消费状态栏
-        // 时机不一致，导致首张卡片/封面贴顶或被裁切）。
+        // 使各页 TopAppBar / 内容统一用零 inset，不各自消费状态栏（各页各自消费状态栏时
+        // 时机不一致，会导致首张卡片/封面贴顶或被裁切）。
         bottomBar = {
             if (TopLevelDestination.isTopLevelRoute(currentRoute)) {
                 AcgBottomNavigation(
@@ -139,34 +142,35 @@ fun AppNavHost(
         navController = navController,
         startDestination = AppDestination.Home.route,
         modifier = modifier,
-        // 顶层栏目之间无方向语义，直接切换；只要一端是嵌套页，就使用对称的整屏 push/pop 位移。
+        // 顶层栏目之间无方向语义，直接切换；只要一端是嵌套页，就使用对称的 push/pop 转场：
+        // Material「共享轴 X」风格——短距离位移 + 淡入淡出（整屏平移在大屏上显得拖沓，且两页会并排露出）。
         // 四个 transition 必须使用相同的双端判断，确保进入和返回动画成对且页面不会重叠。
         enterTransition = {
             if (initialState.isTopLevel() && targetState.isTopLevel()) {
                 EnterTransition.None
             } else {
-                slideInHorizontally(tween(NAV_SLIDE_MS)) { it }
+                slideInHorizontally(navSpec()) { it / NAV_SLIDE_FRACTION } + fadeIn(navSpec())
             }
         },
         exitTransition = {
             if (initialState.isTopLevel() && targetState.isTopLevel()) {
                 ExitTransition.None
             } else {
-                slideOutHorizontally(tween(NAV_SLIDE_MS)) { -it }
+                slideOutHorizontally(navSpec()) { -it / NAV_SLIDE_FRACTION } + fadeOut(navSpec())
             }
         },
         popEnterTransition = {
             if (initialState.isTopLevel() && targetState.isTopLevel()) {
                 EnterTransition.None
             } else {
-                slideInHorizontally(tween(NAV_SLIDE_MS)) { -it }
+                slideInHorizontally(navSpec()) { -it / NAV_SLIDE_FRACTION } + fadeIn(navSpec())
             }
         },
         popExitTransition = {
             if (initialState.isTopLevel() && targetState.isTopLevel()) {
                 ExitTransition.None
             } else {
-                slideOutHorizontally(tween(NAV_SLIDE_MS)) { it }
+                slideOutHorizontally(navSpec()) { it / NAV_SLIDE_FRACTION } + fadeOut(navSpec())
             }
         },
     ) {
@@ -174,93 +178,93 @@ fun AppNavHost(
         composable(AppDestination.Home.route) {
             HomeRoute(
                 onOpenRecommender = { presetTags ->
-                    navController.navigate(recommenderRoute(presetTags))
+                    navController.navigateOnce(recommenderRoute(presetTags))
                 },
                 // 搜索专页尚未接入，暂时复用发现页。
                 onOpenSearch = {
-                    navController.navigate(AppDestination.Discover.route)
+                    navController.navigateOnce(AppDestination.Discover.route)
                 },
                 onOpenImport = {
-                    navController.navigate(AppDestination.Import.route)
+                    navController.navigateOnce(AppDestination.Import.route)
                 },
                 onOpenWork = { workId ->
-                    navController.navigate(detailRoute(workId))
+                    navController.navigateOnce(detailRoute(workId))
                 },
                 onOpenSettings = {
-                    navController.navigate(AppDestination.Settings.route)
+                    navController.navigateOnce(AppDestination.Settings.route)
                 },
                 onOpenHomeModules = {
-                    navController.navigate(AppDestination.HomeModules.route)
+                    navController.navigateOnce(AppDestination.HomeModules.route)
                 },
                 onOpenSchedule = {
-                    navController.navigate(AppDestination.Schedule.route)
+                    navController.navigateOnce(AppDestination.Schedule.route)
                 },
             )
         }
         composable(AppDestination.Discover.route) {
             DiscoverRoute(
                 onOpenWork = { workId ->
-                    navController.navigate(detailRoute(workId))
+                    navController.navigateOnce(detailRoute(workId))
                 },
                 onOpenExploreQueue = {
-                    navController.navigate(AppDestination.ExploreQueue.route)
+                    navController.navigateOnce(AppDestination.ExploreQueue.route)
                 },
                 onOpenVisualNovels = {
-                    navController.navigate(AppDestination.VisualNovels.route)
+                    navController.navigateOnce(AppDestination.VisualNovels.route)
                 },
             )
         }
         composable(AppDestination.VisualNovels.route) {
             com.acgcompass.feature.visualnovel.VisualNovelRoute(
-                onBack = { navController.popBackStack() },
-                onOpenWork = { workId -> navController.navigate(detailRoute(workId)) },
+                onBack = { navController.popBackOnce() },
+                onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
             )
         }
         composable(AppDestination.ExploreQueue.route) {
             com.acgcompass.feature.explore.ExploreQueueRoute(
-                onOpenWork = { workId -> navController.navigate(detailRoute(workId)) },
-                onBack = { navController.popBackStack() },
+                onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
+                onBack = { navController.popBackOnce() },
             )
         }
         composable(AppDestination.Backlog.route) {
             BacklogRoute(
                 onOpenDetail = { workId ->
-                    navController.navigate(detailRoute(workId))
+                    navController.navigateOnce(detailRoute(workId))
                 },
                 onGoImport = {
-                    navController.navigate(AppDestination.Import.route)
+                    navController.navigateOnce(AppDestination.Import.route)
                 },
                 onGoSearch = {
-                    navController.navigate(AppDestination.Discover.route)
+                    navController.navigateOnce(AppDestination.Discover.route)
                 },
                 onOpenDustMuseum = {
-                    navController.navigate(AppDestination.DustMuseum.route)
+                    navController.navigateOnce(AppDestination.DustMuseum.route)
                 },
             )
         }
         composable(AppDestination.TimeMachine.route) {
             TimeMachineRoute(
                 onOpenWork = { workId ->
-                    navController.navigate(detailRoute(workId))
+                    navController.navigateOnce(detailRoute(workId))
                 },
             )
         }
         composable(AppDestination.Mine.route) {
             MineRoute(
                 onNavigateToSettings = {
-                    navController.navigate(AppDestination.Settings.route)
+                    navController.navigateOnce(AppDestination.Settings.route)
                 },
                 onOpenPrivacySettings = {
-                    navController.navigate(settingsSourceRoute(com.acgcompass.feature.settings.PRIVACY_SOURCE_KEY))
+                    navController.navigateOnce(settingsSourceRoute(com.acgcompass.feature.settings.PRIVACY_SOURCE_KEY))
                 },
                 onOpenTasteProfile = {
-                    navController.navigate(AppDestination.TasteProfile.route)
+                    navController.navigateOnce(AppDestination.TasteProfile.route)
                 },
                 onOpenAbout = {
-                    navController.navigate(AppDestination.About.route)
+                    navController.navigateOnce(AppDestination.About.route)
                 },
                 onOpenLibrary = { tab ->
-                    navController.navigate(libraryRoute(tab))
+                    navController.navigateOnce(libraryRoute(tab))
                 },
             )
         }
@@ -274,7 +278,7 @@ fun AppNavHost(
     BackHandler(
         enabled = !predictiveBackEnabled && !TopLevelDestination.isTopLevelRoute(activeEntry?.destination?.route),
     ) {
-        navController.popBackStack()
+        navController.popBackOnce()
     }
 }
 
@@ -294,8 +298,8 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
         ),
     ) {
         com.acgcompass.feature.visualnovel.VndbProducerRoute(
-            onBack = { navController.popBackStack() },
-            onOpenWork = { workId -> navController.navigate(detailRoute(workId)) },
+            onBack = { navController.popBackOnce() },
+            onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
         )
     }
     composable(
@@ -306,15 +310,15 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
     ) {
         // workId 由路由参数经 SavedStateHandle 注入 DetailViewModel（见 DetailViewModel）。
         DetailRoute(
-            onOpenWork = { workId -> navController.navigate(detailRoute(workId)) },
+            onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
             onOpenVndbProducer = { producerId, producerName ->
                 val encodedName = android.net.Uri.encode(producerName)
-                navController.navigate("vndb_producer/$producerId?producerName=$encodedName")
+                navController.navigateOnce("vndb_producer/$producerId?producerName=$encodedName")
             },
         )
     }
     composable(AppDestination.Import.route) {
-        ImportRoute(onBack = { navController.popBackStack() })
+        ImportRoute(onBack = { navController.popBackOnce() })
     }
     composable(
         route = AppDestination.Recommender.route,
@@ -328,8 +332,9 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
     ) {
         // presetTags 由路由参数经 SavedStateHandle 注入 RecommenderViewModel（首页今日状态预填）。
         RecommenderRoute(
+            onBack = { navController.popBackOnce() },
             onOpenWork = { workId ->
-                navController.navigate(detailRoute(workId))
+                navController.navigateOnce(detailRoute(workId))
             },
         )
     }
@@ -344,12 +349,12 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
         ),
     ) { entry ->
         SettingsScreen(
-            onNavigateBack = { navController.popBackStack() },
+            onNavigateBack = { navController.popBackOnce() },
             expandPrivacy = entry.arguments?.getString("section") == "privacy",
-            onClearCache = { navController.navigate(AppDestination.CacheManagement.route) },
-            onOpenCacheManagement = { navController.navigate(AppDestination.CacheManagement.route) },
+            onClearCache = { navController.navigateOnce(AppDestination.CacheManagement.route) },
+            onOpenCacheManagement = { navController.navigateOnce(AppDestination.CacheManagement.route) },
             onOpenSource = { sourceKey ->
-                navController.navigate(settingsSourceRoute(sourceKey))
+                navController.navigateOnce(settingsSourceRoute(sourceKey))
             },
         )
     }
@@ -365,15 +370,15 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
     ) { entry ->
         SettingsSourceScreen(
             sourceKey = entry.arguments?.getString("source").orEmpty(),
-            onNavigateBack = { navController.popBackStack() },
-            onBangumiLogin = { navController.navigate(AppDestination.BangumiOAuth.route) },
-            onClearCache = { navController.navigate(AppDestination.CacheManagement.route) },
+            onNavigateBack = { navController.popBackOnce() },
+            onBangumiLogin = { navController.navigateOnce(AppDestination.BangumiOAuth.route) },
+            onClearCache = { navController.navigateOnce(AppDestination.CacheManagement.route) },
         )
     }
     composable(AppDestination.CacheManagement.route) {
         CacheManagementScreen(
-            onBack = { navController.popBackStack() },
-            onOpenItemCleanup = { navController.navigate(AppDestination.CacheItems.route) },
+            onBack = { navController.popBackOnce() },
+            onOpenItemCleanup = { navController.navigateOnce(AppDestination.CacheItems.route) },
             onResetComplete = {
                 navController.navigate(AppDestination.Onboarding.route) {
                     popUpTo(0) { inclusive = true }
@@ -382,7 +387,7 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
         )
     }
     composable(AppDestination.CacheItems.route) {
-        CacheItemCleanupScreen(onBack = { navController.popBackStack() })
+        CacheItemCleanupScreen(onBack = { navController.popBackOnce() })
     }
     composable(AppDestination.BangumiOAuth.route) {
         com.acgcompass.feature.auth.BangumiOAuthRoute(
@@ -402,56 +407,56 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
     }
     composable(AppDestination.About.route) {
         AboutScreen(
-            onBack = { navController.popBackStack() },
-            onOpenDataSources = { navController.navigate(AppDestination.AboutDataSources.route) },
-            onOpenLicenses = { navController.navigate(AppDestination.AboutLicenses.route) },
-            onOpenDisclaimer = { navController.navigate(AppDestination.AboutDisclaimer.route) },
+            onBack = { navController.popBackOnce() },
+            onOpenDataSources = { navController.navigateOnce(AppDestination.AboutDataSources.route) },
+            onOpenLicenses = { navController.navigateOnce(AppDestination.AboutLicenses.route) },
+            onOpenDisclaimer = { navController.navigateOnce(AppDestination.AboutDisclaimer.route) },
         )
     }
     composable(AppDestination.AboutDataSources.route) {
         com.acgcompass.feature.mine.AboutDocumentScreen(
             title = "数据来源",
             paragraphs = com.acgcompass.feature.mine.ABOUT_DATA_SOURCE_PARAGRAPHS,
-            onBack = { navController.popBackStack() },
+            onBack = { navController.popBackOnce() },
         )
     }
     composable(AppDestination.AboutLicenses.route) {
         com.acgcompass.feature.mine.AboutLicenseScreen(
-            onBack = { navController.popBackStack() },
+            onBack = { navController.popBackOnce() },
         )
     }
     composable(AppDestination.AboutDisclaimer.route) {
         com.acgcompass.feature.mine.AboutDocumentScreen(
             title = "免责声明",
             paragraphs = com.acgcompass.feature.mine.ABOUT_DISCLAIMER_PARAGRAPHS,
-            onBack = { navController.popBackStack() },
+            onBack = { navController.popBackOnce() },
         )
     }
     composable(AppDestination.HomeModules.route) {
-        com.acgcompass.feature.home.HomeModulesRoute(onBack = { navController.popBackStack() })
+        com.acgcompass.feature.home.HomeModulesRoute(onBack = { navController.popBackOnce() })
     }
     composable(AppDestination.Schedule.route) {
         com.acgcompass.feature.home.BroadcastScheduleRoute(
-            onBack = { navController.popBackStack() },
-            onOpenWork = { workId -> navController.navigate(detailRoute(workId)) },
+            onBack = { navController.popBackOnce() },
+            onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
         )
     }
     composable(AppDestination.DustMuseum.route) {
         com.acgcompass.feature.backlog.DustMuseumRoute(
-            onOpenWork = { workId -> navController.navigate(detailRoute(workId)) },
-            onBack = { navController.popBackStack() },
+            onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
+            onBack = { navController.popBackOnce() },
         )
     }
     composable(AppDestination.TasteProfile.route) {
         TasteProfileRoute(
-            onBack = { navController.popBackStack() },
-            onOpenSettings = { navController.navigate(AppDestination.Settings.route) },
-            onOpenManualReview = { navController.navigate(AppDestination.TagManualReview.route) },
+            onBack = { navController.popBackOnce() },
+            onOpenSettings = { navController.navigateOnce(AppDestination.Settings.route) },
+            onOpenManualReview = { navController.navigateOnce(AppDestination.TagManualReview.route) },
         )
     }
     composable(AppDestination.TagManualReview.route) {
         com.acgcompass.feature.taste.TagManualReviewRoute(
-            onBack = { navController.popBackStack() },
+            onBack = { navController.popBackOnce() },
         )
     }
     composable(
@@ -466,8 +471,8 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
     ) {
         // 初始 Tab 由路由参数经 SavedStateHandle 注入 MyLibraryViewModel。
         MyLibraryRoute(
-            onBack = { navController.popBackStack() },
-            onOpenWork = { workId -> navController.navigate(detailRoute(workId)) },
+            onBack = { navController.popBackOnce() },
+            onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
         )
     }
 }
@@ -478,6 +483,29 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
  * - `launchSingleTop` 防止重复入栈同一页面。
  * - `restoreState` 恢复已保存的滚动与选择状态。
  */
+/**
+ * 当前页面是否处于可交互（RESUMED）状态。转场动画期间旧页面已不是 RESUMED，
+ * 据此可以丢弃「动画还没播完时的第二次点击」。
+ */
+private fun NavHostController.isCurrentResumed(): Boolean =
+    currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED
+
+/**
+ * 进入嵌套页（防连点）：快速双击卡片 / 按钮时只导航一次，避免同一页面被压栈两次、
+ * 返回时要按两下。
+ */
+private fun NavHostController.navigateOnce(route: String) {
+    if (isCurrentResumed()) navigate(route)
+}
+
+/**
+ * 返回上一页（防连点）：转场期间再次点击返回会连退两级，退到起始页之前还会出现空白页。
+ * 仅用于用户点击触发的返回；由流程自动触发的返回（OAuth 回调、引导完成）仍直接 pop。
+ */
+private fun NavHostController.popBackOnce() {
+    if (isCurrentResumed()) popBackStack()
+}
+
 private fun NavHostController.navigateToTopLevel(tab: TopLevelDestination) {
     navigate(tab.route) {
         // 始终回到图的起始页（首页）之上重建目标栏，确保每个 Tab 进入正确页面。
@@ -491,7 +519,12 @@ private fun NavHostController.navigateToTopLevel(tab: TopLevelDestination) {
 }
 
 /** 下钻页（详情等）滑入 / 滑出时长（ms）：快速利落承载整屏位移，不拖沓（纯滑动、无 fade）。 */
-private const val NAV_SLIDE_MS = 220
+private const val NAV_SLIDE_MS = 280
+
+/** 位移距离 = 屏宽 / 此值（共享轴只需要一小段位移提示方向）。 */
+private const val NAV_SLIDE_FRACTION = 6
+
+private fun <T> navSpec() = tween<T>(NAV_SLIDE_MS, easing = androidx.compose.animation.core.FastOutSlowInEasing)
 
 /** 该目的地是否为底部五栏之一（顶层）。用于区分「同级切换（瞬切）」与「下钻（滑入）」动画。 */
 private fun NavBackStackEntry.isTopLevel(): Boolean = TopLevelDestination.isTopLevelRoute(destination.route)

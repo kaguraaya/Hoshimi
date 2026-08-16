@@ -49,7 +49,12 @@ object TasteRawScorer {
             if (cat == TasteCategory.NOISE) continue
             val q = TasteScoringParams.tagStrength(tc.count, maxCount)
             // 时间标签归入 5 年区间，使同年代不同季度聚合为年代偏好。
-            val key = if (cat == TasteCategory.TIME) TagClassifier.timeBucket(cleaned) else cleaned
+            // 内容维度做同义归一（治愈系→治愈、催淚→催泪…），避免同一含义散成互不相干的键。
+            val key = when (cat) {
+                TasteCategory.TIME -> TagClassifier.timeBucket(cleaned)
+                TasteCategory.TOPIC, TasteCategory.DEVICE, TasteCategory.XP -> TagSynonyms.canonical(cleaned)
+                else -> cleaned
+            }
             add(cat, key, q)
             if (cat == TasteCategory.TOPIC || cat == TasteCategory.DEVICE) topicDevice += key
         }
@@ -150,9 +155,21 @@ object TasteRawScorer {
         return if (total > 0.0) hit / (total + TasteScoringParams.EPSILON) else 0.0
     }
 
+    /** 候选作品可与「评论语义」比对的标签：题材 / 情节 / 角色类型 / 梗四个内容维度的并集（同键取最大强度）。 */
+    fun commentTags(f: Featurized): Map<String, Double> {
+        val out = HashMap<String, Double>()
+        for (cat in COMMENT_MATCH_CATEGORIES) {
+            for ((k, q) in f.byCategory[cat].orEmpty()) out[k] = maxOf(out[k] ?: 0.0, q)
+        }
+        return out
+    }
+
+    private val COMMENT_MATCH_CATEGORIES: List<TasteCategory> =
+        listOf(TasteCategory.TOPIC, TasteCategory.DEVICE, TasteCategory.XP, TasteCategory.MEME)
+
     /**
      * 十二维线性融合 raw `z(x)`（候选作品对画像的综合相似度，未校准）。
-     * 候选无用户短评，故 [TasteCategory.COMMENT] 项恒 0（评论语义只在画像侧建模）。
+     * 候选没有「你的短评」，[TasteCategory.COMMENT] 项用候选的社区标签去对画像里的评论感受词。
      */
     fun rawScore(
         feature: WorkFeature,
@@ -173,7 +190,11 @@ object TasteRawScorer {
                         feature.bangumiScore?.toDouble(),
                         feature.bangumiVotes,
                     )
-                TasteCategory.COMMENT, TasteCategory.NOISE -> Unit
+                // 评论语义：你在短评里反复提到的感受词（催泪 / 烧脑 / 群像 / 慢热…）若正好是候选作品的
+                // 社区标签，就按画像里该词的正负倾向计分。此前这一维只建不用——画像里有、打分时恒为 0。
+                TasteCategory.COMMENT ->
+                    z += cat.defaultWeight * simCategory(commentTags(f), profile.category(cat), lambda)
+                TasteCategory.NOISE -> Unit
                 else -> {
                     val catTags = f.byCategory[cat] ?: continue
                     z += cat.defaultWeight * simCategory(catTags, profile.category(cat), lambdaFor(cat, lambda))

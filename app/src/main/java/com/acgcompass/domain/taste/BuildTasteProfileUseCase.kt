@@ -111,7 +111,7 @@ class BuildTasteProfileUseCase @Inject constructor() {
 
             // 组合挖掘只看正向作品（pref>0）。
             if (pref > 0.0 && f.topicDeviceTags.size >= 2) {
-                for (combo in enumerateCombos(f.topicDeviceTags)) {
+                for (combo in enumerateCombos(strongestTopicDeviceTags(f))) {
                     comboSupport[combo] = (comboSupport[combo] ?: 0.0) + w
                     comboSigned[combo] = (comboSigned[combo] ?: 0.0) + contribution
                     comboPosWorks[combo] = (comboPosWorks[combo] ?: 0) + 1
@@ -157,16 +157,40 @@ class BuildTasteProfileUseCase @Inject constructor() {
         )
     }
 
-    /** 样本选择：强制保留高分/低分/有短评，其余按近因补齐到 [TasteScoringParams.MAX_PROFILE_SAMPLES]。 */
+    /**
+     * 样本选择：强制保留高分/低分/有短评，其余按近因补齐到 [TasteScoringParams.MAX_PROFILE_SAMPLES]。
+     *
+     * 强制样本自身也按近因排序、且最多占上限的 [FORCED_SAMPLE_SHARE]：否则重度用户的强制样本一旦
+     * 超过上限，就会按收藏表的任意顺序截断，并把全部中间分作品挤出画像（只剩两极 → 中心化后负向证据失真）。
+     */
     private fun selectSamples(rated: List<TasteSample>): List<TasteSample> {
-        val forced = rated.filter { s ->
-            val r = s.rating ?: return@filter false
+        val max = TasteScoringParams.MAX_PROFILE_SAMPLES
+        val unique = rated.distinctBy { it.subjectId }
+        if (unique.size <= max) return unique
+        val byRecency = compareByDescending<TasteSample> { it.updatedAtMillis ?: 0L }
+        val (forcedAll, ordinaryAll) = unique.partition { s ->
+            val r = s.rating ?: return@partition false
             r >= 9 || r <= 2 || !s.comment.isNullOrBlank()
         }
-        val forcedIds = forced.mapTo(HashSet()) { it.subjectId }
-        val rest = rated.filterNot { it.subjectId in forcedIds }
-            .sortedByDescending { it.updatedAtMillis ?: 0L }
-        return (forced + rest).distinctBy { it.subjectId }.take(TasteScoringParams.MAX_PROFILE_SAMPLES)
+        val forcedSorted = forcedAll.sortedWith(byRecency)
+        val ordinarySorted = ordinaryAll.sortedWith(byRecency)
+        // 普通样本至少保住 (1 − FORCED_SAMPLE_SHARE) 的名额；任一侧不足时名额让给另一侧。
+        val ordinaryQuota = minOf(ordinarySorted.size, max - (max * FORCED_SAMPLE_SHARE).toInt())
+        val forced = forcedSorted.take(max - ordinaryQuota)
+        val ordinary = ordinarySorted.take(max - forced.size)
+        return forced + ordinary
+    }
+
+    /** 参与组合挖掘的题材 / 装置标签：按标注强度取前 [TasteScoringParams.COMBO_MAX_TAGS_PER_WORK]。 */
+    private fun strongestTopicDeviceTags(f: TasteRawScorer.Featurized): Set<String> {
+        val limit = TasteScoringParams.COMBO_MAX_TAGS_PER_WORK
+        if (f.topicDeviceTags.size <= limit) return f.topicDeviceTags
+        val topic = f.byCategory[TasteCategory.TOPIC].orEmpty()
+        val device = f.byCategory[TasteCategory.DEVICE].orEmpty()
+        return f.topicDeviceTags
+            .sortedWith(compareByDescending<String> { maxOf(topic[it] ?: 0.0, device[it] ?: 0.0) }.thenBy { it })
+            .take(limit)
+            .toSet()
     }
 
     /**
@@ -330,5 +354,8 @@ class BuildTasteProfileUseCase @Inject constructor() {
 
         /** 池不足回退时 μ 取已评分 LOO z 的低分位数（补偿幸存者偏差：未评分作品 rawZ 中心低于已评分作品）。 */
         const val CALIB_FALLBACK_MU_QUANTILE: Double = 0.4
+
+        /** 强制样本（极端分 / 有短评）最多占画像样本上限的比例，其余名额留给按近因补齐的普通样本。 */
+        const val FORCED_SAMPLE_SHARE: Double = 0.7
     }
 }

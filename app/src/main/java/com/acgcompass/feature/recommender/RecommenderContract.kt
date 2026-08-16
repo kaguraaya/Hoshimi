@@ -132,9 +132,9 @@ enum class RecommendationKind {
 
     /** 种类副标题（解释该推荐的取向）。 */
     fun tagline(): String = when (this) {
-        SAFE -> "优先满足已选条件"
-        GAMBLE -> "适度放宽偏好条件"
-        WILDCARD -> "扩大候选范围"
+        SAFE -> "综合最贴合今晚的条件"
+        GAMBLE -> "同样高分，但换个题材"
+        WILDCARD -> "高分候选里的随机惊喜"
     }
 }
 
@@ -151,6 +151,8 @@ data class RecommendationUiModel(
     val workId: String,
     val card: WorkCardUiModel,
     val reason: String,
+    /** 口味匹配度（0–100）；画像不可用 / 该作无口味数据时为 `null`（不展示，绝不伪造）。 */
+    val matchPercent: Int? = null,
 )
 
 /**

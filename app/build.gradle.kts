@@ -80,8 +80,8 @@ android {
         applicationId = "com.kaguraaya.hoshimi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 39
-        versionName = "0.22.7"
+        versionCode = 40
+        versionName = "0.23.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

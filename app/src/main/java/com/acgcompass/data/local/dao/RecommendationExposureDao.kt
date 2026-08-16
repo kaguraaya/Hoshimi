@@ -15,6 +15,13 @@ interface RecommendationExposureDao {
     @Query("SELECT DISTINCT subjectId FROM recommendation_exposure WHERE exposedAt >= :since")
     suspend fun exposedSince(since: Long): List<String>
 
+    /**
+     * 指定场景（`tonight` / `explore`）在 [since] 之后的曝光记录。
+     * 冷却与反馈学习必须按场景取：探索队列里右滑加入待补池的作品，不应因此在「今晚看什么」里被冷却。
+     */
+    @Query("SELECT * FROM recommendation_exposure WHERE context = :context AND exposedAt >= :since")
+    suspend fun exposuresInContextSince(context: String, since: Long): List<RecommendationExposureEntity>
+
     @Query("SELECT * FROM recommendation_exposure WHERE subjectId = :subjectId ORDER BY exposedAt DESC LIMIT 1")
     suspend fun latestForSubject(subjectId: String): RecommendationExposureEntity?
 

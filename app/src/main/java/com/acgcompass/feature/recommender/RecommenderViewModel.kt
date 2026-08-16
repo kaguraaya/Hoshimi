@@ -17,11 +17,19 @@ import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.TagNoise
 import com.acgcompass.domain.model.TasteProfile
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.recommend.RecommendSimilarity
+import com.acgcompass.domain.recommend.TonightRanker
+import com.acgcompass.domain.recommend.intent.IntentExplain
+import com.acgcompass.domain.recommend.intent.IntentMatch
+import com.acgcompass.domain.recommend.intent.IntentMatcher
+import com.acgcompass.domain.recommend.intent.IntentTagDictionary
+import com.acgcompass.domain.recommend.intent.TagRepresentativeness
 import com.acgcompass.domain.repository.BacklogFilter
 import com.acgcompass.domain.repository.BacklogRepository
 import com.acgcompass.domain.repository.BacklogSort
 import com.acgcompass.domain.repository.TasteProfileRepository
 import com.acgcompass.domain.repository.WorkRepository
+import com.acgcompass.domain.taste.TagCount
 import com.acgcompass.domain.usecase.PersonalTasteScorer
 import com.acgcompass.domain.usecase.TasteTagTaxonomy
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -220,11 +228,11 @@ class RecommenderViewModel @Inject constructor(
     }
 
     /**
-     * 标签感知 + 个性化推荐（两个候选池共用）。综合分 = **个人口味（主导）** + 所选标签命中加成 +
-     * 社区评分（轻量护栏）+ 随机扰动。个人口味由共享 [PersonalTasteScorer] 计算（作品标签 × 你高/低分
+     * 标签感知 + 个性化推荐（两个候选池共用）。今晚分 = **个人口味（主导）** + 所选标签覆盖 + 时间拟合 +
+     * 社区口碑 + 新鲜度 / 补完轻松度 − 重复推荐惩罚（[TonightRanker]）。个人口味由共享 [PersonalTasteScorer] 计算（作品标签 × 你高/低分
      * 标签的加权重合），故**即使不选任何标签**也能按你的长期口味个性化排序，而非只推社区高分热门。
      *
-     * 选了标签时仍硬筛（必须命中至少一个）；排除已看过/抛弃；按综合分降序取前 3（单一推荐取 1）。
+     * 选了标签时仍硬筛（必须命中至少一个）；排除已看过/抛弃；三档各有分工（单一推荐只出稳妥档）。
      */
     private suspend fun recommendFromWorks(
         input: RecommenderInput,
@@ -249,6 +257,9 @@ class RecommenderViewModel @Inject constructor(
         // 统一清洗后再比较（下方硬筛 / 覆盖率均用清洗后的标签）。
         val selectedTags = input.selectedTags.map { TagNoise.clean(it) }.filter { it.isNotEmpty() }.toSet()
         val tagSelected = selectedTags.isNotEmpty()
+        val intentAliases: Set<String> = selectedTags.flatMapTo(HashSet()) { tag ->
+            IntentTagDictionary.bundleFor(tag).let { it.requiredTags + it.synonymTags }
+        }
 
         // 接受程度「不要X」→ 硬排除关键词（不要太累→烧脑/上头/意识流/电波）；「不要未完结」单独处理。
         val hardExcludeKeywords = input.acceptances.flatMap { ACCEPTANCE_EXCLUDE[it].orEmpty() }.toSet()
@@ -258,6 +269,8 @@ class RecommenderViewModel @Inject constructor(
         val prefiltered = candidates.asSequence()
             .filter { w ->
                 w.mediaType == MediaType.ANIME && w.fitsTimeBudget(input.time) && w.id !in excludeIds &&
+                    // 单集都放不进这段时间（20 分钟配剧场版）的直接排除；时长未知放行。
+                    TonightRanker.episodeFitsBudget(w.units.episodeMinutes, input.time?.availableMinutes) &&
                     // 期末保护模式——排除长篇/未完结/高耗能（致郁·上头·烧脑）。
                     (!input.finalsProtectionMode || passesFinalsProtection(w))
             }
@@ -274,10 +287,12 @@ class RecommenderViewModel @Inject constructor(
                 ) {
                     return@mapNotNull null
                 }
-                // 标签硬筛：选择标签后必须命中至少一个（等值或包含）。
-                val matched = tagNamesClean.filter { t -> selectedTags.any { sel -> t == sel || t.contains(sel) } }
+                // 标签召回：选择标签后至少要沾到一个所选意图（标签本身、包含关系或意图包里的近义标签）。
+                // 这里只负责「别把完全无关的作品放进来」，是否真的契合由下方的意图匹配决定。
+                val matched = tagNamesClean.filter { t ->
+                    selectedTags.any { sel -> t == sel || t.contains(sel) } || t.lowercase() in intentAliases
+                }
                 if (tagSelected && matched.isEmpty()) return@mapNotNull null
-                // soft-AND 覆盖率按命中的所选标签去重计数。
                 val hitSelected = selectedTags.count { sel -> tagNamesClean.any { t -> t == sel || t.contains(sel) } }
                 Triple(w, matched.take(3), hitSelected)
             }
@@ -293,20 +308,25 @@ class RecommenderViewModel @Inject constructor(
             val matchedHigh: List<String>,
             val personal: Float,
             val mean10: Float?,
-            val combined: Float,
+            val bayes10: Float?,
             val tasteFraction: Float?,
             val tasteAvailable: Boolean,
+            val intent: IntentMatch?,
         )
 
-        // 重复推荐冷却——最近 14 天已推过的作品本轮回避；若回避后候选为空则忽略冷却（绝不无结果）。
-        val recentlyExposed = runCatching {
-            exposureDao.exposedSince(System.currentTimeMillis() - REPEAT_COOLDOWN_MS).toSet()
-        }.getOrDefault(emptySet())
-        val workingSet = prefiltered.filterNot { it.first.id in recentlyExposed }.ifEmpty { prefiltered }
+        // 重复推荐冷却——只看「今晚看什么」自己的曝光（探索队列的曝光不算，否则刚右滑进待补池的作品
+        // 会在这里被藏两周）。最近 [HARD_REPEAT_MS] 内推过的本次直接回避（保证「再来一次」能换一批），
+        // 更早的曝光交给排序器做随时间衰减的软惩罚；回避后候选为空则忽略冷却（绝不无结果）。
+        val now = System.currentTimeMillis()
+        val exposureAt: Map<String, Long> = runCatching {
+            exposureDao.exposuresInContextSince(TONIGHT_CONTEXT, now - REPEAT_COOLDOWN_MS)
+                .associate { it.subjectId to it.exposedAt }
+        }.getOrDefault(emptyMap())
+        val justShown = exposureAt.filterValues { now - it < HARD_REPEAT_MS }.keys
+        val workingSet = prefiltered.filterNot { it.first.id in justShown }.ifEmpty { prefiltered }
 
-        // 第二步：精排打分。优先使用 12 维口味引擎的校准匹配度（0–100）；
+        // 第二步：口味打分。优先使用 12 维口味引擎的校准匹配度（0–100）；
         // 引擎对该候选不可用（无特征 / 非 Bangumi / 画像未建）时回退共享 [PersonalTasteScorer] 旧标签重合估计。
-        // 社区评分仅作轻量质量护栏（贝叶斯均分，弱化低评分人数的高分），随机扰动保证多次提交的多样性。
         val engineScores: Map<String, com.acgcompass.domain.taste.TasteMatchResult> = runCatching {
             tasteEngine.scoreBatch(
                 workingSet.mapNotNull { subjectIdOf(it.first) },
@@ -314,52 +334,71 @@ class RecommenderViewModel @Inject constructor(
             )
         }.getOrDefault(emptyMap())
 
-        val ranked = workingSet.map { (w, matchedSelected, hitSelected) ->
+        // 当晚意图匹配：按标签在作品里的代表性（标注人数 + 名次）判断「这部是不是今晚想看的那一类」，
+        // 多个标签按 soft-AND 组合处理。有缓存特征时用带标注人数的标签，否则退回作品标签的顺序。
+        val featureById = if (tagSelected) {
+            tasteEngine.cachedFeatures(workingSet.mapNotNull { subjectIdOf(it.first) })
+        } else {
+            emptyMap()
+        }
+        val intentById: Map<String, IntentMatch> = if (tagSelected) {
+            workingSet.mapNotNull { (w, _, _) ->
+                val feature = subjectIdOf(w)?.let { featureById[it] }
+                val rep = TagRepresentativeness(
+                    tags = feature?.tagCounts?.takeIf { it.isNotEmpty() } ?: w.tags.map { TagCount(it.name, 0) },
+                    episodes = feature?.eps?.takeIf { it > 0 } ?: w.units.episodes ?: 0,
+                )
+                IntentMatcher.match(selectedTags, rep)?.let { w.id to it }
+            }.toMap()
+        } else {
+            emptyMap()
+        }
+
+        // 社区评分逐部查库，候选池大（全部作品）时很慢：先按「口味 + 意图」粗排，只给前
+        // [RATING_LOOKUP_POOL] 名查评分并进入精排，排在后面的本来也不可能被选中。
+        val preRanked = workingSet.map { triple ->
+            val w = triple.first
+            val engine = subjectIdOf(w)?.let { engineScores[it] }
+            val roughTaste = engine?.let { it.satisfaction / 100f }
+                ?: personalTasteScorer.score(w, taste, null).personal
+            triple to (roughTaste + (intentById[w.id]?.fit?.toFloat() ?: 0f))
+        }.sortedByDescending { it.second }.take(RATING_LOOKUP_POOL).map { it.first }
+
+        val ranked = preRanked.map { (w, matchedSelected, hitSelected) ->
             val agg = workRepository.aggregateRatingsCached(w.id)
             val mean = agg.mean10()
             val votes = agg.totalVotes()
-            val prior = 6.5f
-            val m = 300f
+            // 贝叶斯均分：评分人数少的高分被拉回先验，避免「三个人打 9.5」压过大众口碑。
             val bayes = if (mean != null && votes > 0f) {
-                (votes / (votes + m)) * mean + (m / (votes + m)) * prior
+                (votes / (votes + BAYES_PRIOR_VOTES)) * mean +
+                    (BAYES_PRIOR_VOTES / (votes + BAYES_PRIOR_VOTES)) * BAYES_PRIOR_MEAN
             } else {
                 mean
             }
-            val communityNudge = (bayes?.div(10f) ?: 0.5f).coerceIn(0f, 1f)
-            // 用户显式选择标签时，按标签覆盖率增加当下意图权重。
-            // 覆盖率使用平方项；全部命中保持 1.0，部分命中的权重降低，
-            // 显著拉开「全中 vs 擦边」，让多选标签真正驱动排序而非命中 1 个即近似满足；未选标签时为 0。
-            val intentBonus = if (tagSelected && selectedTags.isNotEmpty()) {
-                val coverage = (hitSelected.toFloat() / selectedTags.size).coerceIn(0f, 1f)
-                coverage * coverage * INTENT_COVERAGE_WEIGHT
-            } else {
-                0f
-            }
             val engine = subjectIdOf(w)?.let { engineScores[it] }
             if (engine != null) {
-                // 引擎匹配度 0–100 → 0~1 作为主导个人口味分量（已拉开差距）。
+                // 排序用「预计满意度」（经真实评分数据验证的评分预测）；展示与阈值仍用口味匹配度。
                 val frac = (engine.score / 100f).coerceIn(0f, 1f)
-                val combined = frac * 3f + intentBonus + communityNudge * 0.6f +
-                    (Math.random().toFloat() * INTENT_RANDOM_JITTER)
                 Scored(
                     w,
                     matchedSelected,
                     hitSelected,
-                    engine.reasons.take(3).map { it.label },
-                    frac,
+                    // 只展示正向贡献的维度——负向项不能写成「契合你的口味」。
+                    engine.positiveReasons.take(3).map { it.label },
+                    (engine.satisfaction / 100f).coerceIn(0f, 1f),
                     mean,
-                    combined,
+                    bayes,
                     frac,
                     true,
+                    intentById[w.id],
                 )
             } else {
                 val ts = personalTasteScorer.score(w, taste, bayes)
-                val combined = ts.personal * 3f + intentBonus + communityNudge * 0.6f +
-                    (Math.random().toFloat() * INTENT_RANDOM_JITTER)
                 Scored(
-                    w, matchedSelected, hitSelected, ts.matchedHighTags.take(3), ts.personal, mean, combined,
+                    w, matchedSelected, hitSelected, ts.matchedHighTags.take(3), ts.personal, mean, bayes,
                     tasteFraction = if (ts.available) ts.fraction else null,
                     tasteAvailable = ts.available,
+                    intent = intentById[w.id],
                 )
             }
         }
@@ -377,50 +416,97 @@ class RecommenderViewModel @Inject constructor(
         if (tasteEligible.isEmpty()) {
             return UiState.Empty(if (tasteFloor > 0f) TASTE_FLOOR_CTA else NO_CANDIDATE_CTA)
         }
-        val filtered = tasteEligible.filter { passesCommunity(it) }
-            .ifEmpty { tasteEligible }
-            .sortedByDescending { it.combined }
+        val filtered = tasteEligible.filter { passesCommunity(it) }.ifEmpty { tasteEligible }
         if (filtered.isEmpty()) return UiState.Empty(NO_CANDIDATE_CTA)
 
-        // 从综合分 top 段随机抽取，制造多样性；抽中后再按综合分排序（稳妥档=其中最贴合的一部）。
-        val poolSize = if (input.indecisionMode) 6 else 12
-        val topPool = filtered.take(poolSize)
-        val takeCount = if (input.indecisionMode) 1 else 3
-        // 多选至少两个标签表示强意图；优先保留命中所选标签最多的候选
-        // 展示，避免它被 top 段随机抽样洗掉，导致「选了多个标签却没被尊重」。其余名额仍从池中随机抽取保多样性。
-        // 复合排序键：覆盖数（hitSelected）优先，其次综合分（combined），故稳妥档=最贴合当下意图的一部。
-        val picks = if (tagSelected && selectedTags.size > 1) {
-            val best = topPool.maxByOrNull { it.hitSelected * 1000f + it.combined } ?: topPool.first()
-            val rest = topPool.filter { it !== best }.shuffled().take((takeCount - 1).coerceAtLeast(0))
-            (listOf(best) + rest).sortedByDescending { it.hitSelected * 1000f + it.combined }
-        } else {
-            topPool.shuffled().take(takeCount).sortedByDescending { it.combined }
-        }
+        // 第三步：今晚分精排 + 三档选片（稳妥 = 最高分；探索 = 与稳妥题材拉开；随机 = 高分段加权抽样），
+        // 同系列最多占一个名额。详见 [TonightRanker]。
+        val byId = filtered.associateBy { it.work.id }
+        val picks = TonightRanker.pick(
+            candidates = filtered.map { s ->
+                val w = s.work
+                TonightRanker.Candidate(
+                    id = w.id,
+                    taste = s.personal.toDouble(),
+                    intentFit = if (tagSelected) s.intent?.fit ?: 0.0 else null,
+                    dominantConflict = s.intent?.dominantConflict ?: 0.0,
+                    scoreCap = s.intent?.scoreCap,
+                    community10 = s.bayes10?.toDouble(),
+                    sessionFit = TonightRanker.sessionFit(
+                        w.units.episodes,
+                        w.units.episodeMinutes,
+                        input.time?.availableMinutes,
+                    ),
+                    completionEase = TonightRanker.completionEase(
+                        w.units.episodes,
+                        when (w.status) {
+                            com.acgcompass.domain.model.ReleaseStatus.FINISHED -> true
+                            com.acgcompass.domain.model.ReleaseStatus.UNKNOWN -> null
+                            else -> false
+                        },
+                    ),
+                    daysSinceExposure = exposureAt[w.id]?.let { (now - it).toDouble() / MILLIS_PER_DAY },
+                    releaseYear = w.year,
+                    franchiseKey = RecommendSimilarity.franchiseKey(
+                        w.titles.ja?.takeIf { it.isNotBlank() } ?: w.titles.canonical,
+                    ),
+                    tags = RecommendSimilarity.genreFingerprint(w.tags.map { it.name }),
+                )
+            },
+            count = if (input.indecisionMode) 1 else 3,
+            currentYear = java.time.Year.now().value,
+        )
         if (picks.isEmpty()) return UiState.Empty(NO_CANDIDATE_CTA)
 
-        recordExposure(picks.map { it.work })
+        recordExposure(picks.mapNotNull { byId[it.candidate.id]?.work })
 
-        val kinds = listOf(RecommendationKind.SAFE, RecommendationKind.GAMBLE, RecommendationKind.WILDCARD)
-        val recommendations = picks.mapIndexed { idx, s ->
-            val kind = kinds.getOrElse(idx) { RecommendationKind.WILDCARD }
+        val safeTitle = picks.firstOrNull()?.let { byId[it.candidate.id]?.work?.titles?.canonical }
+        val recommendations = picks.mapNotNull { pick ->
+            val s = byId[pick.candidate.id] ?: return@mapNotNull null
+            val kind = when (pick.slot) {
+                TonightRanker.Slot.SAFE -> RecommendationKind.SAFE
+                TonightRanker.Slot.EXPLORE -> RecommendationKind.GAMBLE
+                TonightRanker.Slot.WILDCARD -> RecommendationKind.WILDCARD
+            }
             val ratingPart = s.mean10?.let { "，社区均分约 %.1f".format(it) }.orEmpty()
             // 理由聚焦「为什么这部贴合你」：优先所选标签，其次你高分常见标签，再退化为综合口碑。
-            val reason = when {
-                s.matchedSelected.isNotEmpty() -> {
-                    val cov = if (selectedTags.size > 1) "（命中 ${s.hitSelected}/${selectedTags.size}）" else ""
-                    "贴合你想看的标签：${s.matchedSelected.joinToString("、")}$cov$ratingPart"
-                }
-                s.matchedHigh.isNotEmpty() -> "契合你的长期口味：常给高分的「${s.matchedHigh.joinToString("、")}」$ratingPart"
+            val fit = when {
+                s.intent != null -> intentReason(s.intent.explain) + ratingPart
+                s.matchedHigh.isNotEmpty() -> "契合你的长期口味：${s.matchedHigh.joinToString("、")}$ratingPart"
                 else -> "综合口碑与你的口味挑选$ratingPart"
+            }
+            // 探索档补一句「和稳妥选择哪里不同」，让三档的差别看得见。
+            val contrast = if (kind == RecommendationKind.GAMBLE && safeTitle != null) {
+                "；题材与《$safeTitle》错开，换个口味"
+            } else {
+                ""
             }
             RecommendationUiModel(
                 kind = kind,
                 workId = s.work.id,
                 card = s.work.toRecommendCard(),
-                reason = "${kind.tagline()}。$reason",
+                reason = "${kind.tagline()}。$fit$contrast",
+                matchPercent = s.tasteFraction?.takeIf { s.tasteAvailable }
+                    ?.let { (it * PERCENT).toInt().coerceIn(0, PERCENT) },
             )
         }
         return UiState.Success(recommendations)
+    }
+
+    /** 把意图匹配结果写成一句人话：命中了什么、哪些只是沾边、缺了什么、主气质是否相冲。 */
+    private fun intentReason(e: IntentExplain): String = buildString {
+        when {
+            e.matchedCombos.isNotEmpty() -> append("是一部典型的${e.matchedCombos.first()}")
+            e.matchedStrongTags.isNotEmpty() ->
+                append("${e.matchedStrongTags.joinToString("、") { "「$it」" }}是它的核心气质")
+            e.matchedWeakTags.isNotEmpty() -> append("带有今晚想看的元素")
+            else -> append("与今晚想看的标签只是沾边")
+        }
+        if (e.matchedWeakTags.isNotEmpty()) append("，${e.matchedWeakTags.joinToString("、") { "「$it」" }}成分较淡")
+        if (e.missingImportantTags.isNotEmpty()) {
+            append("，缺少${e.missingImportantTags.joinToString("、") { "「$it」" }}")
+        }
+        if (e.dominantConflicts.isNotEmpty()) append("，主气质更偏「${e.dominantConflicts.first()}」")
     }
 
     /**
@@ -462,9 +548,9 @@ class RecommenderViewModel @Inject constructor(
             exposureDao.upsertAll(
                 works.map { w ->
                     RecommendationExposureEntity(
-                        id = "tonight:${w.id}",
+                        id = "$TONIGHT_CONTEXT:${w.id}",
                         subjectId = subjectIdOf(w) ?: w.id,
-                        context = "tonight",
+                        context = TONIGHT_CONTEXT,
                         exposedAt = now,
                         clickedAt = null,
                         dismissedAt = null,
@@ -505,13 +591,6 @@ class RecommenderViewModel @Inject constructor(
     )
 
     private companion object {
-        /** 三推荐生成顺序（逐档放宽），用于累积排除保证互不重复。 */
-        val RECOMMENDATION_ORDER = listOf(
-            RecommendationKind.SAFE,
-            RecommendationKind.GAMBLE,
-            RecommendationKind.WILDCARD,
-        )
-
         /** 初始 / 未提交态：引导用户选择条件并提交。 */
         val INITIAL_STATE = UiState.Empty(Cta(label = "选择条件后生成推荐", action = "submit"))
 
@@ -524,8 +603,19 @@ class RecommenderViewModel @Inject constructor(
          */
         val TASTE_FLOOR_CTA = Cta(label = "没有达到口味匹配度阈值的作品，可到设置调低阈值", action = "adjust")
 
-        /** 全部作品池融入评分时，先按口味取的候选规模（之后用本地缓存评分二次排序）。 */
-        const val RATING_BLEND_POOL = 30
+        /** 粗排后进入「查社区评分 + 精排」的候选规模上限（控制逐部查库的耗时）。 */
+        const val RATING_LOOKUP_POOL = 120
+
+        /** 贝叶斯均分先验：均值与等效票数。 */
+        const val BAYES_PRIOR_MEAN = 6.5f
+        const val BAYES_PRIOR_VOTES = 300f
+
+        const val TONIGHT_CONTEXT = "tonight"
+        const val PERCENT = 100
+        const val MILLIS_PER_DAY = 24.0 * 3600 * 1000
+
+        /** 这段时间内刚推过的作品本次直接回避，保证连续提交能换一批。 */
+        const val HARD_REPEAT_MS = 36L * 3600 * 1000
 
         /** 动态标签筛选项最多展示个数（按频次取前 N，避免选项过多）。待补池用此值（精简）。 */
         const val MAX_TAG_OPTIONS = 30
@@ -537,24 +627,12 @@ class RecommenderViewModel @Inject constructor(
         const val ALL_WORKS_TAG_OPTIONS = 40
 
         /**
-         * 意图覆盖率加成权重；用户主动选标签时按平方覆盖率乘以此值加分。
-         * 全命中 +2.6（接近口味 frac×3 的最大 3.0），实现 soft-AND「尽量多命中所选标签」而非命中 1 个即满足；
-         * 平方覆盖率使部分命中（如 1/2→0.25）被显著压低，进一步拉开「全中 vs 擦边」。
-         */
-        const val INTENT_COVERAGE_WEIGHT = 2.6f
-
-        /**
-         * 推荐综合分的随机扰动幅度。数值需低于标签覆盖差异，避免随机项主导排序。
-         */
-        const val INTENT_RANDOM_JITTER = 0.4f
-
-        /**
          * 精排热路径不联网补齐特征，只使用缓存特征；缺失时回退 [PersonalTasteScorer]。
          * 特征由初始化、导入或同步任务在后台补齐。
          */
         const val TONIGHT_FEATURE_BUDGET = 0
 
-        /** 重复推荐冷却窗口（最近此时长内推过的作品本轮回避）。 */
+        /** 重复推荐软惩罚的回看窗口（惩罚随时间衰减，见 [TonightRanker]）。 */
         const val REPEAT_COOLDOWN_MS = 14L * 24 * 3600 * 1000
 
         /** 接受程度「不要X」→ 硬排除的题材关键词（不要太累→烧脑/上头/意识流/电波）。 */

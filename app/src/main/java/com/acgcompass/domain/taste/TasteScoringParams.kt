@@ -5,7 +5,9 @@ import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sign
+import kotlin.math.tanh
 
 /**
  * 口味匹配与推荐算法的默认参数和核心公式。
@@ -16,13 +18,30 @@ import kotlin.math.sign
  */
 object TasteScoringParams {
 
-    /** 算法版本号（画像缓存键 / 回归判定用；公式或默认参数重大变动时 +1）。：IDF 逆频 + 中性点下移 + 口味门控社区融合 + 锚点上调。 */
-    const val ALGORITHM_VERSION: Int = 3
+    /**
+     * 算法版本号（画像缓存键 / 回归判定用；公式或默认参数重大变动时 +1）。
+     * - v3：IDF 逆频 + 中性点下移 + 口味门控社区融合 + 锚点上调。
+     * - v4：社区分以站点中位为中性点拉开 + 候选证据量收缩（标签稀少的作品不被当成反口味）+
+     *   画像样本上限放宽。
+     * - v5：新增「预计满意度」（[satisfactionScore]，经 Bangumi15M 真实用户盲测定权），推荐排序改用它；
+     *   撤掉 v4 的「按个人与社区相关度调权重」（真实数据未见增益）。
+     */
+    const val ALGORITHM_VERSION: Int = 5
 
     // region 样本权重
 
-    /** 画像真实样本上限：50 部信息量最高作品（含全部最高分 / 最低分作品）。 */
-    const val MAX_PROFILE_SAMPLES: Int = 50
+    /**
+     * 画像真实样本上限 120（v4 起）：评分多的用户不只用「极端分 + 最近几部」建画像
+     * （上限太小时强制样本一多，中间分作品就整体进不了画像，负向 / 中性证据缺失）。时间权重已负责近因，
+     * 上限只为约束组合挖掘的内存与耗时。
+     */
+    const val MAX_PROFILE_SAMPLES: Int = 120
+
+    /**
+     * 单部作品参与题材组合挖掘的标签数上限（按标注强度取前 N）。三元组合数随标签数立方增长，
+     * 尾部低标注标签多为噪声，截断后既控内存又让组合更聚焦主干题材。
+     */
+    const val COMBO_MAX_TAGS_PER_WORK: Int = 16
 
     /** 时间半衰期（天）：约 18 个月，最近两年评分更重要但老作品不被抹掉。 */
     const val TIME_HALF_LIFE_DAYS: Double = 540.0
@@ -228,22 +247,137 @@ object TasteScoringParams {
         return (ln(1.0 + v) / ln(20000.0)).coerceIn(0.0, 1.0)
     }
 
+    /** 社区分映射的中性点：Bangumi 动画有排名条目的评分中位约 6.6，此分对应匹配度 50（不加不减）。 */
+    const val COMMUNITY_NEUTRAL_SCORE: Double = 6.6
+
+    /** 社区分映射的尺度：`50 + 45·tanh((score − 6.6)/1.3)`，8.5→≈90、7.5→≈77、7.0→≈64、6.0→≈30。 */
+    const val COMMUNITY_SCORE_SCALE: Double = 1.3
+
     /**
-     * 口味门控社区融合：以画像分 [profileScore]（5–95）为主，按「口味立场弱 + 社区票数足」的程度
-     * 融入社区评分。**仅用于未评分作品**（已评分作品走 [ratedAnchorProbability] 显式锚）。
+     * 社区评分 → 匹配度量纲（5–95）。v3 用 `score·10`，结果挤在 55–85 且中位作品（6.6）也给 66 分——
+     * 「画像没话说 + 口碑平平」的作品被系统性抬到「可能会喜欢」。v4 以站点中位为中性 50 并用 tanh 拉开，
+     * 与画像分同一量纲（中心 50、两端饱和），单调性不变。
+     */
+    fun communityTargetScore(bangumiScore10: Double): Double =
+        (SPREAD_BASE + SPREAD_MAX_OFFSET * tanh((bangumiScore10 - COMMUNITY_NEUTRAL_SCORE) / COMMUNITY_SCORE_SCALE))
+            .coerceIn(SPREAD_BASE - SPREAD_MAX_OFFSET, SPREAD_BASE + SPREAD_MAX_OFFSET)
+
+    /**
+     * 口味门控社区融合（**显示用的口味匹配度**）：以画像分 [profileScore]（5–95）为主，按「口味立场弱 +
+     * 社区票数足」的程度融入社区评分。**仅用于未评分作品**（已评分作品走 [ratedAnchorProbability] 显式锚）。
      *
      * `gate = (1 − |p−50|/50)^EXP`（口味越中性门越开）；`w_c = COMMUNITY_BLEND_MAX · gate · votesConf`；
-     * `out = (1−w_c)·p + w_c·comm`，其中 `comm = clip(bangumiScore·10, 0, 100)`。
-     * 无社区评分时原样返回画像分。
+     * `out = (1−w_c)·p + w_c·comm`，其中 `comm = `[communityTargetScore]。无社区评分时原样返回画像分。
+     *
+     * 门控保证「强命中 / 强反口味由口味主导」——这是匹配度的语义，但也让它不是最好的评分预测器
+     * （Bangumi15M 750 位用户 5 折盲测：匹配度 Spearman≈0.49，而 [satisfactionScore] ≈0.56）。
+     * 推荐排序请用后者。
      */
     fun communityBlendedScore(profileScore: Int, bangumiScore10: Double?, votes: Int?): Int {
         if (bangumiScore10 == null || bangumiScore10 <= 0.0) return profileScore
-        val comm = (bangumiScore10 * 10.0).coerceIn(0.0, 100.0)
+        val comm = communityTargetScore(bangumiScore10)
         val gate = Math.pow((1.0 - abs(profileScore - 50.0) / 50.0).coerceIn(0.0, 1.0), COMMUNITY_GATE_EXP)
         val wc = COMMUNITY_BLEND_MAX * gate * votesConfidence(votes)
         val out = (1.0 - wc) * profileScore + wc * comm
-        return out.toInt().coerceIn(5, 95)
+        return out.roundToInt().coerceIn(5, 95)
     }
+
+    // endregion
+
+    // region 预计满意度（v5，推荐排序用）
+
+    /** 社区分标准化的中心与尺度（Bangumi 动画评分的站点水平）。 */
+    const val SATISFACTION_COMMUNITY_STD: Double = 0.9
+
+    /** 个人画像在满意度里的权重：评分少时 0.20，评分达到 [SATISFACTION_FULL_SAMPLES] 时 0.30。 */
+    const val SATISFACTION_PERSONAL_MIN: Double = 0.20
+    const val SATISFACTION_PERSONAL_MAX: Double = 0.30
+    const val SATISFACTION_MIN_SAMPLES: Int = 20
+    const val SATISFACTION_FULL_SAMPLES: Int = 60
+
+    /** 社区分的贝叶斯票数收缩：`votes/(votes+30)`，只压制「十几个人打出的极端分」。 */
+    const val SATISFACTION_VOTE_PRIOR: Double = 30.0
+
+    /** 画像 z 分截断与满意度的 tanh 尺度。 */
+    const val SATISFACTION_Z_CLIP: Double = 3.0
+    const val SATISFACTION_Z_SCALE: Double = 1.5
+
+    /** 没有社区评分时，只凭画像给出的满意度要保守：画像 z 分乘此系数。 */
+    const val SATISFACTION_PROFILE_ONLY_GAIN: Double = 0.6
+
+    /** 评分数 → 个人画像权重（线性插值，两端截断）。 */
+    fun satisfactionPersonalWeight(sampleCount: Int): Double {
+        val span = (SATISFACTION_FULL_SAMPLES - SATISFACTION_MIN_SAMPLES).toDouble()
+        val t = ((sampleCount - SATISFACTION_MIN_SAMPLES) / span).coerceIn(0.0, 1.0)
+        return SATISFACTION_PERSONAL_MIN + (SATISFACTION_PERSONAL_MAX - SATISFACTION_PERSONAL_MIN) * t
+    }
+
+    /**
+     * **预计满意度**（5–95）：这部作品你看完大概会有多满意。回答的是「看完会不会给高分」，
+     * 与「像不像你的口味」（匹配度）是两个问题——一部口碑极好的陌生题材，匹配度不高，满意度可以很高。
+     *
+     * `z = (1−w)·z_社区 + w·z_画像·证据量`，`score = 50 + 45·tanh(z/1.5)`：
+     * - `z_社区 = (社区分 − 6.6)/0.9 · votes/(votes+30)`；
+     * - `z_画像` = 画像 rawZ 相对候选池的标准分（截断到 ±3）；
+     * - `w` 随评分数从 0.20 升到 0.30。
+     *
+     * 权重来自 Bangumi15M 抽样 750 位真实用户的 5 折盲测（每位用户的预测分 vs 真实评分 Spearman 均值）：
+     * 仅社区分 0.547、仅画像 0.406、原门控融合 0.465–0.485，本公式 0.562–0.567，Top10 命中率
+     * 0.67→0.71。实验中「按个人与社区相关度调权重」「残差建画像」「协同过滤向量」都没有带来
+     * 超过 0.01 的增益，故不引入。
+     *
+     * @param profileZ 画像标准分；画像不可用时传 `null`（只用社区分）。
+     */
+    fun satisfactionScore(
+        profileZ: Double?,
+        evidence: Double,
+        bangumiScore10: Double?,
+        votes: Int?,
+        sampleCount: Int,
+    ): Int {
+        val personal = profileZ?.coerceIn(-SATISFACTION_Z_CLIP, SATISFACTION_Z_CLIP)?.times(evidence.coerceIn(0.0, 1.0))
+        val community = bangumiScore10?.takeIf { it > 0.0 }?.let {
+            val v = (votes ?: 0).coerceAtLeast(0).toDouble()
+            (it - COMMUNITY_NEUTRAL_SCORE) / SATISFACTION_COMMUNITY_STD * (v / (v + SATISFACTION_VOTE_PRIOR))
+        }
+        val w = satisfactionPersonalWeight(sampleCount)
+        val z = when {
+            personal != null && community != null -> (1.0 - w) * community + w * personal
+            community != null -> (1.0 - w) * community
+            personal != null -> SATISFACTION_PROFILE_ONLY_GAIN * personal
+            else -> 0.0
+        }
+        return (SPREAD_BASE + SPREAD_MAX_OFFSET * tanh(z / SATISFACTION_Z_SCALE)).roundToInt().coerceIn(5, 95)
+    }
+
+    // endregion
+
+    // region 候选证据量（v4）
+
+    /**
+     * 候选作品拿满证据量所需的有效内容标签数（题材 / 情节 / 角色类型 / 来源 / 梗 / 年代）。
+     * 取 2：只收缩「完全没有标签 / 只有一个标签」的作品，正常条目（十几个标签）不受影响。
+     */
+    const val EVIDENCE_FULL_TAGS: Int = 2
+
+    /**
+     * 候选证据量 ∈ [0,1]：`max(min(1, 有效内容标签数 / 2), 画像熟悉度)`。
+     *
+     * 校准以候选池 rawZ 中位为中性点，而**没有标签**（新番 / 冷门 / 特征未补齐）的作品 rawZ≈0，
+     * 低于池中位 → 被判成二三十分的「反口味」。但「没有信息」不是「不喜欢」：按证据量把画像概率向
+     * 中性 0.5 收缩，让这类作品回到中性区间、交由社区口碑门控补位，并同步下调置信度。
+     *
+     * 取与 [familiarity] 的较大值：哪怕只有一个标签，只要它正好是画像有明确立场的标签（比如你反复
+     * 打低分的题材），这就是充分证据，不收缩。
+     */
+    fun candidateEvidence(contentTagCount: Int, familiarity: Double = 0.0): Double = maxOf(
+        (contentTagCount.coerceAtLeast(0).toDouble() / EVIDENCE_FULL_TAGS).coerceIn(0.0, 1.0),
+        familiarity.coerceIn(0.0, 1.0),
+    )
+
+    /** 按证据量把概率向中性 0.5 收缩。 */
+    fun shrinkToNeutral(probability: Double, evidence: Double): Double =
+        0.5 + (probability - 0.5) * evidence.coerceIn(0.0, 1.0)
 
     // endregion
 
@@ -380,17 +514,23 @@ object TasteScoringParams {
     /** 多样性重排 MMR 系数 λ（越大越偏相关度、越小越偏多样性）。 */
     const val MMR_LAMBDA: Double = 0.78
 
-    /** 今晚分各项权重（`tonightRaw` 线性融合）。 */
-    const val TONIGHT_W_TASTE: Double = 0.42
-    const val TONIGHT_W_INTENT_TAG: Double = 0.18
+    /**
+     * 今晚分各项权重（`tonightRaw` 线性融合）。按「意图匹配 VNext」修订：当晚意图从 0.18 提到 0.32、
+     * 口味从 0.42 降到 0.34——用户今晚明确说想看什么，不能被长期口味压过去。正向项合计 1.0。
+     */
+    const val TONIGHT_W_TASTE: Double = 0.34
+    const val TONIGHT_W_INTENT_TAG: Double = 0.32
     const val TONIGHT_W_TIME_FIT: Double = 0.10
-    const val TONIGHT_W_COMMUNITY: Double = 0.08
-    const val TONIGHT_W_NOVELTY: Double = 0.08
-    const val TONIGHT_W_COMPLETION_EASE: Double = 0.07
-    const val TONIGHT_W_FRESHNESS: Double = 0.07
-    const val TONIGHT_W_REPEAT_PENALTY: Double = 0.20
-    const val TONIGHT_W_FRANCHISE_PENALTY: Double = 0.12
-    const val TONIGHT_W_EXAM_RISK: Double = 0.08
+    const val TONIGHT_W_COMMUNITY: Double = 0.07
+    const val TONIGHT_W_NOVELTY: Double = 0.06
+    const val TONIGHT_W_COMPLETION_EASE: Double = 0.05
+    const val TONIGHT_W_FRESHNESS: Double = 0.06
+    const val TONIGHT_W_REPEAT_PENALTY: Double = 0.18
+    const val TONIGHT_W_FRANCHISE_PENALTY: Double = 0.14
+    const val TONIGHT_W_EXAM_RISK: Double = 0.12
+
+    /** 主气质冲突惩罚：作品的主气质与所选意图相冲（选校园恋爱日常，作品主打超能力战斗）。 */
+    const val TONIGHT_W_DOMINANT_CONFLICT: Double = 0.18
 
     // endregion
 }

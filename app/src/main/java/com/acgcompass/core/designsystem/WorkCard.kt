@@ -1,5 +1,6 @@
 package com.acgcompass.core.designsystem
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,25 +12,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 /**
  * 统一作品卡片。
@@ -77,6 +77,7 @@ fun WorkCard(model: WorkCardUiModel, modifier: Modifier = Modifier, onClick: () 
                 Text(
                     text = model.title,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -104,15 +105,9 @@ fun WorkCard(model: WorkCardUiModel, modifier: Modifier = Modifier, onClick: () 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (model.ratingText != null) {
-                        Text(
-                            text = model.ratingText,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        TagPill(text = model.ratingText, tone = TagPillTone.Primary)
                     }
                 }
-
-                // 待补状态 + 补完成本（今晚/周末/长期坑）。
                 val statusLine = listOfNotNull(model.backlogStatus, model.completionCost)
                 if (statusLine.isNotEmpty()) {
                     Text(
@@ -123,41 +118,17 @@ fun WorkCard(model: WorkCardUiModel, modifier: Modifier = Modifier, onClick: () 
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-
-                // 来源标签 chips（标注数据来源）。
-                if (model.sourceTags.isNotEmpty()) {
+                // Informational tags are non-interactive pills: the whole card is the tap target.
+                if (model.sourceTags.isNotEmpty() || model.moodRiskTags.isNotEmpty()) {
                     FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        model.sourceTags.forEach { tag ->
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(text = tag, style = MaterialTheme.typography.labelSmall) },
-                                shape = MaterialTheme.shapes.extraSmall,
-                                border = SuggestionChipDefaults.suggestionChipBorder(enabled = true),
-                            )
-                        }
-                    }
-                }
-
-                // 风险 / 心情标签 chips。
-                if (model.moodRiskTags.isNotEmpty()) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        model.moodRiskTags.forEach { tag ->
-                            AssistChip(
-                                onClick = {},
-                                label = { Text(text = tag, style = MaterialTheme.typography.labelSmall) },
-                                shape = MaterialTheme.shapes.extraSmall,
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                ),
-                            )
-                        }
+                        model.sourceTags.forEach { TagPill(text = it, tone = TagPillTone.Neutral) }
+                        model.moodRiskTags.forEach { TagPill(text = it, tone = TagPillTone.Secondary) }
                     }
                 }
             }
@@ -166,22 +137,27 @@ fun WorkCard(model: WorkCardUiModel, modifier: Modifier = Modifier, onClick: () 
 }
 
 /**
- * 封面图：使用 Coil [AsyncImage] 加载远程封面；[coverUrl] 为 `null` 时渲染占位图标兜底
- * （封面缺失兜底）。
+ * Cover thumbnail. The image is cropped to fill the 3:4 frame (covers come in assorted aspect
+ * ratios; letterboxing them left uneven gaps), fades in, and sits on a tonal surface so the row
+ * does not jump while it loads.
  */
 @Composable
 private fun CoverImage(coverUrl: String?, contentDescription: String, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
             .size(width = 72.dp, height = 96.dp)
-            .clip(shape),
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         contentAlignment = Alignment.Center,
     ) {
         if (coverUrl != null) {
             AsyncImage(
-                model = coverUrl,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(coverUrl)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = contentDescription,
+                contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -194,9 +170,7 @@ private fun CoverImage(coverUrl: String?, contentDescription: String, modifier: 
 @Composable
 private fun PlaceholderCover(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(10.dp)),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         Column(

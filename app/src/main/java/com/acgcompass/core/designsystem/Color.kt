@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber") // ARGB literals are the named, contrast-checked theme tokens.
+
 package com.acgcompass.core.designsystem
 
 import androidx.compose.material3.ColorScheme
@@ -59,6 +61,15 @@ private val md_light_inverseOnSurface = Color(0xFFF2F0F4)
 private val md_light_inversePrimary = Color(0xFFB1C5FF)
 private val md_light_scrim = Color(0xFF000000)
 
+// Tonal surface roles (Material 3 surface containers), tinted toward the brand blue.
+private val md_light_surfaceDim = Color(0xFFD9D9E0)
+private val md_light_surfaceBright = Color(0xFFFAF8FF)
+private val md_light_surfaceContainerLowest = Color(0xFFFFFFFF)
+private val md_light_surfaceContainerLow = Color(0xFFF4F3FA)
+private val md_light_surfaceContainer = Color(0xFFEEEDF4)
+private val md_light_surfaceContainerHigh = Color(0xFFE8E7EF)
+private val md_light_surfaceContainerHighest = Color(0xFFE2E2E9)
+
 // ---- Dark scheme roles ----
 private val md_dark_primary = Color(0xFFB1C5FF)
 private val md_dark_onPrimary = Color(0xFF002C71)
@@ -93,6 +104,15 @@ private val md_dark_inverseOnSurface = Color(0xFF303034)
 private val md_dark_inversePrimary = Color(0xFF1F5EFF)
 private val md_dark_scrim = Color(0xFF000000)
 
+// Tonal surface roles (Material 3 surface containers), tinted toward the brand blue.
+private val md_dark_surfaceDim = Color(0xFF12131A)
+private val md_dark_surfaceBright = Color(0xFF383940)
+private val md_dark_surfaceContainerLowest = Color(0xFF0D0E14)
+private val md_dark_surfaceContainerLow = Color(0xFF1A1B22)
+private val md_dark_surfaceContainer = Color(0xFF1E1F26)
+private val md_dark_surfaceContainerHigh = Color(0xFF292A31)
+private val md_dark_surfaceContainerHighest = Color(0xFF33343C)
+
 /** Brand light color scheme (fallback for devices without dynamic color). */
 internal val LightColors = lightColorScheme(
     primary = md_light_primary,
@@ -123,6 +143,17 @@ internal val LightColors = lightColorScheme(
     inverseOnSurface = md_light_inverseOnSurface,
     inversePrimary = md_light_inversePrimary,
     scrim = md_light_scrim,
+    // Tonal surface roles. Material 3 cards, navigation bars, sheets and search fields read these;
+    // left unset they fall back to the library's baseline (purple-tinted) values, which clash with
+    // the blue brand palette whenever dynamic color is off or unavailable (Android < 12).
+    surfaceTint = md_light_primary,
+    surfaceDim = md_light_surfaceDim,
+    surfaceBright = md_light_surfaceBright,
+    surfaceContainerLowest = md_light_surfaceContainerLowest,
+    surfaceContainerLow = md_light_surfaceContainerLow,
+    surfaceContainer = md_light_surfaceContainer,
+    surfaceContainerHigh = md_light_surfaceContainerHigh,
+    surfaceContainerHighest = md_light_surfaceContainerHighest,
 )
 
 /** Brand dark color scheme (fallback for devices without dynamic color). */
@@ -155,10 +186,18 @@ internal val DarkColors = darkColorScheme(
     inverseOnSurface = md_dark_inverseOnSurface,
     inversePrimary = md_dark_inversePrimary,
     scrim = md_dark_scrim,
+    surfaceTint = md_dark_primary,
+    surfaceDim = md_dark_surfaceDim,
+    surfaceBright = md_dark_surfaceBright,
+    surfaceContainerLowest = md_dark_surfaceContainerLowest,
+    surfaceContainerLow = md_dark_surfaceContainerLow,
+    surfaceContainer = md_dark_surfaceContainer,
+    surfaceContainerHigh = md_dark_surfaceContainerHigh,
+    surfaceContainerHighest = md_dark_surfaceContainerHighest,
 )
 
 /** 动态取色关闭时按浅/深模式选择的高对比度预设。 */
-@Suppress("MagicNumber") // ARGB literals are the named, contrast-checked theme tokens.
+@Suppress("MagicNumber", "LongMethod") // ARGB literals are the named, contrast-checked theme tokens.
 internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme {
     val base = if (dark) DarkColors else LightColors
     return when (preset) {
@@ -166,6 +205,7 @@ internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme 
         ThemePreset.SAKURA -> if (dark) {
             base.copy(
                 primary = Color(0xFFFFB1C8),
+                surfaceTint = Color(0xFFFFB1C8),
                 onPrimary = Color(0xFF53152F),
                 primaryContainer = Color(0xFF6E2943),
                 onPrimaryContainer = Color(0xFFFFD9E5),
@@ -174,6 +214,7 @@ internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme 
         } else {
             base.copy(
                 primary = Color(0xFF8A3A5B),
+                surfaceTint = Color(0xFF8A3A5B),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFFFD9E5),
                 onPrimaryContainer = Color(0xFF3A071E),
@@ -183,6 +224,7 @@ internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme 
         ThemePreset.FOREST -> if (dark) {
             base.copy(
                 primary = Color(0xFF9CD596),
+                surfaceTint = Color(0xFF9CD596),
                 onPrimary = Color(0xFF00390A),
                 primaryContainer = Color(0xFF1D511F),
                 onPrimaryContainer = Color(0xFFB7F2AF),
@@ -191,6 +233,7 @@ internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme 
         } else {
             base.copy(
                 primary = Color(0xFF356A35),
+                surfaceTint = Color(0xFF356A35),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFB7F2AF),
                 onPrimaryContainer = Color(0xFF002204),
@@ -200,6 +243,7 @@ internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme 
         ThemePreset.AMBER -> if (dark) {
             base.copy(
                 primary = Color(0xFFEBC248),
+                surfaceTint = Color(0xFFEBC248),
                 onPrimary = Color(0xFF3E2E00),
                 primaryContainer = Color(0xFF594400),
                 onPrimaryContainer = Color(0xFFFFE08A),
@@ -208,6 +252,7 @@ internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme 
         } else {
             base.copy(
                 primary = Color(0xFF765A00),
+                surfaceTint = Color(0xFF765A00),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFFFE08A),
                 onPrimaryContainer = Color(0xFF241A00),

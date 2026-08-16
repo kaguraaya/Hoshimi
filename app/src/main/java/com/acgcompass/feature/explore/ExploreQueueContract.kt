@@ -48,29 +48,21 @@ data class ExploreCardUiModel(
     val synopsis: String?,
     /** 背面简介懒加载中标记——翻面时若无本地简介则联网补齐，加载期间背面显示「加载中」。 */
     val synopsisLoading: Boolean = false,
+    /** 跨界候选：口碑扎实但题材在画像常看范围之外，卡片上以「跨界探索」标识。 */
+    val discovery: Boolean = false,
 )
 
 /**
  * 将 12 维匹配结果和作品映射为探索卡片；理由只呈现题材、组合和情节维度，
  * 引擎无结果时退化为「探索尝试 / 按热度」措辞（绝不伪造匹配度）。
  */
-internal fun Work.toExploreCard(match: TasteMatchResult?): ExploreCardUiModel {
+internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = false): ExploreCardUiModel {
     val parts = listOfNotNull(
         units.episodes?.let { "$it 话" },
         year?.toString(),
         mediaTypeLabel(mediaType),
     )
-    val topicReasons = match?.reasons.orEmpty().filter {
-        it.category == TasteCategory.TOPIC ||
-            it.category == TasteCategory.COMBO ||
-            it.category == TasteCategory.DEVICE
-    }.ifEmpty { match?.reasons.orEmpty() }
-    val reason = when {
-        topicReasons.isNotEmpty() ->
-            "命中「${topicReasons.take(3).joinToString(" + ") { it.label }}」，与长期口味画像接近"
-        match != null -> "与口味画像重合较少，作为探索性候选"
-        else -> "口味画像尚未就绪，先按热度作为探索推荐"
-    }
+    val reason = exploreReason(match, discovery)
     val score = match?.score
     return ExploreCardUiModel(
         workId = id,
@@ -89,8 +81,31 @@ internal fun Work.toExploreCard(match: TasteMatchResult?): ExploreCardUiModel {
         reason = reason,
         tags = tags.take(5).map { it.name },
         synopsis = summary?.trim()?.takeIf { it.isNotBlank() },
+        discovery = discovery,
     )
 }
+
+/** 卡片上的一句话推荐理由。只引用正向贡献的维度：负向项是「拉低匹配」的原因，不能写成「命中」。 */
+private fun exploreReason(match: TasteMatchResult?, discovery: Boolean): String {
+    val positive = match?.positiveReasons.orEmpty()
+    val topicReasons = positive.filter {
+        it.category == TasteCategory.TOPIC ||
+            it.category == TasteCategory.COMBO ||
+            it.category == TasteCategory.DEVICE
+    }.ifEmpty { positive }
+    return when {
+        discovery -> {
+            val rating = match?.communityScore10?.let { "社区评分 %.1f，".format(it) }.orEmpty()
+            "${rating}口碑扎实，但题材在你常看的范围之外——换换口味的跨界候选"
+        }
+        topicReasons.isNotEmpty() ->
+            "命中「${topicReasons.take(MAX_REASON_LABELS).joinToString(" + ") { it.label }}」，与长期口味画像接近"
+        match != null -> "与口味画像重合较少，作为探索性候选"
+        else -> "口味画像尚未就绪，先按热度作为探索推荐"
+    }
+}
+
+private const val MAX_REASON_LABELS = 3
 
 private fun mediaTypeLabel(t: MediaType): String = when (t) {
     MediaType.ANIME -> "动画"

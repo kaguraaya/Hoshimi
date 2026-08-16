@@ -275,6 +275,18 @@ class TasteEngine @Inject constructor(
             features.mapValues { (_, f) -> computeMatch(f, profile, null, tagOverrides) }
         }
 
+    /**
+     * 只读本地缓存的作品特征（不联网）。「今晚看什么」用其中的标签标注人数判断标签代表性；
+     * 未缓存的作品不在返回表里（调用方退回只看标签顺序）。
+     */
+    suspend fun cachedFeatures(subjectIds: List<String>): Map<String, WorkFeature> = withContext(dispatchers.io) {
+        if (subjectIds.isEmpty()) {
+            emptyMap()
+        } else {
+            runCatching { workFeatureRepository.getFeatures(subjectIds.distinct(), 0) }.getOrDefault(emptyMap())
+        }
+    }
+
     /** 解析单条收藏的「评定时间」毫秒：优先 Bangumi `sourceUpdatedAt`，回退本地 `updatedAt`。 */
     private fun timestampOf(c: UserCollectionEntity): Long = parseIsoMillis(c.sourceUpdatedAt) ?: c.updatedAt
 
