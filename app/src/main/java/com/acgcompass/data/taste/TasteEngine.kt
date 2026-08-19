@@ -2,6 +2,7 @@ package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.logging.RedactingLogger
+import com.acgcompass.data.local.dao.RecommendationExposureDao
 import com.acgcompass.data.local.dao.TagDimensionDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkDao
@@ -10,6 +11,7 @@ import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.taste.AdvancedTasteProfile
 import com.acgcompass.domain.taste.BuildTasteProfileUseCase
 import com.acgcompass.domain.taste.ComputeTasteMatchUseCase
+import com.acgcompass.domain.taste.ImplicitSignal
 import com.acgcompass.domain.taste.TasteCategory
 import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.TasteRefreshProgress
@@ -45,6 +47,7 @@ import kotlinx.coroutines.withContext
  *
  * 韧性：任一步骤失败都不抛、不伪造——画像不可用时 [score] 退化为低置信中性结果。
  */
+@Suppress("LongParameterList") // Hilt 构造注入。
 @Singleton
 class TasteEngine @Inject constructor(
     private val userCollectionDao: UserCollectionDao,
@@ -53,6 +56,7 @@ class TasteEngine @Inject constructor(
     private val buildProfile: BuildTasteProfileUseCase,
     private val computeMatch: ComputeTasteMatchUseCase,
     private val tagDimensionDao: TagDimensionDao,
+    private val exposureDao: RecommendationExposureDao,
     private val dispatchers: DispatcherProvider,
 ) {
     private val logger = RedactingLogger()
@@ -161,7 +165,7 @@ class TasteEngine @Inject constructor(
             if (networkBudget > 0) {
                 refreshProgressState.value = TasteRefreshProgress(TasteRefreshProgress.Phase.BUILDING)
             }
-            val profile = buildProfile(samples, now, calibrationPool, loadTagOverrides())
+            val profile = buildWithImplicitSignals(samples, now, calibrationPool, ratedIds)
             // 显式评分锚定必须覆盖「全部已评分作品」——含特征未取到、未进 50 样本者，否则这些作品
             // 在详情页拿不到显式评分锚（rating 查不到）→ 仍会塌到个位数。用完整评分表覆盖 ratedSubjectScores。
             val allRatedScores = rated.mapNotNull { c -> c.rating?.let { c.sourceItemId to it } }.toMap()
@@ -176,6 +180,50 @@ class TasteEngine @Inject constructor(
             if (networkBudget > 0) refreshProgressState.value = null
             finalProfile
         }
+    }
+
+    private suspend fun buildWithImplicitSignals(
+        samples: List<TasteSample>,
+        now: Long,
+        calibrationPool: List<WorkFeature>,
+        ratedIds: Set<String>,
+    ): AdvancedTasteProfile = buildProfile(
+        samples,
+        now,
+        calibrationPool,
+        loadTagOverrides(),
+        implicitSignals = runCatching { loadImplicitSignals(ratedIds, now) }.getOrDefault(emptyList()),
+    )
+
+    /**
+     * 收集隐式兴趣信号：未评分收藏的状态（想看 / 在看 / 搁置 / 抛弃）与探索队列的左右滑。
+     * 只用本地已缓存的作品特征（不联网）；没有特征的作品跳过。
+     */
+    private suspend fun loadImplicitSignals(ratedIds: Set<String>, now: Long): List<ImplicitSignal> {
+        val kinds = LinkedHashMap<String, ImplicitSignal.Kind>()
+        // 探索队列：加入待补池 = 感兴趣；暂不 = 轻微的不感兴趣（原因未知，权重最低）。
+        exposureDao.exposuresInContextSince(EXPLORE_CONTEXT, now - IMPLICIT_WINDOW_MS).forEach { e ->
+            when {
+                e.clickedAt != null -> kinds[e.subjectId] = ImplicitSignal.Kind.EXPLORE_LIKED
+                e.dismissedAt != null -> kinds[e.subjectId] = ImplicitSignal.Kind.EXPLORE_SKIPPED
+            }
+        }
+        // 收藏状态比滑动更明确，后写入以覆盖同一作品的滑动信号。
+        userCollectionDao.getAll()
+            .filter { it.rating == null && it.sourceItemId.isNotBlank() }
+            .forEach { c -> statusSignal(c.status)?.let { kinds[c.sourceItemId] = it } }
+        val ids = kinds.keys.filter { it !in ratedIds }
+        if (ids.isEmpty()) return emptyList()
+        val features = workFeatureRepository.getFeatures(ids, 0)
+        return ids.mapNotNull { id -> features[id]?.let { ImplicitSignal(it, kinds.getValue(id)) } }
+    }
+
+    private fun statusSignal(status: String?): ImplicitSignal.Kind? = when (status) {
+        "想看" -> ImplicitSignal.Kind.WISH
+        "在看" -> ImplicitSignal.Kind.WATCHING
+        "搁置" -> ImplicitSignal.Kind.ON_HOLD
+        "抛弃" -> ImplicitSignal.Kind.DROPPED
+        else -> null
     }
 
     /**
@@ -321,5 +369,9 @@ class TasteEngine @Inject constructor(
          */
         const val CALIB_POOL_TARGET: Int = 40
         const val TIMING_LOG_TAG = "TasteMatchTiming"
+        const val EXPLORE_CONTEXT = "explore"
+
+        /** 隐式信号回看窗口：半年前的滑动代表不了现在的兴趣。 */
+        const val IMPLICIT_WINDOW_MS = 180L * 24 * 60 * 60 * 1000
     }
 }

@@ -114,7 +114,7 @@ class DetailInteractionRepositoryImpl @Inject constructor(
             val rating = record.rating ?: return@mapNotNull null
             val title = workDao.getById(record.localWorkId)?.canonicalTitle?.takeIf(String::isNotBlank)
                 ?: return@mapNotNull null
-            RatedWorkContext(title, rating, record.comment, record.updatedAt)
+            RatedWorkContext(title, rating, record.comment, record.updatedAt, record.sourceItemId)
         }
 
     override suspend fun isBangumiConfigured(): Boolean =

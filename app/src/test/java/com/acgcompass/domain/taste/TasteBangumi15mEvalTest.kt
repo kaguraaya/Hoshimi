@@ -51,7 +51,8 @@ class TasteBangumi15mEvalTest : StringSpec({
 
         val out = File("build/loo/b15m-components.tsv").bufferedWriter()
         out.appendLine(
-            "user\tn\tsubject\trating\tscore\tprofile\tsatisfaction\tcommunity\tvotes\tevidence\tfamiliarity\tz",
+            "user\tn\tsubject\trating\tscore\tprofile\tsatisfaction\tcommunity\tvotes" +
+                "\tevidence\tfamiliarity\tz\tpred\tdivergence",
         )
         var rows = 0
         for ((userIndex, userEl) in root.getValue("users").jsonArray.take(maxUsers).withIndex()) {
@@ -76,6 +77,7 @@ class TasteBangumi15mEvalTest : StringSpec({
                             userIndex, items.size, t.subjectId, t.rating, r.score, r.profileScore, r.satisfaction,
                             t.feature.bangumiScore ?: 0f, t.feature.bangumiVotes, r.evidence, r.familiarity,
                             (r.rawZ - profile.calibration.mu) / profile.calibration.tau,
+                            r.prediction?.rating ?: "", r.prediction?.divergence ?: "",
                         ).joinToString("\t"),
                     )
                     rows++

@@ -108,6 +108,12 @@ data class TasteMatchOutput(
     val likedReasons: List<String> = emptyList(),
     val riskReasons: List<String> = emptyList(),
     val confidence: Float = 0f,
+    /** 预计用户会打的分（1–10，一位小数）；0 = 模型未给出（旧缓存 / 不支持）。 */
+    val predictedRating: Float = 0f,
+    /** 与大众评分相比会更高 / 更低的一句话原因；没有明显分歧时为空串。 */
+    val divergenceReason: String = "",
+    /** 从用户的分歧评分与短评里归纳出的「打分最看重的角度」（2–4 个短语）。 */
+    val ratingAngles: List<String> = emptyList(),
 )
 
 @Serializable

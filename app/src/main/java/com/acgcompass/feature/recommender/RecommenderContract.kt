@@ -311,7 +311,7 @@ private fun MediaType.recommenderLabel(): String = when (this) {
     MediaType.OTHER -> "其他"
 }
 
-private fun SourceId.recommenderSourceLabel(): String = when (this) {
+internal fun SourceId.recommenderSourceLabel(): String = when (this) {
     SourceId.BANGUMI -> "Bangumi"
     SourceId.ANILIST -> "AniList"
     SourceId.TENRAI -> "Tenrai"

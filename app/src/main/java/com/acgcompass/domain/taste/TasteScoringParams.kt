@@ -23,10 +23,12 @@ object TasteScoringParams {
      * - v3：IDF 逆频 + 中性点下移 + 口味门控社区融合 + 锚点上调。
      * - v4：社区分以站点中位为中性点拉开 + 候选证据量收缩（标签稀少的作品不被当成反口味）+
      *   画像样本上限放宽。
+     * - v6：个人分歧模型（[PersonalDivergenceModel]）——残差对标签的岭回归 + 系列一致性 + 取向维度，
+     *   预测评分并给出分歧归因；满意度优先用它。Bangumi15M 盲测 Spearman 0.561 → 0.607。
      * - v5：新增「预计满意度」（[satisfactionScore]，经 Bangumi15M 真实用户盲测定权），推荐排序改用它；
      *   撤掉 v4 的「按个人与社区相关度调权重」（真实数据未见增益）。
      */
-    const val ALGORITHM_VERSION: Int = 5
+    const val ALGORITHM_VERSION: Int = 6
 
     // region 样本权重
 
@@ -351,6 +353,12 @@ object TasteScoringParams {
     }
 
     // endregion
+
+    /** 预计评分 → 满意度（5–95）：`50 + 45·tanh(((r̂ − 你的均分)/你的评分标准差)/1.5)`。 */
+    fun satisfactionFromRating(predictedRating: Double, userMean: Double, userStd: Double): Int {
+        val z = (predictedRating - userMean) / userStd.coerceAtLeast(EPSILON)
+        return (SPREAD_BASE + SPREAD_MAX_OFFSET * tanh(z / SATISFACTION_Z_SCALE)).roundToInt().coerceIn(5, 95)
+    }
 
     // region 候选证据量（v4）
 

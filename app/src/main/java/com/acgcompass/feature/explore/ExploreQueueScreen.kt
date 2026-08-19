@@ -508,6 +508,10 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
                     .clip(CircleShape),
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
+            card.predictionText?.let {
+                Spacer(Modifier.height(10.dp))
+                TagPill(text = it, tone = TagPillTone.Primary)
+            }
             Spacer(Modifier.height(14.dp))
             Text(
                 card.reason,

@@ -23,6 +23,8 @@ data class RatedWorkContext(
     val rating: Int,
     val comment: String?,
     val updatedAt: Long,
+    /** Bangumi 条目 id（与口味引擎的 subjectId 同口径），用于把评分记录与模型里的样本对上。 */
+    val subjectId: String = "",
 )
 
 /** Fields supported by Bangumi's collection update endpoint. */

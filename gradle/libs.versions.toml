@@ -48,6 +48,10 @@ hiltWork = "1.2.0"
 # Testing
 junit = "4.13.2"
 kotest = "5.9.1"
+# JVM 界面走查：Robolectric 原生渲染 + Roborazzi 截图；JUnit4 测试经 vintage 引擎跑在 JUnit Platform 上。
+robolectric = "4.13"
+roborazzi = "1.26.0"
+junitVintage = "5.10.3"
 androidxTestExtJunit = "1.2.1"
 espressoCore = "3.6.1"
 
@@ -114,6 +118,10 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotest-runner-junit5 = { group = "io.kotest", name = "kotest-runner-junit5", version.ref = "kotest" }
 kotest-assertions-core = { group = "io.kotest", name = "kotest-assertions-core", version.ref = "kotest" }
 kotest-property = { group = "io.kotest", name = "kotest-property", version.ref = "kotest" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+junit-vintage-engine = { group = "org.junit.vintage", name = "junit-vintage-engine", version.ref = "junitVintage" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 

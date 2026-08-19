@@ -41,6 +41,13 @@ data class TasteMatchResult(
      * 已评分作品与 [score] 相同（都由显式评分锚定）。
      */
     val satisfaction: Int = score,
+    /**
+     * 评分预测与分歧归因（[PersonalDivergenceModel]）：预计你会打几分、比大众水准高 / 低多少、原因是什么。
+     * 画像样本不足以建模时为 `null`。
+     */
+    val prediction: RatingPrediction? = null,
+    /** 你评过的作品里题材最接近的几部（类比证据：相似的作品你当时怎么评的）。 */
+    val similarRated: List<RatedExample> = emptyList(),
 ) {
     /** 正向理由（真正「命中你口味」的维度）；负向贡献项不应被展示成「命中」。 */
     val positiveReasons: List<TasteReason> get() = reasons.filter { it.contribution > 0.0 }
@@ -128,9 +135,12 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             timeCoverage = profile.coverage.time,
         )
 
+        val prediction = profile.divergence?.predict(feature)
         return TasteMatchResult(
             profileScore = finalScore(p),
-            satisfaction = if (isRated) score else satisfaction(feature, profile, rawZ, evidence),
+            satisfaction = if (isRated) score else satisfaction(feature, profile, rawZ, evidence, prediction),
+            prediction = prediction,
+            similarRated = profile.divergence?.nearestRated(feature, SIMILAR_RATED_LIMIT).orEmpty(),
             score = score,
             confidence = confidence,
             rawZ = rawZ,
@@ -144,18 +154,30 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         )
     }
 
+    /**
+     * 预计满意度。有个人分歧模型时用它的预测评分——换算成相对你自己打分尺度的高低：
+     * 预计评分等于你的均分 → 50，高一个标准差 → 约 77。没有模型（样本太少）时退回
+     * 「社区 + 画像」的 [TasteScoringParams.satisfactionScore]。
+     */
     private fun satisfaction(
         feature: WorkFeature,
         profile: AdvancedTasteProfile,
         rawZ: Double,
         evidence: Double,
-    ): Int = TasteScoringParams.satisfactionScore(
-        profileZ = (rawZ - profile.calibration.mu) / profile.calibration.tau,
-        evidence = evidence,
-        bangumiScore10 = feature.bangumiScore?.toDouble(),
-        votes = feature.bangumiVotes,
-        sampleCount = profile.sampleCount,
-    )
+        prediction: RatingPrediction?,
+    ): Int {
+        val model = profile.divergence
+        if (prediction != null && model != null) {
+            return TasteScoringParams.satisfactionFromRating(prediction.rating, model.meanRating, model.ratingStd)
+        }
+        return TasteScoringParams.satisfactionScore(
+            profileZ = (rawZ - profile.calibration.mu) / profile.calibration.tau,
+            evidence = evidence,
+            bangumiScore10 = feature.bangumiScore?.toDouble(),
+            votes = feature.bangumiVotes,
+            sampleCount = profile.sampleCount,
+        )
+    }
 
     /** 冷启动（画像不可用）：仅用社区口碑做极弱先验，低置信度。 */
     private fun coldStart(feature: WorkFeature, isRated: Boolean): TasteMatchResult {
@@ -245,6 +267,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
     private companion object {
         const val REASON_MIN: Double = 1e-3
         const val MAX_REASONS: Int = 4
+        const val SIMILAR_RATED_LIMIT: Int = 6
 
         /** 证据量为 0 时置信度保留的比例（不直接归零：画像本身的可信度仍在）。 */
         const val CONFIDENCE_EVIDENCE_FLOOR: Double = 0.5

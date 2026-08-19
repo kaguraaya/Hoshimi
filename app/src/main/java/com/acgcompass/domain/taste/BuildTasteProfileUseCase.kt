@@ -19,6 +19,24 @@ data class TasteSample(
 )
 
 /**
+ * 隐式兴趣信号：没有评分、但表达了态度的行为（想看 / 在看 / 搁置 / 抛弃、探索队列的加入与暂不）。
+ *
+ * 它们说明的是**兴趣**（想不想看），不是看完后的满意度——Bangumi15M 盲测里它们对预测评分没有可见增益，
+ * 所以不进评分预测模型；但对「像不像你会想看的东西」（口味匹配度的画像向量）是有效信息，以很小的权重计入：
+ * 单条信号的强度不到一条正式评分的四分之一，不参与校准、不参与组合挖掘、不计入样本数。
+ */
+data class ImplicitSignal(val feature: WorkFeature, val kind: Kind) {
+    enum class Kind(val pref: Double, val weight: Double) {
+        WISH(pref = 0.25, weight = 0.4),
+        WATCHING(pref = 0.30, weight = 0.4),
+        ON_HOLD(pref = -0.15, weight = 0.4),
+        DROPPED(pref = -0.50, weight = 0.5),
+        EXPLORE_LIKED(pref = 0.25, weight = 0.4),
+        EXPLORE_SKIPPED(pref = -0.10, weight = 0.3),
+    }
+}
+
+/**
  * 由用户收藏和作品特征构建 [AdvancedTasteProfile]；实现为可单元测试的纯函数：
  *
  * 1. **样本选择**：最多 50；强制纳入「最高分(≥9) / 最低分(≤2) / 有短评」的全部作品，其余按时间近因补齐。
@@ -31,6 +49,8 @@ data class TasteSample(
  */
 class BuildTasteProfileUseCase @Inject constructor() {
 
+    // 画像构建的主流程；原有的长度 / 复杂度告警登记在 detekt baseline 里（按旧签名匹配），新增参数后在此显式说明。
+    @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
     operator fun invoke(
         samples: List<TasteSample>,
         now: Long,
@@ -39,6 +59,7 @@ class BuildTasteProfileUseCase @Inject constructor() {
         idfStrength: Double = TasteScoringParams.PROFILE_IDF_STRENGTH,
         neutralBias: Double = TasteScoringParams.PREF_NEUTRAL_BIAS,
         prefSlope: Double = TasteScoringParams.PREF_SLOPE,
+        implicitSignals: List<ImplicitSignal> = emptyList(),
     ): AdvancedTasteProfile {
         val rated = samples.filter { it.rating != null }
         if (rated.isEmpty()) {
@@ -119,6 +140,20 @@ class BuildTasteProfileUseCase @Inject constructor() {
             }
         }
 
+        // 隐式兴趣信号：只轻推内容维度的标签向量（已评分作品以评分为准，不重复计入）。
+        val ratedIds = rated.mapTo(HashSet()) { it.subjectId }
+        for (signal in implicitSignals.distinctBy { it.feature.subjectId }) {
+            if (signal.feature.subjectId in ratedIds) continue
+            val contribution = signal.kind.weight * signal.kind.pref
+            val f = TasteRawScorer.featurize(signal.feature, tagOverrides)
+            for (cat in IMPLICIT_CATEGORIES) {
+                for ((k, q) in f.byCategory[cat].orEmpty()) {
+                    accumulate(cat, k, contribution * q)
+                    countSupport(cat, k)
+                }
+            }
+        }
+
         val nSelected = selected.size
         val categories = acc.mapValues { (cat, m) -> toCategoryPreference(m, tagSupport[cat], nSelected, idfStrength) }
             .filterValues { !it.isEmpty }
@@ -153,6 +188,7 @@ class BuildTasteProfileUseCase @Inject constructor() {
             coverage = coverage,
             sampleCount = n,
             userAvgRating = rated.mapNotNull { it.rating }.average(),
+            divergence = PersonalDivergenceModel.fit(rated, calibrationPool),
             generatedAt = now,
         )
     }
@@ -354,6 +390,10 @@ class BuildTasteProfileUseCase @Inject constructor() {
 
         /** 池不足回退时 μ 取已评分 LOO z 的低分位数（补偿幸存者偏差：未评分作品 rawZ 中心低于已评分作品）。 */
         const val CALIB_FALLBACK_MU_QUANTILE: Double = 0.4
+
+        /** 隐式信号只影响这些内容维度（不碰 staff / 声优 / 角色等实体维度：兴趣信号太弱，不足以归因到人）。 */
+        val IMPLICIT_CATEGORIES: List<TasteCategory> =
+            listOf(TasteCategory.TOPIC, TasteCategory.DEVICE, TasteCategory.XP, TasteCategory.SOURCE)
 
         /** 强制样本（极端分 / 有短评）最多占画像样本上限的比例，其余名额留给按近因补齐的普通样本。 */
         const val FORCED_SAMPLE_SHARE: Double = 0.7

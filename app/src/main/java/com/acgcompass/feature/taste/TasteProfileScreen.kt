@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.TagPill
+import com.acgcompass.core.designsystem.TagPillTone
 import com.acgcompass.core.ui.AcgScreenScaffold
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
@@ -34,6 +36,7 @@ import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.model.TagBucket
 import com.acgcompass.domain.model.TasteProfile
 import com.acgcompass.domain.taste.AdvancedTasteProfile
+import com.acgcompass.domain.taste.PersonalDivergenceModel
 import com.acgcompass.domain.taste.TagClassificationPhase
 import com.acgcompass.domain.taste.TagClassificationState
 import com.acgcompass.domain.taste.TagClassifyProgress
@@ -299,6 +302,7 @@ fun TasteProfileScreen(
 
                 // 12 维引擎画像——按维度拆解偏好 + 偏爱题材组合（仅在画像可用时展示）。
                 advancedProfile?.takeIf { it.isUsable }?.let { adv ->
+                    adv.divergence?.let { DivergenceSection(it) }
                     TasteDimensionsSection(adv)
                     TasteCombosSection(adv.combos)
                 }
@@ -385,6 +389,78 @@ private fun StatLine(label: String, value: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
+
+/**
+ * 你和大众的分歧——个人分歧模型的可读版本：打分宽严、跟不跟口碑、哪些题材你比大众更偏爱 /
+ * 更不买账，以及小众 / 年代 / 篇幅上的取向。数字都是「10 分制下大约差多少分」。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun DivergenceSection(model: PersonalDivergenceModel) {
+    SectionCard("你和大众的分歧") {
+        Text(
+            "大多数作品你的评分会和社区接近；下面是你稳定偏离大众的地方（基于 ${model.sampleCount} 部评分）。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        StatLine(
+            "打分宽严",
+            when {
+                model.leniency >= LENIENCY_NOTABLE -> "比社区均分高 ${oneDecimal(model.leniency.toFloat())} 分，手偏松"
+                model.leniency <= -LENIENCY_NOTABLE -> "比社区均分低 ${oneDecimal((-model.leniency).toFloat())} 分，手偏紧"
+                else -> "和社区均分基本持平"
+            },
+        )
+        StatLine(
+            "跟随口碑",
+            when {
+                model.slope >= SLOPE_STRONG -> "口碑好坏对你的评分影响很大（拉得比大众更开）"
+                model.slope >= SLOPE_WEAK -> "基本跟着口碑走"
+                else -> "不太看口碑，更按自己的标准打分"
+            },
+        )
+        StatLine("分歧幅度", "平均偏离大众水准 ±${oneDecimal(model.residualStd.toFloat())} 分")
+
+        val (liked, disliked) = model.strongestTags(DIVERGENCE_TAG_LIMIT)
+        if (liked.isNotEmpty()) {
+            Text("比大众更偏爱", style = MaterialTheme.typography.labelLarge)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                liked.forEach { TagPill(text = "${it.label} ${signedDelta(it.delta)}", tone = TagPillTone.Primary) }
+            }
+        }
+        if (disliked.isNotEmpty()) {
+            Text("不如大众买账", style = MaterialTheme.typography.labelLarge)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                disliked.forEach { TagPill(text = "${it.label} ${signedDelta(it.delta)}", tone = TagPillTone.Neutral) }
+            }
+        }
+        model.axisTendencies().filter { kotlin.math.abs(it.delta) >= AXIS_NOTABLE }.forEach { axis ->
+            val (favored, other) = if (axis.delta > 0) {
+                axis.positiveLabel to axis.negativeLabel
+            } else {
+                axis.negativeLabel to axis.positiveLabel
+            }
+            Text(
+                "同等口碑下，你给$favored 的分比$other 高约 ${oneDecimal(kotlin.math.abs(axis.delta).toFloat())} 分",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+private fun signedDelta(delta: Double): String = "%+.1f".format(delta)
+
+private const val LENIENCY_NOTABLE = 0.3
+private const val SLOPE_STRONG = 1.25
+private const val SLOPE_WEAK = 0.6
+private const val AXIS_NOTABLE = 0.15
+private const val DIVERGENCE_TAG_LIMIT = 6
 
 /** 口味维度——把偏好按 12 维（题材 / 角色类型 / 声优 / 来源…）拆解，每维展示代表标签。 */
 @Composable

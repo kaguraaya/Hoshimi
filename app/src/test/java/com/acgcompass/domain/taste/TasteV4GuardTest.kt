@@ -82,8 +82,12 @@ class TasteV4GuardTest : StringSpec({
 
     "端到端：匹配度由口味主导，满意度由口碑托底" {
         val profile = build(samples(40) { community, i -> if (i % 2 == 0) 9 else community.toInt() }, now)
-        val acclaimedStranger = compute(feature("x", listOf("纪实" to 30, "职人" to 20, "历史" to 10), 8.9f, 20000), profile)
-        acclaimedStranger.satisfaction shouldBeGreaterThan 70
+        val strangerTags = listOf("纪实" to 30, "职人" to 20, "历史" to 10)
+        val acclaimed = compute(feature("x", strangerTags, 8.9f, 20000), profile)
+        val mediocre = compute(feature("y", strangerTags, 6.0f, 20000), profile)
+        // 同样陌生的题材：口碑好的那部，预计评分与满意度都明显更高。
+        (acclaimed.satisfaction - mediocre.satisfaction) shouldBeGreaterThan 10
+        (acclaimed.prediction!!.rating > mediocre.prediction!!.rating + 0.8) shouldBe true
         val rated = compute(feature("s0", listOf("奇幻" to 30), 6.0f), profile, userRating = 10)
         rated.satisfaction shouldBe rated.score
     }

@@ -80,8 +80,13 @@ android {
         applicationId = "com.kaguraaya.hoshimi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 40
-        versionName = "0.23.0"
+        versionCode = 41
+        versionName = "0.24.0"
+
+        // 可选：用不同的包名 / 版本后缀出包（例如手头没有正式签名、想与已安装的正式版并存时）：
+        //   ./gradlew assembleRelease -Phoshimi.applicationIdSuffix=.preview -Phoshimi.versionNameSuffix=-preview
+        providers.gradleProperty("hoshimi.applicationIdSuffix").orNull?.let { applicationIdSuffix = it }
+        providers.gradleProperty("hoshimi.versionNameSuffix").orNull?.let { versionNameSuffix = it }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -151,9 +156,17 @@ android {
     }
 
     testOptions {
+        // Robolectric 界面走查需要真实的 Android 资源（主题 / Manifest）。
+        unitTests.isIncludeAndroidResources = true
         unitTests.all {
-            // kotest uses the JUnit5 platform.
+            // kotest uses the JUnit5 platform; JUnit4 (Robolectric) tests run through the vintage engine.
             it.useJUnitPlatform()
+            // 界面走查截图默认写入 build/outputs/roborazzi。
+            it.systemProperty("roborazzi.test.record", "true")
+            // Robolectric 运行时要下载 android-all；可用 -Probolectric.repo=<镜像> 换源（受限网络 / CI）。
+            providers.gradleProperty("robolectric.repo").orNull?.let { repo ->
+                it.systemProperty("robolectric.dependency.repo.url", repo)
+            }
         }
     }
 }
@@ -263,6 +276,14 @@ dependencies {
     testImplementation(libs.bundles.kotest)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    // JVM 界面走查（Robolectric + Compose UI Test + Roborazzi 截图）。
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.ext.junit)
+    testRuntimeOnly(libs.junit.vintage.engine)
 
     // Instrumented / UI tests
     androidTestImplementation(libs.androidx.test.ext.junit)

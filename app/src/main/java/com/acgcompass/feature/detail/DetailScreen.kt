@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -878,6 +879,7 @@ private fun TasteMatchBlock(
                 )
             }
             LinearProgressIndicator(progress = { aiMatch.fraction }, modifier = Modifier.fillMaxWidth())
+            AiPredictionExtras(aiMatch)
             aiMatch.likedReasons.forEach { Text(text = "+ $it", style = MaterialTheme.typography.bodySmall) }
             aiMatch.riskReasons.forEach {
                 Text(
@@ -933,6 +935,7 @@ private fun TasteMatchBlock(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    tasteMatch.prediction?.let { RatingPredictionBlock(it) }
                     // 置信度文案（独立展示，不塞进理由长句）。
                     tasteMatch.confidenceText?.let { conf ->
                         Text(
@@ -1552,3 +1555,82 @@ private fun DetailScreenInsufficientPreview() {
 }
 
 // endregion
+
+/**
+ * 评分预测块：预计评分 / 大众基线 / 个人分歧三个数字 + 一句话结论 + 分歧归因。
+ * 与上方「口味匹配度」回答的问题不同——匹配度是「像不像你的口味」，这里是「你会打几分」。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun RatingPredictionBlock(prediction: RatingPredictionUi) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                PredictionStat(label = "预计你会打", value = prediction.predictedText, emphasized = true)
+                PredictionStat(label = "大众基线", value = prediction.baselineText)
+                PredictionStat(label = "个人分歧", value = prediction.divergenceText)
+            }
+            Text(text = prediction.summary, style = MaterialTheme.typography.bodyMedium)
+            if (prediction.factors.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    prediction.factors.forEach { factor ->
+                        com.acgcompass.core.designsystem.TagPill(
+                            text = factor.text,
+                            tone = if (factor.positive) {
+                                com.acgcompass.core.designsystem.TagPillTone.Primary
+                            } else {
+                                com.acgcompass.core.designsystem.TagPillTone.Neutral
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PredictionStat(label: String, value: String, emphasized: Boolean = false) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = if (emphasized) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/** AI 给出的预计评分、分歧原因与评分角度（旧缓存 / 不支持的模型不返回时不展示）。 */
+@Composable
+private fun AiPredictionExtras(aiMatch: AiMatchUi.Result) {
+    aiMatch.predictedRatingText?.let { predicted ->
+        Text(
+            text = "AI 预计你会打 $predicted 分" + aiMatch.divergenceReason?.let { "：$it" }.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+    if (aiMatch.ratingAngles.isNotEmpty()) {
+        Text(
+            text = "你打分最看重：" + aiMatch.ratingAngles.joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}

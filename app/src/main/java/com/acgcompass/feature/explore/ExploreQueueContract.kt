@@ -48,6 +48,8 @@ data class ExploreCardUiModel(
     val synopsis: String?,
     /** 背面简介懒加载中标记——翻面时若无本地简介则联网补齐，加载期间背面显示「加载中」。 */
     val synopsisLoading: Boolean = false,
+    /** 预计评分一句话（如「预计你会打 7.8 · 大众基线 7.2」）；模型不可用时为 null。 */
+    val predictionText: String? = null,
     /** 跨界候选：口碑扎实但题材在画像常看范围之外，卡片上以「跨界探索」标识。 */
     val discovery: Boolean = false,
 )
@@ -75,6 +77,8 @@ internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = f
             score == null -> "探索推荐"
             score >= 80 -> "与口味画像高度匹配"
             score >= 65 -> "可能会喜欢"
+            // 题材不在常看范围、但预计评分不低：别用「感觉一般」误导（匹配度说的是题材，不是好不好看）。
+            match.satisfaction >= SATISFIED_THRESHOLD -> "题材不常看，但预计会满意"
             score >= 45 -> "可能感觉一般"
             else -> "可以试试看"
         },
@@ -82,6 +86,9 @@ internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = f
         tags = tags.take(5).map { it.name },
         synopsis = summary?.trim()?.takeIf { it.isNotBlank() },
         discovery = discovery,
+        predictionText = match?.prediction?.let {
+            "预计你会打 %.1f · 大众基线 %.1f".format(it.rating, it.baseline)
+        },
     )
 }
 
@@ -106,6 +113,7 @@ private fun exploreReason(match: TasteMatchResult?, discovery: Boolean): String 
 }
 
 private const val MAX_REASON_LABELS = 3
+private const val SATISFIED_THRESHOLD = 65
 
 private fun mediaTypeLabel(t: MediaType): String = when (t) {
     MediaType.ANIME -> "动画"

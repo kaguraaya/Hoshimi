@@ -189,6 +189,49 @@ data class DecisionUiModel(
  * 口味匹配度。措辞采用「可能 / 倾向于」而非绝对结论；未生成口味画像时
  * 为 [Unavailable]，不伪造匹配。
  */
+/**
+ * 评分预测展示模型：预计你会打几分、大众基线是多少、你会比大众高 / 低多少，以及原因。
+ *
+ * @property predictedText 预计评分（如「7.8」）。
+ * @property baselineText 大众基线（只看社区评分、按你的打分尺度换算，如「7.2」）。
+ * @property divergenceText 带符号的个人分歧（如「+0.6」）；接近 0 时为「≈0」。
+ * @property summary 一句话结论。
+ * @property factors 分歧归因（如「悬疑 +0.3」），正负分色。
+ */
+data class RatingPredictionUi(
+    val predictedText: String,
+    val baselineText: String,
+    val divergenceText: String,
+    val summary: String,
+    val factors: List<TasteMatchReasonUi>,
+)
+
+/** 由领域预测结果生成展示模型（详情页 / 探索卡片 / 今晚看什么共用同一口径的文案）。 */
+fun com.acgcompass.domain.taste.RatingPrediction.toUi(): RatingPredictionUi {
+    val notable = kotlin.math.abs(divergence) >= NOTABLE_DIVERGENCE
+    return RatingPredictionUi(
+        predictedText = "%.1f".format(rating),
+        baselineText = "%.1f".format(baseline),
+        divergenceText = if (notable) "%+.1f".format(divergence) else "≈0",
+        summary = when {
+            divergence >= STRONG_DIVERGENCE -> "你大概率会比大众更喜欢这部"
+            divergence >= NOTABLE_DIVERGENCE -> "预计略高于大众水准"
+            divergence <= -STRONG_DIVERGENCE -> "你大概率不如大众那么买账"
+            divergence <= -NOTABLE_DIVERGENCE -> "预计略低于大众水准"
+            else -> "预计和大众的看法差不多"
+        },
+        factors = factors.map {
+            TasteMatchReasonUi(
+                text = "${it.label} %+.1f".format(it.delta),
+                positive = it.delta >= 0.0,
+            )
+        },
+    )
+}
+
+private const val NOTABLE_DIVERGENCE = 0.25
+private const val STRONG_DIVERGENCE = 0.8
+
 sealed interface TasteMatchUiModel {
 
     /**
@@ -208,6 +251,8 @@ sealed interface TasteMatchUiModel {
         val reasons: List<TasteMatchReasonUi> = emptyList(),
         /** 置信度文案（如「置信度中等」）；null 则不展示。 */
         val confidenceText: String? = null,
+        /** 评分预测与分歧归因；画像样本不足以建模时为 null（不展示，绝不伪造）。 */
+        val prediction: RatingPredictionUi? = null,
     ) : TasteMatchUiModel
 
     /** 尚未生成口味画像，或样本/标签不足以计算匹配度（[message] 说明具体原因，不伪造）。 */
@@ -325,6 +370,12 @@ sealed interface AiMatchUi {
         val riskReasons: List<String>,
         val confidenceText: String,
         val dataSources: List<String>,
+        /** AI 预计评分（如「7.5」）；模型未返回时为 null。 */
+        val predictedRatingText: String? = null,
+        /** 与大众相比会更高 / 更低的一句话原因。 */
+        val divergenceReason: String? = null,
+        /** AI 归纳的「你打分最看重的角度」。 */
+        val ratingAngles: List<String> = emptyList(),
     ) : AiMatchUi
 
     /** 失败回退：展示失败原因 + 已回退本地模型说明（[message]）。 */
@@ -850,6 +901,8 @@ private fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         reason = "$reasonCore$ratedNote",
         reasons = reasonUis,
         confidenceText = confidenceText,
+        // 已评分作品不展示预测（你已经给出了答案）。
+        prediction = prediction?.takeIf { !isRated }?.toUi(),
     )
 }
 

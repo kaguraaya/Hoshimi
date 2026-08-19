@@ -312,6 +312,7 @@ class RecommenderViewModel @Inject constructor(
             val tasteFraction: Float?,
             val tasteAvailable: Boolean,
             val intent: IntentMatch?,
+            val predictedRating: Double? = null,
         )
 
         // 重复推荐冷却——只看「今晚看什么」自己的曝光（探索队列的曝光不算，否则刚右滑进待补池的作品
@@ -391,6 +392,7 @@ class RecommenderViewModel @Inject constructor(
                     frac,
                     true,
                     intentById[w.id],
+                    engine.prediction?.rating,
                 )
             } else {
                 val ts = personalTasteScorer.score(w, taste, bayes)
@@ -419,6 +421,27 @@ class RecommenderViewModel @Inject constructor(
         val filtered = tasteEligible.filter { passesCommunity(it) }.ifEmpty { tasteEligible }
         if (filtered.isEmpty()) return UiState.Empty(NO_CANDIDATE_CTA)
 
+        // 接受程度「可慢热 / 可致郁 / 可党争」：没勾选的风险气质按其在作品里的代表性做软惩罚
+        // （不是硬排除——只沾一点的不受影响，主打这种气质的才明显下沉）；用户这次主动选了同名标签时不罚。
+        val untolerated = RISK_TAGS.filterKeys { it !in input.acceptances }
+            .filterValues { tags -> tags.none { it in selectedTags } }
+        val riskById: Map<String, Pair<String, Double>> = if (untolerated.isEmpty()) {
+            emptyMap()
+        } else {
+            val features = tasteEngine.cachedFeatures(filtered.mapNotNull { subjectIdOf(it.work) })
+            filtered.mapNotNull { s ->
+                val w = s.work
+                val feature = subjectIdOf(w)?.let { features[it] }
+                val rep = TagRepresentativeness(
+                    tags = feature?.tagCounts?.takeIf { it.isNotEmpty() } ?: w.tags.map { TagCount(it.name, 0) },
+                    episodes = feature?.eps?.takeIf { it > 0 } ?: w.units.episodes ?: 0,
+                )
+                untolerated.values.flatten().toSet().let(rep::strongest)
+                    ?.takeIf { it.second >= RISK_MIN_REPRESENTATIVENESS }
+                    ?.let { w.id to it }
+            }.toMap()
+        }
+
         // 第三步：今晚分精排 + 三档选片（稳妥 = 最高分；探索 = 与稳妥题材拉开；随机 = 高分段加权抽样），
         // 同系列最多占一个名额。详见 [TonightRanker]。
         val byId = filtered.associateBy { it.work.id }
@@ -429,7 +452,8 @@ class RecommenderViewModel @Inject constructor(
                     id = w.id,
                     taste = s.personal.toDouble(),
                     intentFit = if (tagSelected) s.intent?.fit ?: 0.0 else null,
-                    dominantConflict = s.intent?.dominantConflict ?: 0.0,
+                    dominantConflict = ((s.intent?.dominantConflict ?: 0.0) + riskById[w.id]?.second.orZero())
+                        .coerceAtMost(1.0),
                     scoreCap = s.intent?.scoreCap,
                     community10 = s.bayes10?.toDouble(),
                     sessionFit = TonightRanker.sessionFit(
@@ -468,13 +492,15 @@ class RecommenderViewModel @Inject constructor(
                 TonightRanker.Slot.EXPLORE -> RecommendationKind.GAMBLE
                 TonightRanker.Slot.WILDCARD -> RecommendationKind.WILDCARD
             }
-            val ratingPart = s.mean10?.let { "，社区均分约 %.1f".format(it) }.orEmpty()
+            val ratingPart = s.mean10?.let { "，社区均分约 %.1f".format(it) }.orEmpty() +
+                s.predictedRating?.let { "，预计你会打 %.1f".format(it) }.orEmpty()
             // 理由聚焦「为什么这部贴合你」：优先所选标签，其次你高分常见标签，再退化为综合口碑。
             val fit = when {
                 s.intent != null -> intentReason(s.intent.explain) + ratingPart
                 s.matchedHigh.isNotEmpty() -> "契合你的长期口味：${s.matchedHigh.joinToString("、")}$ratingPart"
                 else -> "综合口碑与你的口味挑选$ratingPart"
             }
+            val riskNote = riskById[s.work.id]?.let { "；带明显的「${it.first}」气质" }.orEmpty()
             // 探索档补一句「和稳妥选择哪里不同」，让三档的差别看得见。
             val contrast = if (kind == RecommendationKind.GAMBLE && safeTitle != null) {
                 "；题材与《$safeTitle》错开，换个口味"
@@ -485,7 +511,7 @@ class RecommenderViewModel @Inject constructor(
                 kind = kind,
                 workId = s.work.id,
                 card = s.work.toRecommendCard(),
-                reason = "${kind.tagline()}。$fit$contrast",
+                reason = "${kind.tagline()}。$fit$contrast$riskNote",
                 matchPercent = s.tasteFraction?.takeIf { s.tasteAvailable }
                     ?.let { (it * PERCENT).toInt().coerceIn(0, PERCENT) },
             )
@@ -586,7 +612,7 @@ class RecommenderViewModel @Inject constructor(
             MediaType.OTHER -> "其他"
         },
         ratingText = null,
-        sourceTags = listOf(primarySource.name),
+        sourceTags = listOf(primarySource.recommenderSourceLabel()),
         moodRiskTags = tags.take(3).map { it.name },
     )
 
@@ -611,6 +637,16 @@ class RecommenderViewModel @Inject constructor(
         const val BAYES_PRIOR_VOTES = 300f
 
         const val TONIGHT_CONTEXT = "tonight"
+
+        /** 「可 X」对应的风险气质标签；未勾选时按代表性软惩罚。 */
+        val RISK_TAGS: Map<AcceptanceOption, List<String>> = mapOf(
+            AcceptanceOption.SLOW_BURN to listOf("慢热"),
+            AcceptanceOption.DEPRESSING to listOf("致郁", "致郁系", "虐心", "胃痛", "黑深残"),
+            AcceptanceOption.SHIPPING_WAR to listOf("党争", "修罗场"),
+        )
+
+        /** 风险气质的代表性达到多少才算「主打」并触发软惩罚。 */
+        const val RISK_MIN_REPRESENTATIVENESS = 0.3
         const val PERCENT = 100
         const val MILLIS_PER_DAY = 24.0 * 3600 * 1000
 
@@ -658,3 +694,5 @@ private fun com.acgcompass.domain.model.RatingAggregate.mean10(): Float? {
 /** 社区评分总人数（各源有效评分人数之和），用于贝叶斯加权（人数少的高分被拉回先验）。 */
 private fun com.acgcompass.domain.model.RatingAggregate.totalVotes(): Float =
     perSource.values.sumOf { (it?.voteCount ?: 0).coerceAtLeast(0).toLong() }.toFloat()
+
+private fun Double?.orZero(): Double = this ?: 0.0

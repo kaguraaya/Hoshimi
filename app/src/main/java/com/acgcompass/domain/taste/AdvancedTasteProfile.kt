@@ -60,6 +60,8 @@ data class AdvancedTasteProfile(
     val sampleCount: Int = 0,
     /** 用户平均分（10 分制，习惯展示用）；无评分为 0。 */
     val userAvgRating: Double = 0.0,
+    /** 个人分歧模型（预测评分 + 分歧归因）；带社区分的已评分作品不足时为 `null`。 */
+    val divergence: PersonalDivergenceModel? = null,
     val algorithmVersion: Int = TasteScoringParams.ALGORITHM_VERSION,
     val generatedAt: Long = 0L,
 ) {

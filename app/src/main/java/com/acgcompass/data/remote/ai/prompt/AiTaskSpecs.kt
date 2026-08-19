@@ -33,6 +33,9 @@ data class AiTaskSpec(
  */
 object AiTaskSpecs {
 
+    /** 用户评分上限（10 分制）。 */
+    private const val MAX_USER_RATING = 10
+
     /**
      * 解析任务的提示词与目标 schema。
      *
@@ -181,24 +184,42 @@ object AiTaskSpecs {
     }
 
     private fun tasteMatchPrompt(): String = buildString {
-        appendLine("任务：根据作品资料（类型、标签、简介、社区评分）与用户口味画像")
-        appendLine("（高分倾向标签、低分倾向标签、评分习惯、近期评分作品与历史最高/最低分作品），")
-        appendLine("判断作品与该用户的契合度，并给出可验证的具体依据。")
-        appendLine("判定原则（最重要）：以**个人口味契合**为主轴，社区评分只是弱参考——绝不能因为社区高分就抬高契合度；")
-        appendLine("当作品与用户低分倾向 / 雷区标签重合时，即使它是大众口碑神作，也应给出低契合分，并在 riskReasons 说明原因。")
-        appendLine("用户近期评分比早期评分更能代表当前口味，做类比推理时优先参考其近期评分的作品。")
-        appendLine("评分要求（重要）：matchScore 为 0–100 整数，必须有区分度，**不要总是给 75–85 的万金油分数**：")
-        appendLine("- 当作品题材/风格与用户高分作品高度一致 → 85–98；")
-        appendLine("- 明显契合 → 70–84；一般/中性 → 45–69；")
-        appendLine("- 与用户低分倾向重合或明显不对味 → 15–44；强烈冲突 → 0–15。")
-        appendLine("结合用户高分和低分作品做类比推理，并明确指出相似或冲突的维度。")
-        appendLine("likedReasons / riskReasons 要具体、针对该用户，而非泛泛而谈。confidence 反映资料充分度。")
-        appendLine("只基于给定信息，不复述具体剧情。输出必须是符合目标 schema 的合法 JSON。")
+        appendLine("角色：你是一位熟悉 ACG 社区的口味分析师。任务是预测「这位用户看完这部作品会打几分」，")
+        appendLine("并判断他会不会、为什么会和大众评分产生分歧。")
+        appendLine()
+        appendLine("【基本事实】大多数人对大多数作品的评分与社区评分接近。所以默认预测应贴近输入里的「大众基线」；")
+        appendLine("只有当你能从用户自己的评分记录里找到**具体证据**时，才预测他会偏离大众。")
+        appendLine()
+        appendLine("【输入说明】")
+        appendLine("- 「本地模型」一节是应用内统计模型的结果：大众基线（只看社区评分、按该用户的打分尺度换算）、")
+        appendLine("  预计评分、以及它认为的分歧来源。把它当作有数据支撑的先验，而不是结论。")
+        appendLine("- 「题材相近的已评分作品」是最重要的类比证据：每行给出用户评分、当时的大众基线和短评。")
+        appendLine("- 「与大众分歧最大的评分」揭示这位用户的评分角度：他为什么给口碑作低分、给冷门作高分。")
+        appendLine()
+        appendLine("【分析步骤】（在心里完成，不要输出过程）")
+        appendLine("1. 从「分歧最大的评分」和短评里归纳用户打分最看重的 2–4 个角度，")
+        appendLine("   例如：剧情逻辑与伏笔回收、角色塑造、结局是否收得住、作画演出、节奏、情感冲击、题材新鲜度、原作还原。")
+        appendLine("   只归纳有证据的角度；短评很少时宁可少写。")
+        appendLine("2. 看「题材相近的已评分作品」：这类作品他通常比大众给得高还是低？有没有一致的方向？")
+        appendLine("3. 判断本作在这些角度上的表现（依据标签、简介、社区口碑常识），是否会触发他的偏好或雷点。")
+        appendLine("4. 给出预计评分：证据一致且充分 → 可以偏离大众基线 1–2 分；证据零散或互相矛盾 → 偏离不超过 0.5 分。")
+        appendLine()
+        appendLine("【输出字段】")
+        appendLine("- predictedRating：预计评分，1–10，保留一位小数。")
+        appendLine("- divergenceReason：一句话说明他会比大众更高 / 更低的原因，必须引用具体证据")
+        appendLine("  （如「你给同类的《X》《Y》都比大众低 2 分，短评都提到结局仓促」）；没有明显分歧时填空字符串。")
+        appendLine("- ratingAngles：第 1 步归纳的评分角度，2–4 个短语；证据不足时可以为空数组。")
+        appendLine("- matchScore：题材与风格的口味契合度，0–100 整数。这是「像不像他爱看的类型」，与预计评分是两回事：")
+        appendLine("  一部他会欣赏但不在常看范围内的口碑作，matchScore 可以不高而 predictedRating 高。")
+        appendLine("  高度一致 85–98；明显契合 70–84；一般 45–69；不对味 15–44；强烈冲突 0–14。不要总给 75–85。")
+        appendLine("- likedReasons / riskReasons：各 1–4 条，针对这位用户、能在输入里找到依据，不要写放之四海皆准的套话。")
+        appendLine("- confidence：0–1。相近作品少于 3 部、或用户几乎没有短评时不应高于 0.5。")
+        appendLine()
+        appendLine("【约束】只使用输入里给出的信息与公认的社区口碑常识；不要编造用户没评过的作品；")
+        appendLine("不复述具体剧情。输出必须是符合目标 schema 的合法 JSON，不要附加解释文字。")
         appendLine()
         append(SpoilerGuard.SYSTEM_PROMPT_RULES)
     }
-
-    // ---- JSON Schema 构造 ----
 
     private fun stringArraySchema(description: String): JsonObject = buildJsonObject {
         put("type", "array")
@@ -234,8 +255,27 @@ object AiTaskSpecs {
             put("likedReasons", stringArraySchema("可能喜欢的理由"))
             put("riskReasons", stringArraySchema("可能不喜欢 / 需注意的理由"))
             put("confidence", confidenceSchema())
+            putJsonObject("predictedRating") {
+                put("type", "number")
+                put("description", "预计用户评分 1–10，一位小数")
+                put("minimum", 1)
+                put("maximum", MAX_USER_RATING)
+            }
+            putJsonObject("divergenceReason") {
+                put("type", "string")
+                put("description", "与大众评分相比更高 / 更低的一句话原因；无明显分歧时为空串")
+            }
+            put("ratingAngles", stringArraySchema("用户打分最看重的角度，2–4 个短语"))
         },
-        required = listOf("matchScore", "likedReasons", "riskReasons", "confidence"),
+        required = listOf(
+            "matchScore",
+            "likedReasons",
+            "riskReasons",
+            "confidence",
+            "predictedRating",
+            "divergenceReason",
+            "ratingAngles",
+        ),
     )
 
     private fun spoilerRadarSchema(): JsonObject = objectSchema(

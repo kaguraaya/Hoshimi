@@ -15,8 +15,14 @@ def hit10(df,col):
         hs.append((top.rating>=thr).mean())
     return np.mean(hs)
 def report(df,name):
+    df=df.copy()
+    if 'divergence' in df:
+        # 跨折稳健的排序代理：社区分 + 个人分歧（各折的基线均值不同，直接比预测评分会引入折间偏移）。
+        df['v_personal']=df.community+df.divergence.fillna(0)
+        ok=df.dropna(subset=['pred'])
+        print(f"  预测评分 MAE={np.abs(ok.rating-ok.pred).mean():.3f}  ±1分以内={(np.abs(ok.rating-ok.pred)<=1).mean():.3f}  覆盖={len(ok)/len(df):.3f}")
     print(f"--- {name}: users={df.user.nunique()} rows={len(df)}")
-    for col in ['community','profile','score','satisfaction']:
+    for col in ['community','profile','score','satisfaction']+[c for c in df.columns if c.startswith('v_')]:
         s=per_user(df,col); print(f"  {col:28s} spearman mean={s.mean():.4f} median={np.median(s):.4f}  top10-precision={hit10(df,col):.3f}")
 if __name__=='__main__':
     df=pd.read_csv(sys.argv[1],sep='\t')
