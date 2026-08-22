@@ -2,7 +2,6 @@
 
 package com.acgcompass.core.designsystem
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -42,9 +41,10 @@ enum class TagPillTone {
 @Composable
 fun TagPill(text: String, modifier: Modifier = Modifier, tone: TagPillTone = TagPillTone.Secondary) {
     val (container, content) = when (tone) {
-        // Neutral pills sit on tonal card containers, so a filled tonal background would vanish into the
-        // card; they use the plain surface color plus a hairline outline instead.
-        TagPillTone.Neutral -> MaterialTheme.colorScheme.surface to MaterialTheme.colorScheme.onSurfaceVariant
+        // Neutral pills sit on tonal cards of varying tone; a translucent on-surface tint reads as a quiet
+        // chip on any of them, without needing an outline.
+        TagPillTone.Neutral -> MaterialTheme.colorScheme.onSurface.copy(alpha = NEUTRAL_TINT_ALPHA) to
+            MaterialTheme.colorScheme.onSurfaceVariant
         TagPillTone.Secondary ->
             MaterialTheme.colorScheme.secondaryContainer to
                 MaterialTheme.colorScheme.onSecondaryContainer
@@ -55,34 +55,19 @@ fun TagPill(text: String, modifier: Modifier = Modifier, tone: TagPillTone = Tag
             MaterialTheme.colorScheme.tertiaryContainer to
                 MaterialTheme.colorScheme.onTertiaryContainer
     }
-    TagPill(
-        text = text,
-        containerColor = container,
-        contentColor = content,
-        modifier = modifier,
-        border = if (tone == TagPillTone.Neutral) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        } else {
-            null
-        },
-    )
+    TagPill(text = text, containerColor = container, contentColor = content, modifier = modifier)
 }
+
+private const val NEUTRAL_TINT_ALPHA = 0.07f
 
 /** [TagPill] with explicit colors (e.g. on top of imagery). */
 @Composable
-fun TagPill(
-    text: String,
-    containerColor: Color,
-    contentColor: Color,
-    modifier: Modifier = Modifier,
-    border: BorderStroke? = null,
-) {
+fun TagPill(text: String, containerColor: Color, contentColor: Color, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.small,
         color = containerColor,
         contentColor = contentColor,
-        border = border,
     ) {
         Text(
             text = text,

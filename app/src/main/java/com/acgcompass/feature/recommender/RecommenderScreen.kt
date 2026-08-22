@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,22 +26,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Casino
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +51,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -58,8 +60,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatCard
+import com.acgcompass.core.designsystem.FlatDefaults
+import com.acgcompass.core.designsystem.PillTabs
 import com.acgcompass.core.designsystem.TagPill
 import com.acgcompass.core.designsystem.TagPillTone
+import com.acgcompass.core.designsystem.TonalFilterChip
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.StateScaffold
@@ -121,8 +127,8 @@ fun RecommenderRoute(
 /**
  * 推荐器页面：条件选择（候选池 / 时间 / 标签 / 接受程度）→ 特别模式 → 生成 → 三档结果。
  *
- * 版式遵循 Material 3：候选池用分段按钮（互斥二选一），多选条件用带勾选图标的 FilterChip，
- * 特别模式收进一张描边卡片；生成后自动滚动到结果区，不需要用户自己往下找。
+ * 版式是扁平的色块卡片：每组条件一张无边框卡片（小图标 + 标题），互斥选项用药丸式标签页，
+ * 多选用无描边的色块 chip，选中即实心填充；生成后自动滚动到结果区，不需要用户自己往下找。
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Suppress("LongMethod", "LongParameterList") // 页面骨架：参数为各交互回调，主体是按顺序排布的区块。
@@ -167,6 +173,21 @@ fun RecommenderScreen(
                 windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
             )
         },
+        // 主操作固定在底部：条件区再长，「生成」也始终在手边，不用滚到页面最下面找。
+        bottomBar = {
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    SubmitButton(
+                        enabled = input.canSubmit,
+                        submitted = submitted,
+                        onClick = {
+                            submitted = true
+                            onSubmit()
+                        },
+                    )
+                }
+            }
+        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -176,7 +197,7 @@ fun RecommenderScreen(
                 .padding(16.dp)
                 // 标题栏下方额外 8dp 呼吸（共约 24dp），底部额外留白避免末项贴边。
                 .padding(top = 8.dp, bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             CandidatePoolSelector(selected = input.candidatePool, onSelect = onSelectCandidatePool)
 
@@ -194,15 +215,6 @@ fun RecommenderScreen(
                 onToggleIndecision = onToggleIndecision,
                 onToggleFinalsProtection = onToggleFinalsProtection,
                 onToggleLateNight = onToggleLateNight,
-            )
-
-            SubmitButton(
-                enabled = input.canSubmit,
-                submitted = submitted,
-                onClick = {
-                    submitted = true
-                    onSubmit()
-                },
             )
 
             // 深夜提醒仅显示状态提示，不改变筛选结果。
@@ -225,23 +237,16 @@ fun RecommenderScreen(
     }
 }
 
-/** 候选池选择——待补池 / 全部作品（互斥二选一 → 分段按钮）。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/** 候选池——待补池 / 全部作品（互斥二选一，药丸式标签页）。 */
 @Composable
 private fun CandidatePoolSelector(selected: CandidatePool, onSelect: (CandidatePool) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("从哪里挑")
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            CandidatePool.entries.forEachIndexed { index, pool ->
-                SegmentedButton(
-                    selected = selected == pool,
-                    onClick = { onSelect(pool) },
-                    shape = SegmentedButtonDefaults.itemShape(index, CandidatePool.entries.size),
-                ) {
-                    Text(pool.label())
-                }
-            }
-        }
+    FlatCard(title = "从哪里挑", icon = Icons.Outlined.Inventory2) {
+        PillTabs(
+            options = CandidatePool.entries,
+            selected = selected,
+            onSelect = onSelect,
+            label = { it.label() },
+        )
     }
 }
 
@@ -251,40 +256,28 @@ private fun SubmitButton(enabled: Boolean, submitted: Boolean, onClick: () -> Un
     Button(
         onClick = onClick,
         enabled = enabled,
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp),
+            .heightIn(min = 56.dp),
     ) {
         if (enabled) {
             Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
         }
         Text(
-            when {
+            text = when {
                 !enabled -> "先选择可用时间"
                 submitted -> "换一批"
                 else -> "生成今晚推荐"
             },
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
 
-/** 分组标题：统一的字号 / 字重 / 颜色，替代各处零散的 Text 样式。 */
-@Composable
-private fun SectionTitle(text: String, supporting: String? = null) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        if (supporting != null) {
-            Text(
-                supporting,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** 推荐约束与提醒开关。 */
+/** 推荐约束与提醒开关：一张卡片里的三行，行与行之间只靠留白分隔。 */
 @Composable
 private fun ModeSwitches(
     input: RecommenderInput,
@@ -292,23 +285,24 @@ private fun ModeSwitches(
     onToggleFinalsProtection: () -> Unit,
     onToggleLateNight: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionTitle("特别模式")
-        OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    FlatCard(
+        title = "特别模式",
+        icon = Icons.Outlined.Tune,
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 8.dp),
+    ) {
+        Column {
             ModeSwitchRow(
                 label = "单一推荐模式",
                 supporting = "只给一部最稳妥的，不用纠结",
                 checked = input.indecisionMode,
                 onToggle = onToggleIndecision,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             ModeSwitchRow(
                 label = "低负担模式",
                 supporting = "过滤长篇 / 致郁 / 高投入 / 未完结",
                 checked = input.finalsProtectionMode,
                 onToggle = onToggleFinalsProtection,
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             ModeSwitchRow(
                 label = "深夜提醒",
                 supporting = "提醒合理安排休息，不影响结果",
@@ -325,8 +319,9 @@ private fun ModeSwitchRow(label: String, supporting: String, checked: Boolean, o
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
             .toggleable(value = checked, role = Role.Switch, onValueChange = { onToggle() })
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -339,32 +334,20 @@ private fun ModeSwitchRow(label: String, supporting: String, checked: Boolean, o
             )
         }
         // 点击由整行处理；Switch 只负责显示状态。
-        Switch(checked = checked, onCheckedChange = null)
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            // 未选中态去掉描边：实心轨道 + 实心滑块，与页面其余部分的无线条风格一致。
+            colors = SwitchDefaults.colors(
+                uncheckedBorderColor = Color.Transparent,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+            ),
+        )
     }
 }
 
-/** 选中时带勾选图标的 FilterChip（Material 3 规范：多选 chip 用前置勾号表达选中）。 */
-@Composable
-private fun CheckableChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-        leadingIcon = if (selected) {
-            {
-                Icon(
-                    Icons.Filled.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(FilterChipDefaults.IconSize),
-                )
-            }
-        } else {
-            null
-        },
-    )
-}
-
-/** 三组选择区。 */
+/** 三组选择区：每组一张无边框的色块卡片。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InputSection(
@@ -374,24 +357,24 @@ private fun InputSection(
     onToggleTag: (String) -> Unit,
     onToggleAcceptance: (AcceptanceOption) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SectionTitle("我有多少时间")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TimeBudget.entries.forEach { option ->
-                    CheckableChip(option.label(), input.time == option) { onSelectTime(option) }
-                }
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FlatCard(title = "我有多少时间", icon = Icons.Outlined.Schedule) {
+            PillTabs(
+                options = TimeBudget.entries,
+                selected = input.time,
+                onSelect = onSelectTime,
+                label = { it.label() },
+            )
         }
 
         // 标签选项来自候选池作品的真实 Bangumi 社区标签（频次降序）；并入已选标签
         // 以保证预填（如首页「今日状态」）或已选项即使不在当前前 N 也能显示、可取消。
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val selectedCount = input.selectedTags.size
-            SectionTitle(
-                "想看的标签",
-                supporting = if (selectedCount > 1) "已选 $selectedCount 个，命中越多越优先" else "可多选，不选则按长期口味推荐",
-            )
+        val selectedCount = input.selectedTags.size
+        FlatCard(
+            title = "想看的标签",
+            icon = Icons.Outlined.Sell,
+            supporting = if (selectedCount > 1) "已选 $selectedCount 个，命中越多越优先" else "可多选，不选则按长期口味推荐",
+        ) {
             val displayTags = (availableTags + input.selectedTags.toList()).distinct()
             if (displayTags.isEmpty()) {
                 Text(
@@ -402,17 +385,20 @@ private fun InputSection(
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     displayTags.forEach { tag ->
-                        CheckableChip(tag, tag in input.selectedTags) { onToggleTag(tag) }
+                        TonalFilterChip(tag, tag in input.selectedTags, onClick = { onToggleTag(tag) })
                     }
                 }
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SectionTitle("接受程度")
+        FlatCard(title = "接受程度", icon = Icons.Outlined.Shield) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AcceptanceOption.entries.forEach { option ->
-                    CheckableChip(option.label(), option in input.acceptances) { onToggleAcceptance(option) }
+                    TonalFilterChip(
+                        option.label(),
+                        option in input.acceptances,
+                        onClick = { onToggleAcceptance(option) },
+                    )
                 }
             }
         }
@@ -433,7 +419,6 @@ private fun ResultSection(
         onCta = { onSubmit() },
     ) { recommendations ->
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SectionTitle("今晚的推荐")
             recommendations.forEach { rec ->
                 RecommendationCard(rec = rec, onOpenWork = onOpenWork)
             }
@@ -441,7 +426,7 @@ private fun ResultSection(
     }
 }
 
-/** 单条推荐：档位（图标 + 名称）与口味匹配度 → 作品卡片 → 理由。三档用不同色调区分。 */
+/** 单条推荐：一张色块卡片——档位（图标 + 名称）与匹配度 → 作品 → 理由。三档用不同色调区分。 */
 @Composable
 private fun RecommendationCard(rec: RecommendationUiModel, onOpenWork: (String) -> Unit) {
     val (icon, accent) = when (rec.kind) {
@@ -449,22 +434,26 @@ private fun RecommendationCard(rec: RecommendationUiModel, onOpenWork: (String) 
         RecommendationKind.GAMBLE -> Icons.Filled.Explore to MaterialTheme.colorScheme.tertiary
         RecommendationKind.WILDCARD -> Icons.Filled.Casino to MaterialTheme.colorScheme.secondary
     }
-    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = FlatDefaults.cardColor,
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
                 Text(
                     text = rec.kind.label(),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = accent,
                     modifier = Modifier.weight(1f),
@@ -473,18 +462,18 @@ private fun RecommendationCard(rec: RecommendationUiModel, onOpenWork: (String) 
             }
             WorkCard(
                 model = rec.card,
+                containerColor = FlatDefaults.tileColor,
                 onClick = { onOpenWork(rec.workId) },
             )
             Text(
                 text = rec.reason,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
     }
 }
-
-// region Preview
 
 @Preview(showBackground = true)
 @Composable

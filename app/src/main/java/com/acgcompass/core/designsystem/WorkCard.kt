@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -49,12 +51,20 @@ import coil.request.ImageRequest
  *
  */
 @OptIn(ExperimentalLayoutApi::class)
+@Suppress("LongMethod") // 一张卡片的完整布局；原有长度告警按旧签名登记在 baseline 里。
 @Composable
-fun WorkCard(model: WorkCardUiModel, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+fun WorkCard(
+    model: WorkCardUiModel,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    onClick: () -> Unit = {},
+) {
+    // Flat tonal card: no outline, no elevation. Nested inside another card, pass a stronger tone.
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
         Row(
             modifier = Modifier
@@ -147,7 +157,7 @@ private fun CoverImage(coverUrl: String?, contentDescription: String, modifier: 
         modifier = modifier
             .size(width = 72.dp, height = 96.dp)
             .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
         if (coverUrl != null) {

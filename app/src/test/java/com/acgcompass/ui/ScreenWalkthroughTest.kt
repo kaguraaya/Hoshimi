@@ -101,7 +101,7 @@ class ScreenWalkthroughTest {
             }
         }
 
-        // 1. 初始：没选时间，主按钮禁用并提示原因。
+        // 1. 初始：没选时间，底部固定的主按钮禁用并提示原因（不需要滚动就能看到）。
         compose.onNodeWithText("先选择可用时间").assertIsDisplayed().assertIsNotEnabled()
         shot("tonight-1-initial")
 
@@ -119,7 +119,7 @@ class ScreenWalkthroughTest {
         assertTrue(input.indecisionMode)
 
         // 4. 生成：按钮可用 → 点击 → 结果出现，文案变为「换一批」。
-        compose.onNodeWithText("生成今晚推荐").performScrollTo().assertIsEnabled().performClick()
+        compose.onNodeWithText("生成今晚推荐").assertIsDisplayed().assertIsEnabled().performClick()
         compose.waitForIdle()
         compose.onNodeWithText("换一批").assertExists()
         compose.onNodeWithText("稳妥选择").performScrollTo().assertIsDisplayed()
@@ -257,7 +257,7 @@ private val sampleRecommendations = listOf(
             subtitle = "2012 · 2012-10-08",
             type = "动画",
             ratingText = null,
-            sourceTags = listOf("BANGUMI"),
+            sourceTags = listOf("Bangumi"),
             moodRiskTags = listOf("校园", "恋爱", "治愈"),
         ),
         reason = "综合最贴合今晚的条件。是一部典型的校园恋爱日常喜剧，「搞笑」成分较淡，社区均分约 7.6，预计你会打 8.2",
@@ -272,7 +272,7 @@ private val sampleRecommendations = listOf(
             subtitle = "2017 · 2017-04-06",
             type = "动画",
             ratingText = null,
-            sourceTags = listOf("BANGUMI"),
+            sourceTags = listOf("Bangumi"),
             moodRiskTags = listOf("恋爱", "青春"),
         ),
         reason = "同样高分，但换个题材。「恋爱」是它的核心气质；题材与《樱花庄的宠物女孩》错开，换个口味",
@@ -287,7 +287,7 @@ private val sampleRecommendations = listOf(
             subtitle = "2010 · 2010-01-06",
             type = "动画",
             ratingText = null,
-            sourceTags = listOf("BANGUMI"),
+            sourceTags = listOf("Bangumi"),
             moodRiskTags = listOf("搞笑", "校园"),
         ),
         reason = "高分候选里的随机惊喜。「校园」是它的核心气质，缺少「恋爱」",

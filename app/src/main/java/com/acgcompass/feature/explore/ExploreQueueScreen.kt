@@ -35,11 +35,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -204,6 +204,8 @@ private fun PreparingContent(state: ExploreQueueUiState.Preparing) {
                     .fillMaxWidth(PREPARING_BAR_WIDTH_FRACTION)
                     .height(6.dp)
                     .clip(CircleShape),
+                gapSize = 0.dp,
+                drawStopIndicator = {},
             )
             Text(
                 "${state.completed} / ${state.total}",
@@ -307,8 +309,10 @@ private fun ReadyContent(
                         )
                     }
                     .clickable(onClickLabel = if (flipped) "翻回正面" else "查看简介") { flipped = !flipped },
+                // 扁平：靠色块与大圆角区分层次，不用描边和投影。
+                shape = MaterialTheme.shapes.extraLarge,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
                 if (rotation.value <= HALF_FLIP_DEGREES) {
                     ExploreCardFrontWithStamps(card = card, dragProgress = dragProgress)
@@ -341,6 +345,8 @@ private fun BatchProgress(position: Int, total: Int) {
                 .weight(1f)
                 .height(6.dp)
                 .clip(CircleShape),
+            gapSize = 0.dp,
+            drawStopIndicator = {},
         )
         Text(
             "$position / $total",
@@ -379,11 +385,12 @@ private fun SwipeActions(onSkip: () -> Unit, onLike: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onSkip,
+            shape = MaterialTheme.shapes.large,
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 48.dp),
+                .heightIn(min = 52.dp),
         ) {
             Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
@@ -391,9 +398,10 @@ private fun SwipeActions(onSkip: () -> Unit, onLike: () -> Unit) {
         }
         Button(
             onClick = onLike,
+            shape = MaterialTheme.shapes.large,
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 48.dp),
+                .heightIn(min = 52.dp),
         ) {
             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
@@ -436,12 +444,23 @@ private fun SwipeStamp(
 @Composable
 private fun ExploreCardFront(card: ExploreCardUiModel) {
     Column(modifier = Modifier.fillMaxSize()) {
+        // 封面占卡片上部约四成半：海报多为竖图，给足高度；下方信息区可滚动。
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(FRONT_COVER_HEIGHT)
+                .weight(COVER_WEIGHT)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         ) {
+            if (card.coverUrl == null) {
+                Icon(
+                    Icons.Outlined.Explore,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(40.dp),
+                    tint = MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current).data(card.coverUrl).crossfade(true).build(),
                 contentDescription = card.title,
@@ -460,10 +479,10 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
         }
         Column(
             modifier = Modifier
-                .weight(1f)
+                .weight(1f - COVER_WEIGHT)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                .padding(start = 18.dp, end = 18.dp, top = 16.dp),
         ) {
             Text(card.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             if (card.meta.isNotBlank()) {
@@ -507,6 +526,8 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
                     .height(8.dp)
                     .clip(CircleShape),
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                gapSize = 0.dp,
+                drawStopIndicator = {},
             )
             card.predictionText?.let {
                 Spacer(Modifier.height(10.dp))
@@ -628,7 +649,7 @@ private fun FinishedContent(liked: Int, skipped: Int, onRegenerate: () -> Unit, 
         )
         Spacer(Modifier.height(8.dp))
         Button(onClick = onRegenerate, modifier = Modifier.fillMaxWidth()) { Text("再来一批") }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回发现") }
+        FilledTonalButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回发现") }
     }
 }
 
@@ -647,7 +668,7 @@ private fun EmptyOrError(message: String, onRetry: () -> Unit, onBack: () -> Uni
         )
         Spacer(Modifier.height(8.dp))
         Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("再试一次") }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回发现") }
+        FilledTonalButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回发现") }
     }
 }
 
@@ -667,6 +688,9 @@ private const val CAMERA_DISTANCE_FACTOR = 12f
 
 /** 准备态进度条占屏宽的比例。 */
 private const val PREPARING_BAR_WIDTH_FRACTION = 0.6f
+
+/** 正面封面占卡片高度的比例。 */
+private const val COVER_WEIGHT = 0.45f
 
 /** 新卡片入场的起始缩放。 */
 private const val APPEAR_START_SCALE = 0.94f

@@ -80,8 +80,8 @@ android {
         applicationId = "com.kaguraaya.hoshimi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 41
-        versionName = "0.24.0"
+        versionCode = 42
+        versionName = "0.25.0"
 
         // 可选：用不同的包名 / 版本后缀出包（例如手头没有正式签名、想与已安装的正式版并存时）：
         //   ./gradlew assembleRelease -Phoshimi.applicationIdSuffix=.preview -Phoshimi.versionNameSuffix=-preview
@@ -127,7 +127,11 @@ android {
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            isMinifyEnabled = false
+            // 默认不混淆压缩；`-Phoshimi.minify=true` 可开启 R8 + 资源压缩出小体积包（约为原来的五分之一）。
+            // 压缩包必须在真机上完整回归后再分发：R8 会裁掉它认为用不到的代码。
+            val minify = providers.gradleProperty("hoshimi.minify").orNull == "true"
+            isMinifyEnabled = minify
+            isShrinkResources = minify
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
