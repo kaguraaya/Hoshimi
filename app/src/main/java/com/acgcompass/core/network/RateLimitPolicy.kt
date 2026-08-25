@@ -39,7 +39,9 @@ data class RateLimitPolicy(
             ),
             RateLimitPolicy(
                 source = NetworkSource.ANILIST,
-                rules = listOf(RateLimiter.Rule.perSecond(1), RateLimiter.Rule.perMinute(45)),
+                // 官方文档目前标注「降级状态，每分钟 30 次」（恢复后为 90 次），实测响应头 X-RateLimit-Limit: 30。
+                // 每分钟 45 次会撞上 429 并触发退避；取 28 次，留 2 次余量给窗口对齐误差。
+                rules = listOf(RateLimiter.Rule.perSecond(1), RateLimiter.Rule.perMinute(28)),
             ),
             RateLimitPolicy(
                 source = NetworkSource.VNDB,
@@ -54,6 +56,8 @@ data class RateLimitPolicy(
             RateLimitPolicy(
                 source = NetworkSource.BANGUMI,
                 rules = listOf(RateLimiter.Rule(5, 4_000L), RateLimiter.Rule.perMinute(45)),
+                // 两个并发槽：详情页的条目 / 人物 / 角色请求可以并行；其中至多一个给后台任务。
+                maxConcurrentRequests = 2,
             ),
         )
     }

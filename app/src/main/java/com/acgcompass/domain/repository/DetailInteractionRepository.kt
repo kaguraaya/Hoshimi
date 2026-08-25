@@ -45,6 +45,12 @@ interface DetailInteractionRepository {
 
     suspend fun isAiConfigured(): Boolean
 
+    /**
+     * 「隐私与数据 → 允许 AI 分析评论」是否开启。关闭（默认）时，任何评论内容——你自己的短评和
+     * 社区评论——都不得出现在发给 AI 提供商的请求里。
+     */
+    suspend fun isAiReviewAnalysisAllowed(): Boolean
+
     suspend fun addRecentlyViewed(workId: String)
 
     suspend fun shouldAutoTranslateVndbDescription(): Boolean

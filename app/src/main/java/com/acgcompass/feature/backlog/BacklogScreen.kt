@@ -28,18 +28,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,12 +49,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatAssistChip
+import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.StateScaffold
@@ -223,14 +228,14 @@ fun BacklogScreen(
                     }
                 }
                 isEmpty -> {
-                    // 空池友好引导卡（导入 / 搜索添加），不再是孤零零的占位。
+                    // 空池友好引导卡（导入 / 搜索添加），而不是孤零零的占位。
                     BacklogEmptyState(
                         onGoImport = onGoImport,
                         onGoSearch = onGoSearch,
                     )
                 }
                 selectionMode -> {
-                    // 批量操作栏作为列表 header 随内容一起滚动（不再固定在顶部）。
+                    // 批量操作栏作为列表 header 随内容一起滚动（不固定在顶部）。
                     BacklogList(
                         state = state,
                         selectionMode = selectionMode,
@@ -250,7 +255,7 @@ fun BacklogScreen(
                     )
                 }
                 else -> {
-                    // 一键抽番按钮 + 筛选/排序卡作为列表 header 随内容一起滚动（不再固定在顶部）。
+                    // 一键抽番按钮 + 筛选/排序卡作为列表 header 随内容一起滚动（不固定在顶部）。
                     BacklogList(
                         state = state,
                         selectionMode = selectionMode,
@@ -477,7 +482,7 @@ private fun BacklogEmptyState(onGoImport: () -> Unit, onGoSearch: () -> Unit) {
                 ) {
                     Text("批量导入补番清单", maxLines = 1)
                 }
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = onGoSearch,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -509,7 +514,7 @@ private fun BulkActionBar(selectedCount: Int, onBulk: (BulkOp) -> Unit) {
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BulkOp.entries.forEach { op ->
-                    AssistChip(
+                    FlatAssistChip(
                         onClick = { onBulk(op) },
                         label = { Text(op.label()) },
                     )
@@ -625,6 +630,8 @@ private fun FilterSortBar(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = 260.dp)
+            // 手指落在面板里就只滚面板：滚到头之后的余量在这里吃掉，不传给外层页面继续滚。
+            .nestedScroll(remember { ConsumeLeftoverScrollConnection })
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -635,7 +642,7 @@ private fun FilterSortBar(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedButton(onClick = { sortMenuExpanded = true }) {
+            FilledTonalButton(onClick = { sortMenuExpanded = true }) {
                 Text("排序：${sort.label()}")
             }
             DropdownMenu(
@@ -659,7 +666,7 @@ private fun FilterSortBar(
         Text("优先级", style = MaterialTheme.typography.labelMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Priority.entries.forEach { priority ->
-                FilterChip(
+                FlatFilterChip(
                     selected = priority in filter.priorities,
                     onClick = { onTogglePriorityFilter(priority) },
                     label = { Text(priority.label()) },
@@ -672,7 +679,7 @@ private fun FilterSortBar(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // 音乐、真人和未知类型不作为待补池的可筛选媒介。
             MediaType.entries.filter { it != MediaType.OTHER }.forEach { mediaType ->
-                FilterChip(
+                FlatFilterChip(
                     selected = mediaType in filter.mediaTypes,
                     onClick = { onToggleMediaTypeFilter(mediaType) },
                     label = { Text(mediaType.label()) },
@@ -683,17 +690,17 @@ private fun FilterSortBar(
         // 完结状态 / 吃灰过滤。
         Text("吃灰状态", style = MaterialTheme.typography.labelMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
+            FlatFilterChip(
                 selected = filter.inDustMuseum == null,
                 onClick = { onToggleDustMuseumFilter(null) },
                 label = { Text("全部") },
             )
-            FilterChip(
+            FlatFilterChip(
                 selected = filter.inDustMuseum == true,
                 onClick = { onToggleDustMuseumFilter(true) },
                 label = { Text("仅吃灰") },
             )
-            FilterChip(
+            FlatFilterChip(
                 selected = filter.inDustMuseum == false,
                 onClick = { onToggleDustMuseumFilter(false) },
                 label = { Text("仅非吃灰") },
@@ -771,7 +778,7 @@ private fun EditPanel(
             Text("优先级", style = MaterialTheme.typography.labelMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Priority.entries.forEach { priority ->
-                    FilterChip(
+                    FlatFilterChip(
                         selected = card.item.priority == priority,
                         onClick = { onSetPriority(card.workId, priority) },
                         label = { Text(priority.label()) },
@@ -783,7 +790,7 @@ private fun EditPanel(
             var noteDraft by rememberSaveable(card.workId) {
                 mutableStateOf(card.item.note.orEmpty())
             }
-            OutlinedTextField(
+            FlatTextField(
                 value = noteDraft,
                 onValueChange = { noteDraft = it },
                 modifier = Modifier.fillMaxWidth(),
@@ -791,7 +798,7 @@ private fun EditPanel(
                 maxLines = 3,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { onSetNote(card.workId, noteDraft) }) {
+                FilledTonalButton(onClick = { onSetNote(card.workId, noteDraft) }) {
                     Text("保存备注")
                 }
                 TextButton(onClick = {
@@ -834,4 +841,14 @@ private fun BacklogScreenEmptyPreview() {
             onOpenDetail = {},
         )
     }
+}
+
+/**
+ * 嵌套滚动里「到头即止」：内层滚动容器滚到边界后，把剩余的拖动与惯性全部消费掉，
+ * 阻止滚动链把它交给外层容器（否则在小面板里一滑到底，整页就跟着滚）。
+ */
+private object ConsumeLeftoverScrollConnection : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset = available
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity = available
 }

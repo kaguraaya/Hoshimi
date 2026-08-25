@@ -48,7 +48,7 @@ data class ExploreCardUiModel(
     val synopsis: String?,
     /** 背面简介懒加载中标记——翻面时若无本地简介则联网补齐，加载期间背面显示「加载中」。 */
     val synopsisLoading: Boolean = false,
-    /** 预计评分一句话（如「预计你会打 7.8 · 大众基线 7.2」）；模型不可用时为 null。 */
+    /** 预计评分一句话（如「预计你会打 7.8 · 社区 7.2」）；模型不可用时为 null。 */
     val predictionText: String? = null,
     /** 跨界候选：口碑扎实但题材在画像常看范围之外，卡片上以「跨界探索」标识。 */
     val discovery: Boolean = false,
@@ -86,8 +86,8 @@ internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = f
         tags = tags.take(5).map { it.name },
         synopsis = summary?.trim()?.takeIf { it.isNotBlank() },
         discovery = discovery,
-        predictionText = match?.prediction?.let {
-            "预计你会打 %.1f · 大众基线 %.1f".format(it.rating, it.baseline)
+        predictionText = match?.prediction?.let { p ->
+            "预计你会打 %.1f".format(p.rating) + p.community?.let { " · 社区 %.1f".format(it) }.orEmpty()
         },
     )
 }

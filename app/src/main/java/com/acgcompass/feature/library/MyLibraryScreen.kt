@@ -11,10 +11,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -195,7 +195,7 @@ private fun LibraryListItem(item: LibraryItem, onOpenWork: (String) -> Unit, onA
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                OutlinedButton(onClick = { onAddToBacklog(item.workId) }) {
+                FilledTonalButton(onClick = { onAddToBacklog(item.workId) }) {
                     Text("加入待补池", maxLines = 1)
                 }
             }

@@ -15,12 +15,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -34,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 
@@ -99,7 +99,7 @@ private fun CacheItemFilterControls(
     onFiltersChange: (CacheItemFilters) -> Unit,
 ) {
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
+        FlatTextField(
             value = query,
             onValueChange = onQueryChange,
             label = { Text("标题或作品 ID") },
@@ -107,13 +107,13 @@ private fun CacheItemFilterControls(
             singleLine = true,
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilterChip(
+            FlatFilterChip(
                 selected = filters.source == null,
                 onClick = { onFiltersChange(filters.copy(source = null)) },
                 label = { Text("全部来源") },
             )
             listOf(SourceId.BANGUMI, SourceId.TENRAI, SourceId.ANILIST, SourceId.VNDB).forEach { source ->
-                FilterChip(
+                FlatFilterChip(
                     selected = filters.source == source,
                     onClick = { onFiltersChange(filters.copy(source = source)) },
                     label = { Text(source.name) },
@@ -128,13 +128,13 @@ private fun CacheItemFilterControls(
 @Composable
 private fun CacheKindFilters(filters: CacheItemFilters, onFiltersChange: (CacheItemFilters) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(
+        FlatFilterChip(
             selected = filters.kind == null,
             onClick = { onFiltersChange(filters.copy(kind = null)) },
             label = { Text("整项缓存") },
         )
         ClearableAssetKinds.forEach { kind ->
-            FilterChip(
+            FlatFilterChip(
                 selected = filters.kind == kind,
                 onClick = { onFiltersChange(filters.copy(kind = kind)) },
                 label = { Text(kind.label()) },
@@ -167,7 +167,7 @@ private fun CacheItemRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            OutlinedButton(onClick = { viewModel.clearOne(item.workId, kind) }, enabled = !state.busy) {
+            FilledTonalButton(onClick = { viewModel.clearOne(item.workId, kind) }, enabled = !state.busy) {
                 Text("清理")
             }
         }

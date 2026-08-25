@@ -24,6 +24,9 @@ data class HttpTimeouts(
 
         /** AI provider 档：补全可能较慢，放宽读取与端到端超时。 */
         val AI = HttpTimeouts(connectSeconds = 15, readSeconds = 60, writeSeconds = 30, callSeconds = 90)
+
+        /** 图片下载：跨境链路上原图（数百 KB）传输慢，读超时放宽，避免大图读到一半被掐断。 */
+        val IMAGE = HttpTimeouts(connectSeconds = 10, readSeconds = 30, writeSeconds = 10, callSeconds = 0)
     }
 }
 
@@ -60,6 +63,8 @@ object HttpClientFactory {
             .writeTimeout(timeouts.writeSeconds, TimeUnit.SECONDS)
             .callTimeout(timeouts.callSeconds, TimeUnit.SECONDS)
             .retryOnConnectionFailure(retryOnConnectionFailure)
+            // IPv4 优先：避免双栈域名在 IPv6 不通的网络上每次都先卡满连接超时（见 [Ipv4FirstDns]）。
+            .dns(Ipv4FirstDns())
 
         // 可选 HTTP 响应磁盘缓存，复用条目/评分/评论等 GET 响应，减少重复请求（缓存利用）。
         cache?.let(builder::cache)

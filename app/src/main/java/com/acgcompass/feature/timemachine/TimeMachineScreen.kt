@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -33,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.ScreenContentPadding
@@ -277,7 +277,7 @@ private fun BaselineGroupCard(group: BaselineGroupUi, onOpenWork: (String) -> Un
             }
             if (expanded) {
                 group.works.forEachIndexed { index, work ->
-                    if (index > 0) HorizontalDivider()
+                    if (index > 0) FlatDivider()
                     BaselineWorkRow(work = work, onOpenWork = onOpenWork)
                 }
             }

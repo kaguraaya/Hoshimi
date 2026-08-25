@@ -14,7 +14,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.ui.AcgScreenScaffold
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.domain.taste.ManualTagReview
@@ -115,7 +115,7 @@ fun TagManualReviewRoute(onBack: () -> Unit, viewModel: TagManualReviewViewModel
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TasteCategory.SINGLE_TAG_CATEGORIES.forEach { category ->
-                    FilterChip(
+                    FlatFilterChip(
                         selected = state.category == category,
                         onClick = { viewModel.selectCategory(category) },
                         label = { Text(category.label) },

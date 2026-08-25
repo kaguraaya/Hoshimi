@@ -14,12 +14,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -37,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 import kotlinx.coroutines.launch
@@ -103,7 +103,7 @@ fun CacheManagementScreen(
                             "清除本地数据会删除数据库、设置、登录状态、媒体和后台任务，应用将回到首次启动状态。",
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = { showResetDialog = true },
                             enabled = !state.busy,
                             modifier = Modifier.fillMaxWidth(),
@@ -131,7 +131,7 @@ fun CacheManagementScreen(
                 ) { Text("确认清除") }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showResetDialog = false }) { Text("取消") }
+                FilledTonalButton(onClick = { showResetDialog = false }) { Text("取消") }
             },
         )
     }
@@ -177,7 +177,7 @@ private fun SourceCard(state: CacheManagementUiState, viewModel: CacheManagement
             listOf(SourceId.BANGUMI, SourceId.TENRAI, SourceId.ANILIST, SourceId.VNDB).forEach { source ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text("${source.name} · ${state.sourceCoverage[source] ?: 0}", modifier = Modifier.weight(1f))
-                    OutlinedButton(onClick = { viewModel.clearSource(source) }, enabled = !state.busy) {
+                    FilledTonalButton(onClick = { viewModel.clearSource(source) }, enabled = !state.busy) {
                         Text("清理")
                     }
                 }
@@ -198,30 +198,30 @@ private fun CleanupCard(
             Button(onClick = viewModel::trimNow, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                 Text("按当前上限整理")
             }
-            OutlinedButton(onClick = onOpenItemCleanup, modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(onClick = onOpenItemCleanup, modifier = Modifier.fillMaxWidth()) {
                 Text("搜索并选择作品…")
             }
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = viewModel::clearAllCache,
                 enabled = !state.busy,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("清除可重新下载的缓存")
             }
-            HorizontalDivider()
+            FlatDivider()
             listOf(
                 "截图原图" to CacheAssetKind.SCREENSHOT_ORIGINAL,
                 "截图缩略图" to CacheAssetKind.SCREENSHOT_THUMBNAIL,
                 "封面" to CacheAssetKind.COVER,
                 "详情" to CacheAssetKind.DETAIL,
             ).forEach { (label, kind) ->
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = { viewModel.clearAsset(kind) },
                     enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("清理$label") }
             }
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = viewModel::clearExpiredDetails,
                 enabled = !state.busy,
                 modifier = Modifier.fillMaxWidth(),

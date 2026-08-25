@@ -21,6 +21,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import retrofit2.Response
 
 /**
@@ -44,6 +46,10 @@ class VndbRemoteDataSource @Inject constructor(
 ) {
 
     private val auth: SourceAuth = SourceAuths.vndb
+    private val detailMutex = Mutex()
+    private val detailMemo = LinkedHashMap<String, MemoizedDetail>()
+
+    private class MemoizedDetail(val dto: VndbVnDto, val fetchedAt: Long)
 
     /**
      * 按关键字搜索 VN → 候选 [WorkMatch] 列表（精确置信度由上层匹配器另行计算）。
@@ -227,17 +233,26 @@ class VndbRemoteDataSource @Inject constructor(
     }
 
     /** 按 id 取单个 VN DTO；`results` 为空抛出 [AppError.FieldMissing]。 */
-    private suspend fun fetchVnById(id: String): VndbVnDto {
+    /**
+     * 按 id 取详情。作品页会从三条路径（作品信息 / 评分 / 视觉小说详情）各要一次同一份数据；
+     * VNDB 并发为 1 且每秒 1 次，三次重复请求会让页面白等数秒并多占官方的执行时间配额。
+     * 这里串行化并短时复用结果：同一 id 在 [DETAIL_MEMO_TTL_MS] 内只真正请求一次。
+     */
+    private suspend fun fetchVnById(id: String): VndbVnDto = detailMutex.withLock {
+        val now = System.currentTimeMillis()
+        detailMemo[id]?.takeIf { now - it.fetchedAt < DETAIL_MEMO_TTL_MS }?.let { return@withLock it.dto }
         val request = VndbQueryRequestDto(
             filters = VndbFilters.byId(id),
             fields = VndbFieldSets.VN_DETAIL,
             results = 1,
         )
-        return api.queryVn(request, auth).bodyOrThrow().results.firstOrNull()
+        val dto = api.queryVn(request, auth).bodyOrThrow().results.firstOrNull()
             ?: throw AppError.FieldMissing().asException()
+        if (detailMemo.size >= DETAIL_MEMO_MAX_ENTRIES) detailMemo.remove(detailMemo.keys.first())
+        detailMemo[id] = MemoizedDetail(dto, System.currentTimeMillis())
+        dto
     }
 
-    /** 解析成人内容开关：显式参数优先，否则读取 [SettingsDataStore] 当前值。 */
     private suspend fun resolveAdultFlag(explicit: Boolean?): Boolean =
         explicit ?: settingsDataStore.showAdultContent.first()
 
@@ -269,6 +284,8 @@ class VndbRemoteDataSource @Inject constructor(
 
     private companion object {
         const val MINIMUM_AUTOMATIC_VOTES = 50
+        const val DETAIL_MEMO_TTL_MS = 60_000L
+        const val DETAIL_MEMO_MAX_ENTRIES = 16
     }
 }
 

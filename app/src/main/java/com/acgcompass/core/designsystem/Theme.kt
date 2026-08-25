@@ -34,7 +34,11 @@ fun AcgCompassTheme(
     preset: ThemePreset = ThemePreset.OCEAN,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = resolveColorScheme(darkTheme = darkTheme, dynamicColor = dynamicColor, preset = preset)
+    val resolved = resolveColorScheme(darkTheme = darkTheme, dynamicColor = dynamicColor, preset = preset)
+    // Flat look: Material's default filled Card / chip surfaces use `surfaceContainerHighest`, which under
+    // wallpaper-based dynamic color can be a heavily saturated block. Map it one step down so every
+    // default card in the app reads as a light tonal surface instead of a colored slab.
+    val colorScheme = resolved.copy(surfaceContainerHighest = resolved.surfaceContainer)
 
     // Match the status/navigation bar icon appearance (light vs dark) to the resolved theme so
     // edge-to-edge content stays readable in both light and dark mode. Guarded against the Compose

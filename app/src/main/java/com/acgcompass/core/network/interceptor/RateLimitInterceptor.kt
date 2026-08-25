@@ -60,6 +60,7 @@ class RateLimiterRegistry private constructor(
         private val lock = ReentrantLock(true)
         private val available = lock.newCondition()
         private var inFlight = 0
+        private var inFlightBackground = 0
         private var foregroundWaiters = 0
         private var consecutiveRateLimits = 0
 
@@ -67,16 +68,17 @@ class RateLimiterRegistry private constructor(
             if (priority == RequestPriority.FOREGROUND) {
                 lock.withLock { foregroundWaiters++ }
             }
+            // 后台任务只用窗口容量的一部分，余量留给前台（用户正在等的详情 / 搜索）。
+            val share = if (priority == RequestPriority.BACKGROUND) BACKGROUND_CAPACITY_SHARE else 1.0
             try {
                 while (true) {
                     acquireAdmissionSlot(priority)
-                    if (limiter.tryAcquireNow()) {
+                    if (limiter.tryAcquireNow(share)) {
                         unregisterForegroundWaiter(priority)
-                        return Lease(::release)
+                        return Lease { release(priority) }
                     }
-
-                    release()
-                    waitForNextPermit()
+                    release(priority)
+                    waitForNextPermit(share)
                 }
             } catch (error: InterruptedException) {
                 unregisterForegroundWaiter(priority)
@@ -87,14 +89,23 @@ class RateLimiterRegistry private constructor(
 
         private fun acquireAdmissionSlot(priority: RequestPriority) {
             lock.withLock {
-                while (
-                    inFlight >= maxConcurrentRequests ||
-                    (priority == RequestPriority.BACKGROUND && foregroundWaiters > 0)
-                ) {
+                while (!canAdmit(priority)) {
                     available.await()
                 }
                 inFlight++
+                if (priority == RequestPriority.BACKGROUND) inFlightBackground++
             }
+        }
+
+        /**
+         * 并发槽准入。后台请求额外受两条约束：有前台请求在等时让路；并发槽多于 1 个时至少留 1 个给前台
+         * ——否则几个慢的后台请求占满全部槽位，前台只能等它们超时。
+         */
+        private fun canAdmit(priority: RequestPriority): Boolean {
+            val hasFreeSlot = inFlight < maxConcurrentRequests
+            if (priority != RequestPriority.BACKGROUND) return hasFreeSlot
+            val backgroundSlots = (maxConcurrentRequests - 1).coerceAtLeast(1)
+            return hasFreeSlot && foregroundWaiters == 0 && inFlightBackground < backgroundSlots
         }
 
         private fun unregisterForegroundWaiter(priority: RequestPriority) {
@@ -103,8 +114,8 @@ class RateLimiterRegistry private constructor(
             }
         }
 
-        private fun waitForNextPermit() {
-            val delay = limiter.delayUntilNextPermitMillis()
+        private fun waitForNextPermit(share: Double) {
+            val delay = limiter.delayUntilNextPermitMillis(share)
             if (delay > 0L) Thread.sleep(delay.coerceAtMost(RETRY_SLICE_MILLIS))
         }
 
@@ -122,15 +133,19 @@ class RateLimiterRegistry private constructor(
             lock.withLock { consecutiveRateLimits = 0 }
         }
 
-        private fun release() {
+        private fun release(priority: RequestPriority) {
             lock.withLock {
                 inFlight--
+                if (priority == RequestPriority.BACKGROUND) inFlightBackground--
                 available.signalAll()
             }
         }
 
         private companion object {
             const val RETRY_SLICE_MILLIS = 250L
+
+            /** 后台任务最多占用限流窗口容量的比例。 */
+            const val BACKGROUND_CAPACITY_SHARE = 0.5
         }
     }
 

@@ -120,6 +120,8 @@ class DetailInteractionRepositoryImpl @Inject constructor(
     override suspend fun isBangumiConfigured(): Boolean =
         credentialStore.observeStatus().first()[CredentialSourceId.BANGUMI]?.configured == true
 
+    override suspend fun isAiReviewAnalysisAllowed(): Boolean = settings.allowAiAnalyzeReviews.first()
+
     override suspend fun isAiConfigured(): Boolean =
         credentialStore.observeStatus().first()[CredentialSourceId.AI_PROVIDER]?.configured == true
 

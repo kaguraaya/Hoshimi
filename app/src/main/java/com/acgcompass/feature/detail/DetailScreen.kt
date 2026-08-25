@@ -22,16 +22,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
@@ -58,6 +57,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.imageLoader
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatAssistChip
+import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelDetail
@@ -234,7 +236,7 @@ private fun WatchRouteSection(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onAddMainline) { Text("加入主线必看", maxLines = 1) }
-            OutlinedButton(onClick = onAddAllSeries) { Text("加入全系列", maxLines = 1) }
+            FilledTonalButton(onClick = onAddAllSeries) { Text("加入全系列", maxLines = 1) }
         }
     }
 }
@@ -509,7 +511,7 @@ private fun PersonalSection(
                 // 明确展示记录的私密或公开状态。
                 PersonalRow(label = "可见性", value = if (personal.isPrivate) "仅自己可见（私密）" else "公开")
                 // 编辑我的记录（状态/评分/进度/短评）并回写 Bangumi。
-                OutlinedButton(onClick = { showEdit = true }, modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(onClick = { showEdit = true }, modifier = Modifier.fillMaxWidth()) {
                     Text(text = "编辑我的记录")
                 }
                 if (options.localOnly) {
@@ -523,7 +525,7 @@ private fun PersonalSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     if (options.canSyncToBangumi && personal.inLibrary) {
-                        OutlinedButton(onClick = actions.onSyncToBangumi, modifier = Modifier.fillMaxWidth()) {
+                        FilledTonalButton(onClick = actions.onSyncToBangumi, modifier = Modifier.fillMaxWidth()) {
                             Text("同步这条记录到 Bangumi")
                         }
                     }
@@ -545,7 +547,7 @@ private fun PersonalSection(
             }
             // 根据是否已在待补池切换「加入 / 移出待补池」按钮形态。
             if (personal.inBacklog) {
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = actions.onToggleBacklog,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
@@ -614,14 +616,14 @@ private fun EditMyRecordDialog(
                 Text("状态", style = MaterialTheme.typography.labelMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     statuses.forEach { s ->
-                        androidx.compose.material3.FilterChip(
+                        FlatFilterChip(
                             selected = status == s,
                             onClick = { status = if (status == s) null else s },
                             label = { Text(s) },
                         )
                     }
                 }
-                androidx.compose.material3.OutlinedTextField(
+                FlatTextField(
                     value = ratingText,
                     onValueChange = { v: String -> ratingText = v.filter { it.isDigit() }.take(2) },
                     label = { Text("评分 0-10") },
@@ -629,7 +631,7 @@ private fun EditMyRecordDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (personal.progressEditable) {
-                    androidx.compose.material3.OutlinedTextField(
+                    FlatTextField(
                         value = progressText,
                         onValueChange = { v: String ->
                             val digits = v.filter { it.isDigit() }.take(4)
@@ -648,13 +650,13 @@ private fun EditMyRecordDialog(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                androidx.compose.material3.OutlinedTextField(
+                FlatTextField(
                     value = comment,
                     onValueChange = { v: String -> comment = v },
                     label = { Text("短评") },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                androidx.compose.material3.OutlinedTextField(
+                FlatTextField(
                     value = tagsText,
                     onValueChange = { v: String -> tagsText = v },
                     label = { Text("标签（空格分隔）") },
@@ -711,10 +713,10 @@ private fun MembershipBadges(personal: PersonalUiModel, modifier: Modifier = Mod
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        AssistChip(onClick = {}, label = { Text(text = libraryText) })
-        AssistChip(onClick = {}, label = { Text(text = backlogText) })
+        FlatAssistChip(onClick = {}, label = { Text(text = libraryText) })
+        FlatAssistChip(onClick = {}, label = { Text(text = backlogText) })
         if (personal.inDustMuseum) {
-            AssistChip(onClick = {}, label = { Text(text = "吃灰区") })
+            FlatAssistChip(onClick = {}, label = { Text(text = "吃灰区") })
         }
     }
 }
@@ -856,7 +858,7 @@ private fun TasteMatchBlock(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(text = "口味匹配度", style = MaterialTheme.typography.titleSmall)
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = onAnalyzeMatchWithAi,
                 enabled = aiMatch !is AiMatchUi.Loading,
             ) {
@@ -1196,7 +1198,7 @@ private fun VndbProducerSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(producer.name, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = {
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
@@ -1378,6 +1380,7 @@ private fun CompletionCostSection(completionCost: CompletionCostUiModel, modifie
             SuggestionChip(
                 onClick = {},
                 label = { Text(text = completionCost.bucketLabel) },
+                border = null,
             )
             Text(
                 text = completionCost.detailText,
@@ -1406,7 +1409,7 @@ private fun ChipFlowRow(items: List<String>, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items.forEach { item ->
-            AssistChip(
+            FlatAssistChip(
                 onClick = {},
                 label = { Text(text = item) },
             )
@@ -1557,7 +1560,8 @@ private fun DetailScreenInsufficientPreview() {
 // endregion
 
 /**
- * 评分预测块：预计评分 / 大众基线 / 个人分歧三个数字 + 一句话结论 + 分歧归因。
+ * 评分预测块：预计评分 / 社区评分 / 你的均分三个数字，一句「对你来说算高还是低」，
+ * 一句「和社区差在哪」，以及个人口味部分的归因。
  * 与上方「口味匹配度」回答的问题不同——匹配度是「像不像你的口味」，这里是「你会打几分」。
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -1574,10 +1578,19 @@ internal fun RatingPredictionBlock(prediction: RatingPredictionUi) {
         ) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 PredictionStat(label = "预计你会打", value = prediction.predictedText, emphasized = true)
-                PredictionStat(label = "大众基线", value = prediction.baselineText)
-                PredictionStat(label = "个人分歧", value = prediction.divergenceText)
+                PredictionStat(label = "社区评分", value = prediction.communityText ?: "—")
+                PredictionStat(label = "你的均分", value = prediction.userMeanText)
             }
-            Text(text = prediction.summary, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = prediction.selfSummary,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = prediction.communitySummary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             if (prediction.factors.isNotEmpty()) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

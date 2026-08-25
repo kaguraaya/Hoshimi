@@ -9,12 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatAssistChip
+import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
@@ -168,7 +168,7 @@ private fun SyncCard(
         )
         // 展示统一同步状态（来源 / 最后同步时间 / 本地收藏数 / 上次结果 / 错误）。
         if (syncStatus.hasSynced || syncStatus.localCollectionCount > 0 || syncStatus.lastError != null) {
-            HorizontalDivider()
+            FlatDivider()
             StatRow("同步来源", syncStatus.currentSource)
             StatRow("最后同步", syncStatus.lastSyncText())
             StatRow("本地收藏数", "${syncStatus.localCollectionCount} 部")
@@ -183,7 +183,7 @@ private fun SyncCard(
                 )
             }
         }
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onSyncBangumi,
             enabled = bangumiConfigured && !syncing,
             modifier = Modifier.fillMaxWidth(),
@@ -191,14 +191,14 @@ private fun SyncCard(
             Text(if (syncing) "同步中…" else "从 Bangumi 同步我的数据", maxLines = 1)
         }
         // 同步入库后查看具体作品的入口。说明信息架构，避免「只看到数字」。
-        HorizontalDivider()
+        FlatDivider()
         Text(
             "「收藏入库」= 把 Bangumi 收藏 / 评分 / 进度 / 短评同步到本地。" +
                 "待补池 = 你准备补的作品；我的库 = 所有同步 / 记录过的作品。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        OutlinedButton(
+        FilledTonalButton(
             onClick = { onOpenLibrary(null) },
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -208,9 +208,9 @@ private fun SyncCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AssistChip(onClick = { onOpenLibrary("watching") }, label = { Text("在看") })
-            AssistChip(onClick = { onOpenLibrary("watched") }, label = { Text("看过") })
-            AssistChip(onClick = { onOpenLibrary("want") }, label = { Text("想看") })
+            FlatAssistChip(onClick = { onOpenLibrary("watching") }, label = { Text("在看") })
+            FlatAssistChip(onClick = { onOpenLibrary("watched") }, label = { Text("看过") })
+            FlatAssistChip(onClick = { onOpenLibrary("want") }, label = { Text("想看") })
         }
     }
 }
@@ -224,7 +224,7 @@ private fun AccountStatusCard(accounts: List<AccountStatusRow>) {
             return@SectionCard
         }
         accounts.forEachIndexed { index, row ->
-            if (index > 0) HorizontalDivider()
+            if (index > 0) FlatDivider()
             AccountStatusRowItem(row = row)
         }
     }
@@ -274,7 +274,7 @@ private fun StatisticsCard(stats: MineStats) {
         StatRow(label = "搁置", value = stats.onHold?.toString() ?: NO_DATA)
         StatRow(label = "抛弃", value = stats.dropped?.toString() ?: NO_DATA)
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        FlatDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         // 评分统计。
         StatRow(
@@ -286,7 +286,7 @@ private fun StatisticsCard(stats: MineStats) {
             value = stats.highestRating?.let { "%.1f".format(it) } ?: NO_DATA,
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        FlatDivider(modifier = Modifier.padding(vertical = 4.dp))
 
         Text("常见番剧标签", style = MaterialTheme.typography.titleSmall)
         if (stats.commonTags.isEmpty()) {
@@ -298,7 +298,7 @@ private fun StatisticsCard(stats: MineStats) {
         } else {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 stats.commonTags.forEach { tag ->
-                    AssistChip(
+                    FlatAssistChip(
                         onClick = {},
                         label = { Text("${tag.name} · ${tag.count}") },
                     )
@@ -334,20 +334,20 @@ private fun ActionsCard(
     onOpenAbout: () -> Unit,
 ) {
     SectionCard(title = "更多") {
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onOpenTasteProfile,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("口味画像")
         }
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onNavigateToSettings,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("设置")
         }
         // 隐私控制、导入导出和缓存管理集中在设置页；此入口会自动展开对应区域。
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onOpenPrivacySettings,
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -357,7 +357,7 @@ private fun ActionsCard(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
         }
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onOpenAbout,
             modifier = Modifier.fillMaxWidth(),
         ) {

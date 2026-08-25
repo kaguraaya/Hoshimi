@@ -20,11 +20,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.AcgTopLevelTopBar
@@ -219,7 +220,7 @@ private fun HomeContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     data.moods.forEach { mood ->
-                        FilterChip(
+                        FlatFilterChip(
                             selected = false,
                             onClick = { onOpenRecommender(mood.presetTags) },
                             label = { Text(mood.label) },
@@ -425,7 +426,7 @@ private fun SyncReminderCard(reminder: SyncReminder, onManualSync: () -> Unit) {
 
 @Composable
 private fun DailyDrawCard(draw: DailyDraw) {
-    ElevatedCard(
+    Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -457,7 +458,7 @@ private fun DailyDrawCard(draw: DailyDraw) {
 
 @Composable
 private fun TonightHeroCard(onClick: () -> Unit) {
-    ElevatedCard(
+    Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.elevatedCardColors(
@@ -480,8 +481,16 @@ private fun TonightHeroCard(onClick: () -> Unit) {
                 text = "按可用时间、偏好与待补池内容生成推荐",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            TextButton(onClick = onClick) {
-                Text("开始决策")
+            // 实心按钮、与卡片底色反相：文字按钮在高饱和的主色卡片上（尤其深色模式）几乎看不清。
+            Button(
+                onClick = onClick,
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    contentColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
+            ) {
+                Text("开始决策", fontWeight = FontWeight.SemiBold)
             }
         }
     }

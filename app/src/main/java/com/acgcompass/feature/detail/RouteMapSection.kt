@@ -10,16 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.domain.ai.RouteRecommendation
 import com.acgcompass.domain.model.RouteNode
 import com.acgcompass.domain.model.RouteRelationType
@@ -176,7 +175,7 @@ fun RouteMapSection(
                     Text(text = "一键加入系列")
                 }
                 if (hasMust) {
-                    OutlinedButton(onClick = { onAddSeries(true) }) {
+                    FilledTonalButton(onClick = { onAddSeries(true) }) {
                         Text(text = "仅加入必看")
                     }
                 }
@@ -218,9 +217,9 @@ private fun RouteNodeRow(node: RouteNodeUiModel, onOpenWork: (String) -> Unit, m
                         )
                     },
                     shape = MaterialTheme.shapes.extraSmall,
-                    border = SuggestionChipDefaults.suggestionChipBorder(enabled = true),
+                    border = null,
                 )
-                AssistChip(
+                FlatAssistChip(
                     onClick = { onOpenWork(node.workId) },
                     label = {
                         Text(

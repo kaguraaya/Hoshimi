@@ -34,6 +34,11 @@ data class RadarRequest(
     val tags: List<String> = emptyList(),
     val userComments: List<String> = emptyList(),
     val publicReviews: List<String> = emptyList(),
+    /**
+     * 是否允许把评论内容（[userComments] / [publicReviews]）发给 AI。对应「隐私与数据 → 允许 AI 分析评论」；
+     * 为 false 时评论只用于本地规则版雷达，AI 请求里不带任何评论文本。
+     */
+    val allowReviewsToAi: Boolean = true,
     /** 社区平均分（0~10 归一化口径），用于让 AI 校准整体口碑判断；缺失为 null。 */
     val communityScore: Double? = null,
     /** 社区评分人数，反映样本量 / 关注度；缺失为 null。 */
@@ -176,10 +181,12 @@ class GenerateSpoilerRadarUseCase(
         }
         cleanList(request.tags).takeIf { it.isNotEmpty() }
             ?.let { appendLine("标签：${it.joinToString("、")}") }
-        cleanList(request.userComments).takeIf { it.isNotEmpty() }
-            ?.let { appendLine("用户短评：\n${it.joinToString("\n")}") }
-        cleanList(request.publicReviews).takeIf { it.isNotEmpty() }
-            ?.let { appendLine("公共评论：\n${it.joinToString("\n")}") }
+        if (request.allowReviewsToAi) {
+            cleanList(request.userComments).takeIf { it.isNotEmpty() }
+                ?.let { appendLine("用户短评：\n${it.joinToString("\n")}") }
+            cleanList(request.publicReviews).takeIf { it.isNotEmpty() }
+                ?.let { appendLine("公共评论：\n${it.joinToString("\n")}") }
+        }
     }.trim()
 
     private fun cleanList(items: List<String>): List<String> = items.map { it.trim() }.filter { it.isNotEmpty() }

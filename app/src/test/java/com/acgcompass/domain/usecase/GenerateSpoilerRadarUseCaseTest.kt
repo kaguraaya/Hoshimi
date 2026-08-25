@@ -169,6 +169,31 @@ class GenerateSpoilerRadarUseCaseTest : StringSpec({
             outcome.result.summarySources shouldContainExactly listOf(RadarSummarySource.TAG_STATS)
         }
     }
+
+    "关闭「允许 AI 分析评论」：发给 AI 的内容里不含任何评论文本，标签照常发送" {
+        runTest {
+            val payload = SpoilerRadarOutput(overallImpression = "整体偏热血", confidence = 0.8f)
+            fun engine() = FakeAiEngine(
+                AiRunResult.Success(
+                    payload = payload,
+                    result = aiResult(generator = AiGenerator.AI, confidence = 0.8f, generatedAt = 555L),
+                ),
+            )
+            val allowed = engine()
+            val denied = engine()
+
+            useCase(allowed).invoke(richRequest)
+            useCase(denied).invoke(richRequest.copy(allowReviewsToAi = false))
+
+            val sentWhenAllowed = requireNotNull(allowed.lastUserContent)
+            sentWhenAllowed.contains("音乐很赞") shouldBe true
+            sentWhenAllowed.contains("节奏稍慢") shouldBe true
+            val sentWhenDenied = requireNotNull(denied.lastUserContent)
+            sentWhenDenied.contains("音乐很赞") shouldBe false
+            sentWhenDenied.contains("节奏稍慢") shouldBe false
+            sentWhenDenied.contains("热血") shouldBe true
+        }
+    }
 })
 
 private fun aiResult(generator: AiGenerator, confidence: Float, generatedAt: Long): AiResult = AiResult(
@@ -184,8 +209,14 @@ private fun aiResult(generator: AiGenerator, confidence: Float, generatedAt: Lon
 
 /** 固定返回预设结果的 [AiEngine] 测试替身。 */
 private class FakeAiEngine(private val result: AiRunResult<*>) : AiEngine {
+    var lastUserContent: String? = null
+        private set
+
     @Suppress("UNCHECKED_CAST")
-    override suspend fun <T> run(task: AiTask<T>, options: AiRunOptions): AiRunResult<T> = result as AiRunResult<T>
+    override suspend fun <T> run(task: AiTask<T>, options: AiRunOptions): AiRunResult<T> {
+        lastUserContent = task.userContent
+        return result as AiRunResult<T>
+    }
 
     override fun estimateCost(task: AiTask<*>, options: AiRunOptions): CostRange =
         CostRange(minTokens = 0, maxTokens = 0, summaryOnlyAvailable = false)

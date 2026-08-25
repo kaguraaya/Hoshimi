@@ -22,9 +22,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,6 +47,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatTextField
 
 /**
  * 首启引导路由入口。
@@ -187,7 +187,7 @@ fun OnboardingScreen(state: OnboardingUiState, onConfirm: (OnboardingSetup) -> U
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (step > 0) {
-                    OutlinedButton(
+                    FilledTonalButton(
                         onClick = { if (step > 0) step-- },
                         modifier = Modifier.weight(1f),
                     ) { Text("上一步") }
@@ -458,7 +458,7 @@ private fun BangumiPage(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(16.dp))
-    OutlinedTextField(
+    FlatTextField(
         value = bangumiToken,
         onValueChange = onBangumiTokenChange,
         label = { Text("Access Token（可选）") },
@@ -502,7 +502,7 @@ private fun AiPage(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(16.dp))
-    OutlinedTextField(
+    FlatTextField(
         value = aiApiKey,
         onValueChange = onAiApiKeyChange,
         label = { Text("API Key（可选）") },
@@ -511,7 +511,7 @@ private fun AiPage(
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
+    FlatTextField(
         value = aiBaseUrl,
         onValueChange = onAiBaseUrlChange,
         label = { Text("Base URL") },
@@ -519,7 +519,7 @@ private fun AiPage(
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
+    FlatTextField(
         value = aiModel,
         onValueChange = onAiModelChange,
         label = { Text("模型名（例如 gpt-5.2）") },

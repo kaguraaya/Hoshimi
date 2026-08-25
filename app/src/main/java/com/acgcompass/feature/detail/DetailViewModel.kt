@@ -460,6 +460,8 @@ class DetailViewModel @Inject constructor(
                 mediaType = work.mediaType.name,
                 tags = work.tags.map { it.name },
                 userComments = listOfNotNull(myCollection.value?.shortReview?.takeIf { it.isNotBlank() }),
+                // 隐私开关：未允许时，评论只参与本地规则版雷达，不进 AI 请求。
+                allowReviewsToAi = detailInteractions.isAiReviewAnalysisAllowed(),
             )
             val fingerprint = RadarCachePolicy.fingerprint(stableRequest)
             if (!forceRefresh) {
@@ -854,10 +856,12 @@ class DetailViewModel @Inject constructor(
             // 口味锚点——历史最高分（最喜欢）与最低分（最不喜欢），各取前若干。
             val topRated = allRated.sortedByDescending { it.rating }.take(5)
             val lowRated = allRated.filter { it.rating <= 6 }.sortedBy { it.rating }.take(5)
+            // 隐私开关「允许 AI 分析评论」：关闭（默认）时，发给 AI 的内容里不带任何短评文本。
+            val allowComments = detailInteractions.isAiReviewAnalysisAllowed()
             val lineOf: (com.acgcompass.domain.detail.RatedWorkContext) -> String = { context ->
                 buildString {
                     append(context.title).append(" · ").append(context.rating).append("分")
-                    context.comment?.takeIf(String::isNotBlank)?.let {
+                    context.comment?.takeIf { allowComments && it.isNotBlank() }?.let {
                         append("（短评：").append(it.take(40)).append("）")
                     }
                 }
@@ -867,7 +871,13 @@ class DetailViewModel @Inject constructor(
             val lowLines = lowRated.map(lineOf)
             // 本地个人分歧模型给出的证据：大众基线 / 预计评分 / 分歧来源、题材相近的已评分作品、
             // 与大众分歧最大的评分。让 AI 在有数据支撑的先验上做归因，而不是只看一堆标签凭感觉打分。
-            val divergenceEvidence = runCatching { buildDivergenceEvidence(work, allRated) }.getOrDefault("")
+            val divergenceEvidence = runCatching {
+                buildDivergenceEvidence(
+                    work,
+                    allRated,
+                    allowComments,
+                )
+            }.getOrDefault("")
             val content = buildString {
                 append("作品：").append(work.titles.canonical).append('\n')
                 community?.let { agg ->
@@ -948,6 +958,7 @@ class DetailViewModel @Inject constructor(
     private suspend fun buildDivergenceEvidence(
         work: Work,
         rated: List<com.acgcompass.domain.detail.RatedWorkContext>,
+        allowComments: Boolean,
     ): String {
         val model = tasteAnalysis.advancedProfile.value?.divergence ?: return ""
         val bangumiId = runCatching { resolveBangumiSubjectId(work) }.getOrNull()
@@ -958,7 +969,8 @@ class DetailViewModel @Inject constructor(
             return buildString {
                 append("- ").append(context.title).append("：你 ").append(e.rating).append(" 分，大众基线 ")
                 append("%.1f".format(e.baseline)).append("（").append("%+.1f".format(e.divergence)).append("）")
-                context.comment?.takeIf(String::isNotBlank)?.let { append("，短评：").append(it.take(AI_COMMENT_CHARS)) }
+                context.comment?.takeIf { allowComments && it.isNotBlank() }
+                    ?.let { append("，短评：").append(it.take(AI_COMMENT_CHARS)) }
             }
         }
         return buildString {

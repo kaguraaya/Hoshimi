@@ -11,9 +11,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.TagPill
 import com.acgcompass.core.designsystem.TagPillTone
 import com.acgcompass.core.ui.AcgScreenScaffold
@@ -175,7 +176,7 @@ fun TasteProfileScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    androidx.compose.material3.OutlinedButton(
+                    FilledTonalButton(
                         onClick = onRefreshAnalysis,
                         enabled = !importing && !localAnalysisRunning,
                         modifier = Modifier.fillMaxWidth(),
@@ -202,7 +203,7 @@ fun TasteProfileScreen(
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
-                    androidx.compose.material3.OutlinedButton(
+                    FilledTonalButton(
                         onClick = onClassifyTags,
                         enabled = classifying || (
                             !importing && !localAnalysisRunning && featureSnapshotReady && (pendingTagCount ?: 0) > 0
@@ -264,7 +265,7 @@ fun TasteProfileScreen(
                         )
                     }
                     if (manualReviewCount > 0) {
-                        androidx.compose.material3.OutlinedButton(
+                        FilledTonalButton(
                             onClick = onOpenManualReview,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
@@ -629,7 +630,7 @@ private fun formatLastUpdated(millis: Long): String {
 @Composable
 private fun FlowRowChips(items: List<String>) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items.forEach { AssistChip(onClick = {}, label = { Text(cleanTagLabel(it)) }) }
+        items.forEach { FlatAssistChip(onClick = {}, label = { Text(cleanTagLabel(it)) }) }
     }
 }
 

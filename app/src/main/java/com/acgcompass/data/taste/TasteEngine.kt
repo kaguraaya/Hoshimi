@@ -22,6 +22,7 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -262,6 +263,19 @@ class TasteEngine @Inject constructor(
             computeMatch(feature, profile, userRating, loadTagOverrides())
         }
 
+    /**
+     * 首次没取到特征（限流排队 / 网络抖动）时自动重试几次；取到后由 [observeScore] 里的
+     * observeFeature 收集并出分。页面上「正在获取」的提示因此真的会自己完成，而不是要用户退出重进。
+     */
+    private suspend fun retryFeature(subjectId: String): WorkFeature? {
+        for (waitMs in FEATURE_RETRY_DELAYS_MS) {
+            delay(waitMs)
+            val feature = runCatching { workFeatureRepository.getFeature(subjectId, true) }.getOrNull()
+            if (feature != null) return feature
+        }
+        return null
+    }
+
     /** BASIC 特征就绪后立即出分，低优先级扩展特征写入时再精化结果。 */
     fun observeScore(
         subjectId: String,
@@ -298,8 +312,11 @@ class TasteEngine @Inject constructor(
                     }
                 }
         }
-        val feature = runCatching { workFeatureRepository.getFeature(subjectId, allowNetwork) }.getOrNull()
-        if (feature == null) send(null)
+        var feature = runCatching { workFeatureRepository.getFeature(subjectId, allowNetwork) }.getOrNull()
+        if (feature == null) {
+            send(null)
+            if (allowNetwork) feature = retryFeature(subjectId)
+        }
         if (allowNetwork && feature != null &&
             feature.completeness != com.acgcompass.domain.taste.WorkFeatureCompleteness.EXTENDED
         ) {
@@ -370,6 +387,9 @@ class TasteEngine @Inject constructor(
         const val CALIB_POOL_TARGET: Int = 40
         const val TIMING_LOG_TAG = "TasteMatchTiming"
         const val EXPLORE_CONTEXT = "explore"
+
+        /** 详情页作品特征首次获取失败后的重试间隔。 */
+        val FEATURE_RETRY_DELAYS_MS = longArrayOf(2_000L, 6_000L, 15_000L)
 
         /** 隐式信号回看窗口：半年前的滑动代表不了现在的兴趣。 */
         const val IMPLICIT_WINDOW_MS = 180L * 24 * 60 * 60 * 1000

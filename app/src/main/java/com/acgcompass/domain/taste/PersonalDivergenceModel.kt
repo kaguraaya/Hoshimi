@@ -28,7 +28,25 @@ data class RatingPrediction(
     val divergence: Double,
     /** 分歧来自哪里（按影响从大到小；正 = 抬高，负 = 拉低）。 */
     val factors: List<DivergenceFactor>,
-)
+    /** 这部作品的社区评分（0–10）；没有时为 `null`。 */
+    val community: Double? = null,
+    /** 你的平均分与评分标准差：判断「这个预计评分对你来说算高还是低」的参照。 */
+    val userMean: Double = 0.0,
+    val userStd: Double = 1.0,
+) {
+    /** 预计评分比社区评分高 / 低多少；没有社区评分时为 `null`。 */
+    val vsCommunity: Double? get() = community?.let { rating - it }
+
+    /** 其中有多少只是打分习惯（你整体比社区宽松 / 严格）造成的：大众基线 − 社区评分。 */
+    val habitOffset: Double? get() = community?.let { baseline - it }
+
+    /** 预计评分在你自己的评分里处于什么位置（标准分）：0 = 你的平均水平。 */
+    val relativeToSelf: Double get() = (rating - userMean) / userStd.coerceAtLeast(MIN_STD)
+
+    private companion object {
+        const val MIN_STD = 0.3
+    }
+}
 
 /**
  * **个人分歧模型**（v6）：预测「你会给这部作品打几分」，并说明你和大众会在哪里产生分歧。
@@ -62,6 +80,8 @@ class PersonalDivergenceModel private constructor(
     private val tagSupport: Map<String, Int>,
     private val idf: Map<String, Double>,
     private val defaultIdf: Double,
+    /** AI 升维分类缓存（清洗后标签 → 维度），预测时与拟合时用同一份。 */
+    private val tagOverrides: Map<String, TasteCategory>,
     /** 系列键 → (残差和, 作品数)。 */
     private val franchise: Map<String, Pair<Double, Int>>,
     private val axisWeights: DoubleArray,
@@ -78,7 +98,7 @@ class PersonalDivergenceModel private constructor(
      * 「相似的作品你当时怎么评的」是最直观的类比证据，供 AI 分析与解释使用。
      */
     fun nearestRated(feature: WorkFeature, limit: Int): List<RatedExample> {
-        val vector = tagVector(feature, idf, defaultIdf)
+        val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
         if (vector.isEmpty()) return emptyList()
         return examples.asSequence()
             .filter { it.first.subjectId != feature.subjectId }
@@ -105,7 +125,7 @@ class PersonalDivergenceModel private constructor(
 
     fun predict(feature: WorkFeature): RatingPrediction {
         val base = baseline(feature.bangumiScore?.toDouble())
-        val vector = tagVector(feature, idf, defaultIdf)
+        val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
         val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to it * x } }
         val tagPart = perTag.sumOf { it.second }
         val franchisePart = FRANCHISE_WEIGHT * franchiseResidual(feature)
@@ -122,6 +142,9 @@ class PersonalDivergenceModel private constructor(
             if (delta != 0.0) factors += DivergenceFactor(if (axes[i] >= 0.0) labels.first else labels.second, delta)
         }
         return RatingPrediction(
+            community = feature.bangumiScore?.toDouble()?.takeIf { it > 0.0 },
+            userMean = meanRating,
+            userStd = ratingStd,
             rating = (base + divergence).coerceIn(MIN_RATING, MAX_RATING),
             baseline = base.coerceIn(MIN_RATING, MAX_RATING),
             divergence = divergence,
@@ -200,7 +223,7 @@ class PersonalDivergenceModel private constructor(
         const val MIN_RATING: Double = 1.0
         const val MAX_RATING: Double = 10.0
         const val MIN_RATING_STD: Double = 0.6
-        const val MIN_FACTOR_DELTA: Double = 0.05
+        const val MIN_FACTOR_DELTA: Double = 0.15
         const val MAX_FACTORS: Int = 6
         const val FRANCHISE_LABEL: String = "同系列的评分习惯"
 
@@ -255,18 +278,23 @@ class PersonalDivergenceModel private constructor(
             feature: WorkFeature,
             idf: Map<String, Double>,
             defaultIdf: Double,
+            overrides: Map<String, TasteCategory> = emptyMap(),
         ): Map<String, Double> {
-            val terms = rawTerms(feature)
+            val terms = rawTerms(feature, overrides)
             if (terms.isEmpty()) return emptyMap()
             val weighted = terms.mapValues { (tag, w) -> w * (idf[tag] ?: defaultIdf) }
             val norm = sqrt(weighted.values.sumOf { it * it })
             return if (norm <= 0.0) emptyMap() else weighted.mapValues { it.value / norm }
         }
 
-        private fun rawTerms(feature: WorkFeature): Map<String, Double> {
+        /**
+         * [overrides] 是 AI 升维分类的缓存（清洗后标签 → 维度）：本地规则认不出、被 AI 判为噪声 / 年代的标签
+         * 也一并剔除，让后台的标签分析结果和 12 维画像一样作用到评分预测上。
+         */
+        private fun rawTerms(feature: WorkFeature, overrides: Map<String, TasteCategory>): Map<String, Double> {
             val ctx = TagClassifier.Context.of(titles = feature.titleVariants)
             val kept = feature.tagCounts.asSequence().take(MAX_TAGS).mapNotNull { tc ->
-                when (TagClassifier.classify(tc.name, ctx)) {
+                when (TagClassifier.classify(tc.name, ctx, overrides)) {
                     TasteCategory.NOISE, TasteCategory.TIME -> null
                     else -> TagSynonyms.canonical(TagClassifier.clean(tc.name)) to tc.count
                 }
@@ -284,7 +312,11 @@ class PersonalDivergenceModel private constructor(
          * 拟合。[corpus] 用来估计标签的逆文档频率（越常见的标签区分度越低）；
          * 传入已评分作品 + 本地缓存的未评分作品特征即可。
          */
-        fun fit(samples: List<TasteSample>, corpus: List<WorkFeature> = emptyList()): PersonalDivergenceModel? {
+        fun fit(
+            samples: List<TasteSample>,
+            corpus: List<WorkFeature> = emptyList(),
+            overrides: Map<String, TasteCategory> = emptyMap(),
+        ): PersonalDivergenceModel? {
             val rated = samples
                 .filter { it.rating != null && (it.feature.bangumiScore ?: 0f) > 0f }
                 .sortedByDescending { it.updatedAtMillis ?: 0L }
@@ -299,8 +331,8 @@ class PersonalDivergenceModel private constructor(
             val slope = shrunkSlope(ratings, community, meanR, meanC)
             val residual = DoubleArray(n) { ratings[it] - (meanR + slope * (community[it] - meanC)) }
 
-            val (idf, defaultIdf) = inverseDocumentFrequency(rated.map { it.feature } + corpus)
-            val vectors = rated.map { tagVector(it.feature, idf, defaultIdf) }
+            val (idf, defaultIdf) = inverseDocumentFrequency(rated.map { it.feature } + corpus, overrides)
+            val vectors = rated.map { tagVector(it.feature, idf, defaultIdf, overrides) }
             // 核矩阵非正定只会在数值异常时出现；此时不建模，调用方退回社区 + 画像口径。
             return tagRidge(vectors, residual)?.let { (weights, support) ->
                 PersonalDivergenceModel(
@@ -311,6 +343,7 @@ class PersonalDivergenceModel private constructor(
                     tagSupport = support,
                     idf = idf,
                     defaultIdf = defaultIdf,
+                    tagOverrides = overrides,
                     franchise = franchiseResiduals(rated, residual),
                     axisWeights = axisRidge(rated, residual),
                     residualStd = sqrt(residual.sumOf { it * it } / n),
@@ -338,10 +371,13 @@ class PersonalDivergenceModel private constructor(
         }
 
         /** 标签的逆文档频率，以及没见过的标签用的默认值。 */
-        private fun inverseDocumentFrequency(features: List<WorkFeature>): Pair<Map<String, Double>, Double> {
+        private fun inverseDocumentFrequency(
+            features: List<WorkFeature>,
+            overrides: Map<String, TasteCategory>,
+        ): Pair<Map<String, Double>, Double> {
             val docs = features.distinctBy { it.subjectId }
             val df = HashMap<String, Int>()
-            for (doc in docs) for (tag in rawTerms(doc).keys) df[tag] = (df[tag] ?: 0) + 1
+            for (doc in docs) for (tag in rawTerms(doc, overrides).keys) df[tag] = (df[tag] ?: 0) + 1
             return df.mapValues { ln(1.0 + docs.size.toDouble() / (1.0 + it.value)) } to ln(1.0 + docs.size.toDouble())
         }
 

@@ -11,6 +11,8 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.acgcompass.core.network.HttpClientFactory
+import com.acgcompass.core.network.HttpTimeouts
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.remote.bangumi.BangumiTokenRefresher
 import com.acgcompass.data.sync.CacheFillScheduler
@@ -77,6 +79,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             .build()
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        // 图片不走接口的限流/鉴权拦截器，但共用 IPv4 优先解析与更宽的读超时（VNDB 图片站是双栈单点）。
+        .okHttpClient { HttpClientFactory.build(timeouts = HttpTimeouts.IMAGE) }
         .memoryCachePolicy(CachePolicy.ENABLED)
         .diskCachePolicy(CachePolicy.ENABLED)
         .crossfade(true)

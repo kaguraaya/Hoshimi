@@ -190,35 +190,51 @@ data class DecisionUiModel(
  * 为 [Unavailable]，不伪造匹配。
  */
 /**
- * 评分预测展示模型：预计你会打几分、大众基线是多少、你会比大众高 / 低多少，以及原因。
+ * 评分预测展示模型。三个数字并排回答「这个分数到底算高还是低」：预计你会打几分、社区评分是多少、
+ * 你自己的平均分是多少——7.1 分对一个均分 7.8 的人来说并不高，这正是「预计评分不低、匹配度却一般」的原因。
  *
- * @property predictedText 预计评分（如「7.8」）。
- * @property baselineText 大众基线（只看社区评分、按你的打分尺度换算，如「7.2」）。
- * @property divergenceText 带符号的个人分歧（如「+0.6」）；接近 0 时为「≈0」。
- * @property summary 一句话结论。
- * @property factors 分歧归因（如「悬疑 +0.3」），正负分色。
+ * @property predictedText 预计评分（如「7.1」）。
+ * @property communityText 社区评分（如「6.6」）；没有时为 null。
+ * @property userMeanText 你的平均分。
+ * @property selfSummary 相对你自己：这个预计评分在你的评分里算高、算低还是中等。
+ * @property communitySummary 相对社区：比社区高 / 低多少，其中多少来自打分习惯、多少来自个人口味。
+ * @property factors 个人口味部分的归因（如「悬疑 +0.3」），只列有实际影响的。
  */
 data class RatingPredictionUi(
     val predictedText: String,
-    val baselineText: String,
-    val divergenceText: String,
-    val summary: String,
+    val communityText: String?,
+    val userMeanText: String,
+    val selfSummary: String,
+    val communitySummary: String,
     val factors: List<TasteMatchReasonUi>,
 )
 
 /** 由领域预测结果生成展示模型（详情页 / 探索卡片 / 今晚看什么共用同一口径的文案）。 */
 fun com.acgcompass.domain.taste.RatingPrediction.toUi(): RatingPredictionUi {
-    val notable = kotlin.math.abs(divergence) >= NOTABLE_DIVERGENCE
+    val self = relativeToSelf
+    val vs = vsCommunity
+    val habit = habitOffset
     return RatingPredictionUi(
         predictedText = "%.1f".format(rating),
-        baselineText = "%.1f".format(baseline),
-        divergenceText = if (notable) "%+.1f".format(divergence) else "≈0",
-        summary = when {
-            divergence >= STRONG_DIVERGENCE -> "你大概率会比大众更喜欢这部"
-            divergence >= NOTABLE_DIVERGENCE -> "预计略高于大众水准"
-            divergence <= -STRONG_DIVERGENCE -> "你大概率不如大众那么买账"
-            divergence <= -NOTABLE_DIVERGENCE -> "预计略低于大众水准"
-            else -> "预计和大众的看法差不多"
+        communityText = community?.let { "%.1f".format(it) },
+        userMeanText = "%.1f".format(userMean),
+        selfSummary = when {
+            self >= SELF_HIGH -> "在你的评分里算高分"
+            self >= SELF_ABOVE -> "比你的平均分略高"
+            self <= -SELF_HIGH -> "明显低于你的平均分"
+            self <= -SELF_ABOVE -> "比你的平均分略低，对你来说偏一般"
+            else -> "接近你的平均分，中规中矩"
+        },
+        communitySummary = when {
+            vs == null || habit == null -> "这部作品还没有社区评分，按你的平均水平估计"
+            kotlin.math.abs(vs) < NOTABLE_DIVERGENCE -> "和社区评分基本一致"
+            else -> buildString {
+                append("比社区评分").append(if (vs > 0) "高 " else "低 ").append("%.1f".format(kotlin.math.abs(vs)))
+                append("：打分习惯 ").append("%+.1f".format(habit))
+                append(
+                    "，个人口味 ",
+                ).append(if (kotlin.math.abs(divergence) < MIN_SHOWN) "≈0" else "%+.1f".format(divergence))
+            }
         },
         factors = factors.map {
             TasteMatchReasonUi(
@@ -230,7 +246,9 @@ fun com.acgcompass.domain.taste.RatingPrediction.toUi(): RatingPredictionUi {
 }
 
 private const val NOTABLE_DIVERGENCE = 0.25
-private const val STRONG_DIVERGENCE = 0.8
+private const val MIN_SHOWN = 0.05
+private const val SELF_ABOVE = 0.35
+private const val SELF_HIGH = 0.9
 
 sealed interface TasteMatchUiModel {
 
@@ -926,7 +944,7 @@ private fun Work.toTasteMatch(
         tags.isEmpty() ->
             TasteMatchUiModel.Unavailable("该作品暂无可用标签（已排除噪声），暂无法计算口味匹配")
         else ->
-            TasteMatchUiModel.Unavailable("该作品特征正在同步，稍后会自动完成")
+            TasteMatchUiModel.Unavailable("正在获取这部作品的标签，几秒后会自动出分")
     }
 }
 

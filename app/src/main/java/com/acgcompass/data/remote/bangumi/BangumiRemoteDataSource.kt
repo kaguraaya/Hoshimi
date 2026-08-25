@@ -175,13 +175,40 @@ class BangumiRemoteDataSource @Inject constructor(
             sort = BangumiSearchSort.RANK,
             filter = filter,
         )
-        val paged = api.searchSubjects(request, limit, offset, auth.withPriority(priority)).bodyOrThrow()
+        val (subjects, total) = collectSearchPages(request, limit, offset, auth.withPriority(priority))
         // 按真实 rank 升序（排名越小越靠前）客户端兜底排序，nulls/0 视为最差。
-        val items = paged.data
+        val items = subjects
             .sortedBy { it.rating?.rank?.takeIf { r -> r > 0 } ?: Int.MAX_VALUE }
             .map { it.toWorkMatch() to it.rating.toRatingEntry() }
         // 携带过滤后总数，供分页判定是否还有更多（不依赖返回数 >= limit）。
-        BangumiRankedPage(items = items, total = paged.total)
+        BangumiRankedPage(items = items, total = total)
+    }
+
+    /**
+     * 连续取满 [limit] 条搜索结果。
+     *
+     * 搜索接口的单页条数由服务器封顶（实测 2026-11 为 20 条，官方规范未写上限且注明「实验性、随时可能改动」）：
+     * 请求 `limit=50` 只会回来 20 条。调用方按 `offset = 页码 × limit` 翻页时，每页都会漏掉后面的条目
+     * ——榜单会缺一大半。这里按**实际返回条数**推进 offset，直到取满或到底；服务器以后放宽上限时自动少发请求。
+     * 第一页失败整体失败；后续页失败则返回已取到的部分。
+     */
+    private suspend fun collectSearchPages(
+        request: BangumiSearchRequestDto,
+        limit: Int,
+        offset: Int,
+        requestAuth: SourceAuth,
+    ): Pair<List<BangumiSubjectDto>, Int> {
+        val first = api.searchSubjects(request, limit, offset, requestAuth).bodyOrThrow()
+        val collected = first.data.toMutableList()
+        var lastPageSize = first.data.size
+        while (lastPageSize > 0 && collected.size < limit && offset + collected.size < first.total) {
+            val next = runCatching {
+                api.searchSubjects(request, limit - collected.size, offset + collected.size, requestAuth).bodyOrThrow()
+            }.getOrNull()
+            lastPageSize = next?.data?.size ?: 0
+            next?.data?.let(collected::addAll)
+        }
+        return collected.take(limit) to first.total
     }
 
     /** 条目关联人物。 */
@@ -296,7 +323,7 @@ class BangumiRemoteDataSource @Inject constructor(
         val paged = api.getEpisodes(
             subjectId = subjectId,
             type = BangumiEpisodeType.MAIN,
-            limit = 100,
+            limit = EPISODE_PAGE_LIMIT,
             offset = 0,
             auth = auth,
         ).bodyOrThrow()
@@ -315,7 +342,7 @@ class BangumiRemoteDataSource @Inject constructor(
         val ids = api.getEpisodes(
             subjectId = subjectId,
             type = BangumiEpisodeType.MAIN,
-            limit = 100,
+            limit = EPISODE_PAGE_LIMIT,
             offset = 0,
             auth = auth,
         ).bodyOrThrow().data
@@ -361,5 +388,8 @@ class BangumiRemoteDataSource @Inject constructor(
     private companion object {
         const val SUBJECT_COALESCE_WINDOW_MILLIS = 3_000L
         const val MAX_RECENT_SUBJECTS = 32
+
+        /** `GET /v0/episodes` 官方规范的单页上限（只取 100 时长篇会被截断）。 */
+        const val EPISODE_PAGE_LIMIT = 200
     }
 }

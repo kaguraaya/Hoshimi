@@ -6,6 +6,7 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.data.sync.BangumiSyncManager
@@ -43,13 +44,17 @@ import kotlinx.coroutines.launch
  * 韧性：流异常兜底为 [UiState.Error]，绝不崩溃。
  */
 @HiltViewModel
-class TimeMachineViewModel @Inject constructor(
+class TimeMachineViewModel
+@Suppress("LongParameterList") // Hilt 注入的依赖，逐个都是页面真实用到的
+@Inject
+constructor(
     private val timeMachineRepository: TimeMachineRepository,
     private val workRepository: WorkRepository,
     private val backlogRepository: BacklogRepository,
     private val bangumiSyncManager: BangumiSyncManager,
     private val userCollectionDao: UserCollectionDao,
     private val syncStatusRepository: SyncStatusRepository,
+    private val settingsDataStore: SettingsDataStore,
 ) : ViewModel() {
 
     private val _message = MutableStateFlow<String?>(null)
@@ -281,7 +286,12 @@ class TimeMachineViewModel @Inject constructor(
                                 progress = c.progress,
                             )
                         }
-                        val snapResult = applySnapshot(states)
+                        // 隐私开关「记录本地时光机快照」：关闭时同步照常进行，但不把变化写进时光机。
+                        val snapResult = if (settingsDataStore.recordTimeMachineSnapshots.first()) {
+                            applySnapshot(states)
+                        } else {
+                            "已关闭时光机快照记录，本次变化未写入"
+                        }
                         _message.value =
                             buildString {
                                 append("已从 Bangumi 导入：新增 ${rep.added} · 更新 ${rep.updated} · 跳过 ${rep.skipped} · ")

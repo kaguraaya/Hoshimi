@@ -1,6 +1,7 @@
 package com.acgcompass.core.network
 
 import kotlin.math.ceil
+import kotlin.math.floor
 
 /**
  * 每个数据源独立的速率限制器。
@@ -99,25 +100,45 @@ class RateLimiter(
      * background request cannot book the only future slot and starve a
      * foreground detail request.
      */
+    /**
+     * 立即尝试取得一个许可。
+     *
+     * @param capacityShare 本次请求最多可用到各规则窗口容量的比例（0–1]。后台任务传小于 1 的值，
+     *   给前台请求留出余量：否则后台补充把窗口占满后，用户点开详情 / 搜索只能排队等窗口滑走。
+     */
     @Synchronized
-    fun tryAcquireNow(): Boolean {
+    fun tryAcquireNow(capacityShare: Double = 1.0): Boolean {
         val now = clock()
         prune(now)
-        val grant = calculateGrant(now)
+        val grant = maxOf(calculateGrant(now), shareEarliest(now, capacityShare))
         if (grant > now) return false
         grants.addLast(now)
         return true
     }
 
-    /** Milliseconds until a non-reserving attempt may be retried. */
     @Synchronized
-    fun delayUntilNextPermitMillis(): Long {
+    fun delayUntilNextPermitMillis(capacityShare: Double = 1.0): Long {
         val now = clock()
         prune(now)
-        return (calculateGrant(now) - now).coerceAtLeast(0L)
+        return (maxOf(calculateGrant(now), shareEarliest(now, capacityShare)) - now).coerceAtLeast(0L)
     }
 
-    /** Prevent new reservations until at least [timestampMillis] on this limiter's clock. */
+    /** 受 [capacityShare] 约束时最早可放行的时刻；份额为 1（前台）时不加额外约束。 */
+    private fun shareEarliest(now: Long, capacityShare: Double): Long {
+        if (capacityShare >= 1.0) return Long.MIN_VALUE
+        var earliest = Long.MIN_VALUE
+        for (rule in rules) {
+            val cap = floor(rule.maxRequests * capacityShare).toInt().coerceAtLeast(1)
+            val windowStart = now - rule.windowMillis
+            val inWindow = grants.count { it > windowStart }
+            if (inWindow >= cap) {
+                // 等到窗口里只剩 cap−1 个许可：即倒数第 cap 个许可滑出窗口。
+                earliest = maxOf(earliest, grantAt(grants.size - cap) + rule.windowMillis)
+            }
+        }
+        return earliest
+    }
+
     @Synchronized
     fun pauseUntil(timestampMillis: Long) {
         pausedUntilMillis = maxOf(pausedUntilMillis, timestampMillis)

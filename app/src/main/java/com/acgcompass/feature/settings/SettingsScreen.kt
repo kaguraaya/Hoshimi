@@ -31,14 +31,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -61,6 +58,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.acgcompass.core.designsystem.FlatDivider
+import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
@@ -571,7 +571,7 @@ private fun AppearanceCard(data: SettingsUiState, actions: SettingsActions, modi
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             ) {
                 ThemeModeOptions.forEach { (label, mode) ->
-                    FilterChip(
+                    FlatFilterChip(
                         selected = data.themeMode == mode,
                         onClick = { actions.onSetThemeMode(mode) },
                         label = { Text(label, maxLines = 1) },
@@ -620,7 +620,7 @@ private fun ThemePresetRow(selected: ThemePreset, onSelect: (ThemePreset) -> Uni
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
     ) {
         ThemePreset.entries.forEach { preset ->
-            FilterChip(
+            FlatFilterChip(
                 selected = preset == selected,
                 onClick = { onSelect(preset) },
                 label = { Text(preset.label, maxLines = 1) },
@@ -848,7 +848,7 @@ internal fun CredentialField(
     onToggleReveal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    OutlinedTextField(
+    FlatTextField(
         value = field.value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
@@ -1016,7 +1016,7 @@ internal fun SourceSettingsCard(card: SourceCardState, actions: SettingsActions,
     ) {
         SourceSettingsFields(card = card, actions = actions)
         ConnectionTestResultRow(test = card.test, onOpenDoc = actions.onOpenDoc)
-        HorizontalDivider()
+        FlatDivider()
         SourceSettingsActions(card = card, actions = actions)
         DocLinkButton(url = card.docUrl, onOpenDoc = actions.onOpenDoc)
     }
@@ -1072,7 +1072,7 @@ private fun SourceSettingsActions(card: SourceCardState, actions: SettingsAction
             ) {
                 Text("保存")
             }
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = { actions.onTestConnection(card.sourceId) },
                 enabled = card.test.status != ConnectionTestStatus.TESTING,
             ) {
@@ -1085,7 +1085,7 @@ private fun SourceSettingsActions(card: SourceCardState, actions: SettingsAction
             }
         }
     } else {
-        OutlinedButton(
+        FilledTonalButton(
             onClick = { actions.onTestConnection(card.sourceId) },
             enabled = card.test.status != ConnectionTestStatus.TESTING,
         ) {
@@ -1122,7 +1122,7 @@ internal fun AiProviderSettingsCard(
             expanded = dropdownExpanded,
             onExpandedChange = { dropdownExpanded = it },
         ) {
-            OutlinedTextField(
+            FlatTextField(
                 value = card.selectedProvider.displayName,
                 onValueChange = {},
                 readOnly = true,
@@ -1176,7 +1176,7 @@ internal fun AiProviderSettingsCard(
         var maxTagsText by remember(card.maxClassificationTags) {
             mutableStateOf(card.maxClassificationTags.toString())
         }
-        OutlinedTextField(
+        FlatTextField(
             value = maxTagsText,
             onValueChange = { value ->
                 maxTagsText = value.filter(Char::isDigit).take(MAX_TAG_INPUT_DIGITS)
@@ -1221,13 +1221,13 @@ internal fun AiProviderSettingsCard(
 
         ConnectionTestResultRow(test = card.test, onOpenDoc = actions.onOpenDoc)
 
-        HorizontalDivider()
+        FlatDivider()
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = actions.onAiSave, enabled = card.hasDraft) {
                 Text("保存")
             }
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = actions.onAiTestConnection,
                 enabled = card.test.status != ConnectionTestStatus.TESTING,
             ) {
@@ -1261,11 +1261,11 @@ internal fun PrivacySettingsCard(card: PrivacyCardState, actions: SettingsAction
         modifier = modifier,
     ) {
         PrivacyToggles(card = card, actions = actions)
-        HorizontalDivider()
+        FlatDivider()
         AutoSyncSettings(card = card, actions = actions)
-        HorizontalDivider()
+        FlatDivider()
         RecommendationSettings(card = card, actions = actions)
-        HorizontalDivider()
+        FlatDivider()
         DataManagementActions(actions)
     }
 }
@@ -1301,7 +1301,7 @@ private fun AutoSyncSettings(card: PrivacyCardState, actions: SettingsActions) {
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
     ) {
         AutoSyncIntervalOptions.forEach { (label, minutes) ->
-            FilterChip(
+            FlatFilterChip(
                 selected = card.autoSyncIntervalMinutes == minutes,
                 onClick = { actions.onSetAutoSyncInterval(minutes) },
                 label = { Text(label, maxLines = 1) },
@@ -1324,7 +1324,7 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
     ) {
         RecommendMinScoreOptions.forEach { (label, score) ->
-            FilterChip(
+            FlatFilterChip(
                 selected = kotlin.math.abs(card.recommendMinCommunityScore - score) < 0.01f,
                 onClick = { actions.onSetRecommendMinScore(score) },
                 label = { Text(label, maxLines = 1) },
@@ -1337,7 +1337,7 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
     ) {
         TasteMatchThresholdOptions.forEach { (label, threshold) ->
-            FilterChip(
+            FlatFilterChip(
                 selected = kotlin.math.abs(card.tasteMatchThreshold - threshold) < 0.01f,
                 onClick = { actions.onSetTasteMatchThreshold(threshold) },
                 label = { Text(label, maxLines = 1) },
@@ -1349,29 +1349,29 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
 @Composable
 private fun DataManagementActions(actions: SettingsActions) {
     Text(text = "数据管理", style = MaterialTheme.typography.titleSmall)
-    OutlinedButton(onClick = actions.onExport, modifier = Modifier.fillMaxWidth()) {
+    FilledTonalButton(onClick = actions.onExport, modifier = Modifier.fillMaxWidth()) {
         Text("导出备份（默认不含 key）")
     }
-    OutlinedButton(onClick = actions.onImport, modifier = Modifier.fillMaxWidth()) {
+    FilledTonalButton(onClick = actions.onImport, modifier = Modifier.fillMaxWidth()) {
         Text("导入备份")
     }
-    OutlinedButton(
+    FilledTonalButton(
         onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.BACKLOG) },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("导出 CSV · 待补池", maxLines = 1) }
-    OutlinedButton(
+    FilledTonalButton(
         onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.RATINGS) },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("导出 CSV · 评分", maxLines = 1) }
-    OutlinedButton(
+    FilledTonalButton(
         onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.RATED_WORKS) },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("导出 CSV · 已评分作品", maxLines = 1) }
-    OutlinedButton(
+    FilledTonalButton(
         onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.TIME_MACHINE) },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("导出 CSV · 时光机", maxLines = 1) }
-    OutlinedButton(
+    FilledTonalButton(
         onClick = { actions.onExportCsv(com.acgcompass.domain.repository.CsvKind.TASTE_PROFILE) },
         modifier = Modifier.fillMaxWidth(),
     ) { Text("导出 CSV · 口味画像标签", maxLines = 1) }
@@ -1475,7 +1475,7 @@ private fun BangumiApiModeSelector(
         expanded = expanded,
         onExpandedChange = onExpandedChange,
     ) {
-        OutlinedTextField(
+        FlatTextField(
             value = currentLabel,
             onValueChange = {},
             readOnly = true,
@@ -1498,7 +1498,7 @@ private fun BangumiApiModeSelector(
 
 @Composable
 private fun BangumiCustomUrlEditor(customDraft: String, actions: SettingsActions) {
-    OutlinedTextField(
+    FlatTextField(
         value = customDraft,
         onValueChange = actions.onBangumiCustomUrlChange,
         modifier = Modifier.fillMaxWidth(),
@@ -1513,7 +1513,7 @@ private fun BangumiCustomUrlEditor(customDraft: String, actions: SettingsActions
 
 @Composable
 private fun BangumiProxyWarning(consent: Boolean, onConsentChange: (Boolean) -> Unit) {
-    HorizontalDivider()
+    FlatDivider()
     Text(
         "你正在使用非官方 Bangumi API 地址。个人 Token 会发送到该地址，请确认你信任该服务。" +
             "建议优先使用官方 API、自己的代理或自建反代。公共搜索可用非官方地址；个人同步需在下方确认后才生效。",

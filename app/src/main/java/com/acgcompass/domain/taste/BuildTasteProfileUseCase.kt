@@ -188,7 +188,7 @@ class BuildTasteProfileUseCase @Inject constructor() {
             coverage = coverage,
             sampleCount = n,
             userAvgRating = rated.mapNotNull { it.rating }.average(),
-            divergence = PersonalDivergenceModel.fit(rated, calibrationPool),
+            divergence = PersonalDivergenceModel.fit(rated, calibrationPool, tagOverrides),
             generatedAt = now,
         )
     }

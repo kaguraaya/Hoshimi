@@ -20,9 +20,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -162,7 +162,7 @@ private fun OAuthWebView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        OutlinedButton(
+        FilledTonalButton(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -258,15 +258,15 @@ private fun ErrorColumn(
     ) {
         Text(text = message, textAlign = TextAlign.Center)
         if (!officialUrl.isNullOrBlank()) {
-            OutlinedButton(onClick = {
+            FilledTonalButton(onClick = {
                 clipboard.setText(AnnotatedString(officialUrl))
             }) { Text("复制官方链接") }
-            OutlinedButton(onClick = openOfficialUrl) { Text("外部浏览器打开") }
-            OutlinedButton(onClick = onBack) { Text("改用手动 Token") }
+            FilledTonalButton(onClick = openOfficialUrl) { Text("外部浏览器打开") }
+            FilledTonalButton(onClick = onBack) { Text("改用手动 Token") }
         }
         if (retryable) {
             Button(onClick = onRetry) { Text("重试") }
         }
-        OutlinedButton(onClick = onBack) { Text("返回设置") }
+        FilledTonalButton(onClick = onBack) { Text("返回设置") }
     }
 }

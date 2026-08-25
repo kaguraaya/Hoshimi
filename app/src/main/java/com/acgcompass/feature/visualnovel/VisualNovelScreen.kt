@@ -23,11 +23,10 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -46,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.acgcompass.core.designsystem.AppSearchField
 import com.acgcompass.core.designsystem.AppSearchFieldState
+import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import com.acgcompass.domain.visualnovel.VisualNovelSort
@@ -133,7 +133,7 @@ private fun VisualNovelControls(state: VisualNovelUiState, viewModel: VisualNove
         ) {
             items(VisualNovelSort.entries.size) { index ->
                 val sort = VisualNovelSort.entries[index]
-                FilterChip(
+                FlatFilterChip(
                     selected = state.sort == sort && state.query.isBlank(),
                     onClick = { viewModel.setSort(sort) },
                     label = { Text(sort.label()) },
@@ -148,7 +148,7 @@ private fun VisualNovelError(message: String, onRetry: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(Modifier.padding(16.dp)) {
             Text(message, color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = onRetry) { Text("重试") }
+            FilledTonalButton(onClick = onRetry) { Text("重试") }
         }
     }
 }
@@ -168,7 +168,7 @@ private fun VisualNovelListFooter(state: VisualNovelUiState, onRetry: () -> Unit
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(state.loadMoreError, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = onRetry) { Text("重试") }
+            FilledTonalButton(onClick = onRetry) { Text("重试") }
         }
     }
 }

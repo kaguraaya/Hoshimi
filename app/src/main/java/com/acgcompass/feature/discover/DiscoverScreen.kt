@@ -39,11 +39,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -79,6 +78,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.AppSearchField
 import com.acgcompass.core.designsystem.AppSearchFieldState
+import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.AcgTopLevelTopBar
@@ -583,7 +583,7 @@ private fun ResultList(
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 低置信提示只在顶部统一展示一处，不再每条结果一张大横幅。
+        // 低置信提示只在顶部统一展示一处，不在每条结果上放一张大横幅。
         if (results.any { it.isLowConfidence }) {
             item(key = "low_conf_hint") {
                 Card(
@@ -715,7 +715,7 @@ private fun MatchPickerDialog(
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 candidates.forEach { candidate ->
-                    OutlinedButton(
+                    FilledTonalButton(
                         onClick = { onChoose(candidate) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -826,7 +826,7 @@ private fun RankingSection(
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     RankingScope.entries.forEach { scope ->
-                        FilterChip(
+                        FlatFilterChip(
                             selected = scope == rankingScope,
                             onClick = { onSelectRankingScope(scope) },
                             label = { Text(scope.label) },
@@ -894,7 +894,7 @@ private fun RankingSection(
                 ) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("排行榜加载失败", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(onClick = onRetryRanking) { Text("重试") }
+                        FilledTonalButton(onClick = onRetryRanking) { Text("重试") }
                     }
                 }
             }
@@ -1307,7 +1307,7 @@ private fun PublicPoolStatusRow(poolLoading: Boolean, poolError: String?, onLoad
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("加载失败：$poolError", style = MaterialTheme.typography.bodyMedium)
-                OutlinedButton(onClick = onLoadPool) { Text("重试") }
+                FilledTonalButton(onClick = onLoadPool) { Text("重试") }
             }
         }
         else -> Row(
@@ -1321,7 +1321,7 @@ private fun PublicPoolStatusRow(poolLoading: Boolean, poolError: String?, onLoad
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = onLoadPool,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     horizontal = 12.dp,
@@ -1369,7 +1369,7 @@ private fun FilterGroup(title: String, content: @Composable FlowRowScope.() -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ToggleChip(label: String, selected: Boolean, onToggle: () -> Unit) {
-    FilterChip(
+    FlatFilterChip(
         selected = selected,
         onClick = onToggle,
         label = { Text(label) },

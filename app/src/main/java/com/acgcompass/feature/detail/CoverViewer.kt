@@ -22,9 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -204,7 +204,7 @@ private fun ZoomableViewerImage(
         error = {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 PreviewImage(media.previewUrl, media.title)
-                OutlinedButton(onClick = { retryKey++ }) { Text("重试原图") }
+                FilledTonalButton(onClick = { retryKey++ }) { Text("重试原图") }
             }
         },
         success = { SubcomposeAsyncImageContent() },
