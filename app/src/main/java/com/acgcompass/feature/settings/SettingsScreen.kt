@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,7 +38,6 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -60,7 +58,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
+import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
@@ -559,7 +559,7 @@ private val ThemeModeOptions: List<Pair<String, ThemeMode>> = listOf(
 private fun AppearanceCard(data: SettingsUiState, actions: SettingsActions, modifier: Modifier = Modifier) {
     val supportsDynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val showThemePresets = !supportsDynamicColor || !data.dynamicColor
-    Card(modifier = modifier.fillMaxWidth()) {
+    PrismCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -656,7 +656,7 @@ private fun SettingsSummaryRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+    PrismCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -752,7 +752,7 @@ private fun BangumiOAuthLoginCard(onLogin: () -> Unit) {
                 com.acgcompass.BuildConfig.BANGUMI_CLIENT_SECRET.isNotBlank() ||
                     com.acgcompass.BuildConfig.BANGUMI_OAUTH_PROXY_BASE_URL.isNotBlank()
                 )
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -791,7 +791,7 @@ internal fun CollapsibleCard(
     statusText: String? = null,
     content: @Composable () -> Unit,
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    PrismCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             // 标题占满剩余宽度并单行省略，状态文字单独成行。
             Row(
@@ -903,7 +903,7 @@ internal fun ToggleRow(
                 )
             }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        FlatSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
@@ -1408,7 +1408,7 @@ internal fun BangumiApiConfigCard(state: BangumiApiUiState, actions: SettingsAct
     var customMode by remember(state.mode) { mutableStateOf(state.mode == BangumiApiMode.CUSTOM) }
     var expanded by remember { mutableStateOf(false) }
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    PrismCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),

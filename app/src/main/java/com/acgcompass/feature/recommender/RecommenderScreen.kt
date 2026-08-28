@@ -40,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +51,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -62,7 +60,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatCard
 import com.acgcompass.core.designsystem.FlatDefaults
+import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.PillTabs
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.TagPill
 import com.acgcompass.core.designsystem.TagPillTone
 import com.acgcompass.core.designsystem.TonalFilterChip
@@ -334,15 +335,9 @@ private fun ModeSwitchRow(label: String, supporting: String, checked: Boolean, o
             )
         }
         // 点击由整行处理；Switch 只负责显示状态。
-        Switch(
+        FlatSwitch(
             checked = checked,
             onCheckedChange = null,
-            // 未选中态去掉描边：实心轨道 + 实心滑块，与页面其余部分的无线条风格一致。
-            colors = SwitchDefaults.colors(
-                uncheckedBorderColor = Color.Transparent,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-            ),
         )
     }
 }
@@ -430,17 +425,14 @@ private fun ResultSection(
 @Composable
 private fun RecommendationCard(rec: RecommendationUiModel, onOpenWork: (String) -> Unit) {
     val (icon, accent) = when (rec.kind) {
-        RecommendationKind.SAFE -> Icons.Filled.Verified to MaterialTheme.colorScheme.primary
-        RecommendationKind.GAMBLE -> Icons.Filled.Explore to MaterialTheme.colorScheme.tertiary
-        RecommendationKind.WILDCARD -> Icons.Filled.Casino to MaterialTheme.colorScheme.secondary
+        // 三档只靠图标和名称区分：颜色留给状态，档位标题不染色。
+        RecommendationKind.SAFE -> Icons.Filled.Verified to MaterialTheme.colorScheme.onSurface
+        RecommendationKind.GAMBLE -> Icons.Filled.Explore to MaterialTheme.colorScheme.onSurface
+        RecommendationKind.WILDCARD -> Icons.Filled.Casino to MaterialTheme.colorScheme.onSurface
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = FlatDefaults.cardColor,
-    ) {
+    PrismCard(modifier = Modifier.fillMaxWidth(), shape = PrismCorner.SectionCard) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(FlatDefaults.CardPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(

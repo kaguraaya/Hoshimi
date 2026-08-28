@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilledTonalButton
@@ -48,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatTextField
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.Surfaces
 
 /**
  * 首启引导路由入口。
@@ -268,10 +269,10 @@ fun OnboardingScreen(state: OnboardingUiState, onConfirm: (OnboardingSetup) -> U
 
 @Composable
 private fun HighlightCard(index: Int, highlight: OnboardingHighlight) {
-    Card(
+    PrismCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = Surfaces.raisedColor,
         ),
     ) {
         Row(
@@ -399,9 +400,9 @@ private fun ConsentPage(
         onCheckedChange = onCommunityProxyChange,
     )
     Spacer(Modifier.height(12.dp))
-    Card(
+    PrismCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = Surfaces.raisedColor),
     ) {
         Row(
             modifier = Modifier

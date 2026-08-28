@@ -23,7 +23,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,7 +57,10 @@ import coil.imageLoader
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelDetail
@@ -676,7 +677,7 @@ private fun EditMyRecordDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = isPrivate, onCheckedChange = { isPrivate = it })
+                    FlatSwitch(checked = isPrivate, onCheckedChange = { isPrivate = it })
                 }
             }
         },
@@ -712,6 +713,7 @@ private fun MembershipBadges(personal: PersonalUiModel, modifier: Modifier = Mod
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         FlatAssistChip(onClick = {}, label = { Text(text = libraryText) })
         FlatAssistChip(onClick = {}, label = { Text(text = backlogText) })
@@ -1407,6 +1409,7 @@ private fun ChipFlowRow(items: List<String>, modifier: Modifier = Modifier) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items.forEach { item ->
             FlatAssistChip(
@@ -1420,10 +1423,10 @@ private fun ChipFlowRow(items: List<String>, modifier: Modifier = Modifier) {
 /** 统一的区块卡片容器（标题 + 内容槽）。 */
 @Composable
 private fun SectionCard(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Card(
+    PrismCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = Surfaces.raisedColor,
         ),
     ) {
         Column(
@@ -1570,7 +1573,7 @@ internal fun RatingPredictionBlock(prediction: RatingPredictionUi) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = Surfaces.raisedColor,
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,6 +71,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.SurfaceLevel
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.designsystem.TagPill
 import com.acgcompass.core.designsystem.TagPillRow
 import com.acgcompass.core.designsystem.TagPillTone
@@ -279,7 +281,7 @@ private fun ReadyContent(
             contentAlignment = Alignment.Center,
         ) {
             val dragProgress = (offsetX.value / swipeThreshold).coerceIn(-1f, 1f)
-            Card(
+            PrismCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .offset { IntOffset(offsetX.value.roundToInt(), 0) }
@@ -311,7 +313,7 @@ private fun ReadyContent(
                     .clickable(onClickLabel = if (flipped) "翻回正面" else "查看简介") { flipped = !flipped },
                 // 扁平：靠色块与大圆角区分层次，不用描边和投影。
                 shape = MaterialTheme.shapes.extraLarge,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                colors = CardDefaults.cardColors(containerColor = Surfaces.raisedColor),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
                 if (rotation.value <= HALF_FLIP_DEGREES) {
@@ -449,7 +451,7 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(COVER_WEIGHT)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                .background(Surfaces.colorOf(SurfaceLevel.Inset)),
         ) {
             if (card.coverUrl == null) {
                 Icon(
@@ -617,7 +619,7 @@ private fun StateBadge(icon: ImageVector) {
         modifier = Modifier
             .size(72.dp)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.secondaryContainer),
+            .background(Surfaces.raisedColor),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

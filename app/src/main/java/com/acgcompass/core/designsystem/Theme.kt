@@ -8,7 +8,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -32,13 +34,14 @@ fun AcgCompassTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     preset: ThemePreset = ThemePreset.OCEAN,
+    /** 直接给定基础配色（跳过壁纸取色与预设），供截图测试模拟特定设备的取色结果。 */
+    baseColorScheme: ColorScheme? = null,
     content: @Composable () -> Unit,
 ) {
-    val resolved = resolveColorScheme(darkTheme = darkTheme, dynamicColor = dynamicColor, preset = preset)
-    // Flat look: Material's default filled Card / chip surfaces use `surfaceContainerHighest`, which under
-    // wallpaper-based dynamic color can be a heavily saturated block. Map it one step down so every
-    // default card in the app reads as a light tonal surface instead of a colored slab.
-    val colorScheme = resolved.copy(surfaceContainerHighest = resolved.surfaceContainer)
+    val resolved = baseColorScheme
+        ?: resolveColorScheme(darkTheme = darkTheme, dynamicColor = dynamicColor, preset = preset)
+    // 表面层级与近灰表面：见 Surfaces.kt（照 FlClash 的设计规范）。
+    val (colorScheme, surfaces) = remember(resolved) { prismColorScheme(resolved) }
 
     // Match the status/navigation bar icon appearance (light vs dark) to the resolved theme so
     // edge-to-edge content stays readable in both light and dark mode. Guarded against the Compose
@@ -56,8 +59,13 @@ fun AcgCompassTheme(
         colorScheme = colorScheme,
         typography = AcgTypography,
         shapes = AcgShapes,
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(
+            LocalPrismSurfaces provides surfaces,
+            LocalSurfaceLevel provides SurfaceLevel.Page,
+            content = content,
+        )
+    }
 }
 
 /**

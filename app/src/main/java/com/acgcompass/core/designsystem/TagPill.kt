@@ -40,32 +40,21 @@ enum class TagPillTone {
  */
 @Composable
 fun TagPill(text: String, modifier: Modifier = Modifier, tone: TagPillTone = TagPillTone.Secondary) {
-    val (container, content) = when (tone) {
-        // Neutral pills sit on tonal cards of varying tone; a translucent on-surface tint reads as a quiet
-        // chip on any of them, without needing an outline.
-        TagPillTone.Neutral -> MaterialTheme.colorScheme.onSurface.copy(alpha = NEUTRAL_TINT_ALPHA) to
-            MaterialTheme.colorScheme.onSurfaceVariant
-        TagPillTone.Secondary ->
-            MaterialTheme.colorScheme.secondaryContainer to
-                MaterialTheme.colorScheme.onSecondaryContainer
-        TagPillTone.Primary ->
-            MaterialTheme.colorScheme.primaryContainer to
-                MaterialTheme.colorScheme.onPrimaryContainer
-        TagPillTone.Tertiary ->
-            MaterialTheme.colorScheme.tertiaryContainer to
-                MaterialTheme.colorScheme.onTertiaryContainer
+    // 标签只是「标识」，不是状态：一律放在比所在表面深一级的中性底上，字色用次要色。
+    // 主色、容器色留给选中 / 开启 / 出错；[TagPillTone.Primary] 只把字提到正文色以示强调。
+    val content = when (tone) {
+        TagPillTone.Primary -> MaterialTheme.colorScheme.onSurface
+        TagPillTone.Neutral, TagPillTone.Secondary, TagPillTone.Tertiary -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    TagPill(text = text, containerColor = container, contentColor = content, modifier = modifier)
+    TagPill(text = text, containerColor = Surfaces.raisedColor, contentColor = content, modifier = modifier)
 }
-
-private const val NEUTRAL_TINT_ALPHA = 0.07f
 
 /** [TagPill] with explicit colors (e.g. on top of imagery). */
 @Composable
 fun TagPill(text: String, containerColor: Color, contentColor: Color, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        shape = MaterialTheme.shapes.small,
+        shape = PrismCorner.Badge,
         color = containerColor,
         contentColor = contentColor,
     ) {
@@ -74,7 +63,7 @@ fun TagPill(text: String, containerColor: Color, contentColor: Color, modifier: 
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
         )
     }
 }

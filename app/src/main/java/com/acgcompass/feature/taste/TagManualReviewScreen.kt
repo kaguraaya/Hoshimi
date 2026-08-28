@@ -113,6 +113,7 @@ fun TagManualReviewRoute(onBack: () -> Unit, viewModel: TagManualReviewViewModel
             )
             androidx.compose.foundation.layout.FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 TasteCategory.SINGLE_TAG_CATEGORIES.forEach { category ->
                     FlatFilterChip(

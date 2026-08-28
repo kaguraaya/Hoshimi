@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -42,6 +41,8 @@ import com.acgcompass.BuildConfig
 import com.acgcompass.R
 import com.acgcompass.core.common.AppInfo
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.Surfaces
 
 /**
  * 关于页。展示应用与版本信息，并提供数据来源、开源许可和免责声明的独立入口。
@@ -114,7 +115,7 @@ private fun AboutBrandHeader() {
             modifier = Modifier
                 .size(96.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(Surfaces.raisedColor),
         )
         Text(
             text = AppInfo.APP_NAME,
@@ -137,7 +138,7 @@ private fun AboutBrandHeader() {
 @Composable
 private fun AboutInfoSection(version: String, author: String, repoUrl: String) {
     val uriHandler = LocalUriHandler.current
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -180,7 +181,7 @@ private fun AboutInfoRow(label: String, value: String) {
 
 @Composable
 private fun AboutNavigationSection(title: String, summary: String, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

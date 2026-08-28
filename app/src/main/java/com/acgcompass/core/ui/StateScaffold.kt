@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -26,6 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.acgcompass.core.common.AppError
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.Surfaces
 
 /**
  * 统一页面状态渲染脚手架。
@@ -150,7 +151,7 @@ fun ErrorCard(
     onRetry: () -> Unit = {},
     onOpenDoc: (String) -> Unit = {},
 ) {
-    Card(
+    PrismCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -206,7 +207,7 @@ fun EmptyState(cta: Cta, modifier: Modifier = Modifier, message: String = "暂�
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondaryContainer),
+                .background(Surfaces.raisedColor),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

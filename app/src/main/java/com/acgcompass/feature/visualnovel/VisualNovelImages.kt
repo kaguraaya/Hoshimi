@@ -9,7 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,6 +27,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.cache.ManagedMediaRecord
 import com.acgcompass.domain.model.SourceId
@@ -67,14 +67,14 @@ internal fun ManagedVisualNovelImage(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(Surfaces.raisedColor),
                 )
             },
             error = {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                        .background(Surfaces.raisedColor),
                     contentAlignment = Alignment.Center,
                 ) {
                     IconButton(onClick = { retryKey++ }) {

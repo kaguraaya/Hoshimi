@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -63,6 +62,7 @@ import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatTextField
+import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.StateScaffold
@@ -458,7 +458,7 @@ private fun BacklogEmptyState(onGoImport: () -> Unit, onGoSearch: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
+        PrismCard(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -497,7 +497,7 @@ private fun BacklogEmptyState(onGoImport: () -> Unit, onGoSearch: () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BulkActionBar(selectedCount: Int, onBulk: (BulkOp) -> Unit) {
-    Card(
+    PrismCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
@@ -577,7 +577,7 @@ private fun FilterCard(
     val activeCount = filter.priorities.size + filter.mediaTypes.size +
         // 默认基线 inDustMuseum=false 不计入激活筛选数。
         (if (filter.inDustMuseum != false) 1 else 0)
-    Card(
+    PrismCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
@@ -641,6 +641,7 @@ private fun FilterSortBar(
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FilledTonalButton(onClick = { sortMenuExpanded = true }) {
                 Text("排序：${sort.label()}")
@@ -768,7 +769,7 @@ private fun EditPanel(
     onSetNote: (String, String?) -> Unit,
     onOpenDetail: (String) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

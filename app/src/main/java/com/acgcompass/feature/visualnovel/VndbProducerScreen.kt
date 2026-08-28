@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -36,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.domain.repository.VisualNovelRepository
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -161,7 +161,7 @@ fun VndbProducerRoute(
 
 @Composable
 private fun ProducerWorkCard(item: VisualNovelListItem, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable(onClick = onClick)) {
+    PrismCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable(onClick = onClick)) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             androidx.compose.foundation.layout.Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

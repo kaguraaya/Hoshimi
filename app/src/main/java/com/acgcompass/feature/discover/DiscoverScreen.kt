@@ -36,7 +36,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -79,6 +78,8 @@ import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.AppSearchField
 import com.acgcompass.core.designsystem.AppSearchFieldState
 import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.AcgTopLevelTopBar
@@ -586,10 +587,10 @@ private fun ResultList(
         // 低置信提示只在顶部统一展示一处，不在每条结果上放一张大横幅。
         if (results.any { it.isLowConfidence }) {
             item(key = "low_conf_hint") {
-                Card(
+                PrismCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        containerColor = Surfaces.raisedColor,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     ),
                 ) {
@@ -665,10 +666,10 @@ private fun DiscoverResultCard(
 /** 低置信横幅：提示匹配置信度较低，并提供「手动选择正确条目」入口。 */
 @Composable
 private fun LowConfidenceBanner(onPick: () -> Unit) {
-    Card(
+    PrismCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            containerColor = Surfaces.raisedColor,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
         ),
     ) {
@@ -885,7 +886,7 @@ private fun RankingSection(
                 EmptyDataPlaceholder("该范围暂无排行数据，换个范围或稍后重试")
             }
             else -> item(key = "rank_error") {
-                Card(
+                PrismCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -934,10 +935,10 @@ private fun ScoreDiffSection(
             PublicPoolStatusRow(poolLoading = poolLoading, poolError = poolError, onLoadPool = onLoadPool)
         }
         item {
-            Card(
+            PrismCard(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    containerColor = Surfaces.raisedColor,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 ),
             ) {
@@ -1298,7 +1299,7 @@ private fun PublicPoolStatusRow(poolLoading: Boolean, poolError: String?, onLoad
             )
             Text("正在加载本季 / 公共榜单…", style = MaterialTheme.typography.bodyMedium)
         }
-        poolError != null -> Card(
+        poolError != null -> PrismCard(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -1336,10 +1337,10 @@ private fun PublicPoolStatusRow(poolLoading: Boolean, poolError: String?, onLoad
 
 @Composable
 private fun EmptyDataPlaceholder(message: String) {
-    Card(
+    PrismCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = Surfaces.raisedColor,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
     ) {

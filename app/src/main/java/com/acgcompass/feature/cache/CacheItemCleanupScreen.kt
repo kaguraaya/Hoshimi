@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -34,6 +33,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatTextField
+import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 
@@ -150,7 +150,7 @@ private fun CacheItemRow(
     kind: CacheAssetKind?,
     viewModel: CacheManagementViewModel,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    PrismCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,

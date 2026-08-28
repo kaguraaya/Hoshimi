@@ -12,9 +12,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,15 +56,18 @@ import coil.request.ImageRequest
 fun WorkCard(
     model: WorkCardUiModel,
     modifier: Modifier = Modifier,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    containerColor: Color = Color.Unspecified,
     onClick: () -> Unit = {},
 ) {
-    // Flat tonal card: no outline, no elevation. Nested inside another card, pass a stronger tone.
-    Card(
+    // 列表卡片：无描边无投影，取比所在表面深一级的填充色，圆角 24；封面与卡片同心（24 − 内边距 12）。
+    PrismCard(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = containerColor),
+        colors = if (containerColor == Color.Unspecified) {
+            null
+        } else {
+            CardDefaults.cardColors(containerColor = containerColor)
+        },
     ) {
         Row(
             modifier = Modifier
@@ -156,8 +159,8 @@ private fun CoverImage(coverUrl: String?, contentDescription: String, modifier: 
     Box(
         modifier = modifier
             .size(width = 72.dp, height = 96.dp)
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            .clip(RoundedCornerShape(12.dp))
+            .background(Surfaces.raisedColor),
         contentAlignment = Alignment.Center,
     ) {
         if (coverUrl != null) {

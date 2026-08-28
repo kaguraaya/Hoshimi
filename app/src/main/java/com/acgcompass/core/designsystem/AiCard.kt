@@ -93,6 +93,7 @@ fun AiCard(
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         model.sources.forEach { source ->
                             SuggestionChip(

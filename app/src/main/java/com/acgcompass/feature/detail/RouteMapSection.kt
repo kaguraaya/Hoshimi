@@ -10,9 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -28,6 +26,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatAssistChip
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.domain.ai.RouteRecommendation
 import com.acgcompass.domain.model.RouteNode
 import com.acgcompass.domain.model.RouteRelationType
@@ -115,10 +115,10 @@ fun RouteMapSection(
     onOpenWork: (String) -> Unit = {},
     onAddSeries: (Boolean) -> Unit = {},
 ) {
-    Card(
+    PrismCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = Surfaces.raisedColor,
         ),
     ) {
         Column(
@@ -170,6 +170,7 @@ fun RouteMapSection(
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(onClick = { onAddSeries(false) }) {
                     Text(text = "一键加入系列")
@@ -207,6 +208,7 @@ private fun RouteNodeRow(node: RouteNodeUiModel, onOpenWork: (String) -> Unit, m
             )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SuggestionChip(
                     onClick = { onOpenWork(node.workId) },
@@ -221,21 +223,7 @@ private fun RouteNodeRow(node: RouteNodeUiModel, onOpenWork: (String) -> Unit, m
                 )
                 FlatAssistChip(
                     onClick = { onOpenWork(node.workId) },
-                    label = {
-                        Text(
-                            text = node.recommendationLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    },
-                    shape = MaterialTheme.shapes.extraSmall,
-                    colors = if (node.isMust) {
-                        AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    } else {
-                        AssistChipDefaults.assistChipColors()
-                    },
+                    label = { Text(node.recommendationLabel) },
                 )
             }
         }

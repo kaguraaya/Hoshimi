@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -33,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatDivider
+import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.ScreenContentPadding
@@ -196,7 +196,7 @@ private fun SyncActionBar(syncing: Boolean, onCaptureLocalSnapshot: () -> Unit, 
 /** 顶部概览卡：当前收藏数、最后同步时间、近期变化和本期评分均值。 */
 @Composable
 private fun OverviewCard(overview: TimeMachineOverviewUi) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -250,7 +250,7 @@ private fun OverviewMetric(label: String, value: String, modifier: Modifier = Mo
 @Composable
 private fun BaselineGroupCard(group: BaselineGroupUi, onOpenWork: (String) -> Unit = {}) {
     var expanded by rememberSaveable(group.statusLabel) { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -311,7 +311,7 @@ private fun BaselineWorkRow(work: BaselineWorkUi, onOpenWork: (String) -> Unit =
 /** 月/年报告卡。 */
 @Composable
 private fun ReportCard(report: TimeMachineReportUi) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -346,7 +346,7 @@ private fun ReportCard(report: TimeMachineReportUi) {
 @Composable
 private fun TimelineRow(entry: TimelineEntryUi, onOpenWork: (String) -> Unit = {}) {
     val wid = entry.workId
-    Card(
+    PrismCard(
         modifier = Modifier
             .fillMaxWidth()
             .let { if (!wid.isNullOrBlank()) it.clickable { onOpenWork(wid) } else it },

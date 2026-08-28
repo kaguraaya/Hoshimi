@@ -12,7 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.FlatDivider
+import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 import kotlinx.coroutines.launch
@@ -89,7 +89,7 @@ fun CacheManagementScreen(
             item { SourceCard(state, viewModel) }
             item { CleanupCard(state, viewModel, onOpenItemCleanup) }
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                PrismCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -139,7 +139,7 @@ fun CacheManagementScreen(
 
 @Composable
 private fun UsageCard(state: CacheManagementUiState) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("当前占用", style = MaterialTheme.typography.titleMedium)
             LinearProgressIndicator(progress = { state.utilization }, modifier = Modifier.fillMaxWidth())
@@ -167,7 +167,7 @@ private fun UsageCard(state: CacheManagementUiState) {
 
 @Composable
 private fun SourceCard(state: CacheManagementUiState, viewModel: CacheManagementViewModel) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("按来源", style = MaterialTheme.typography.titleMedium)
             Text(
@@ -192,7 +192,7 @@ private fun CleanupCard(
     viewModel: CacheManagementViewModel,
     onOpenItemCleanup: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("批量清理", style = MaterialTheme.typography.titleMedium)
             Button(onClick = viewModel::trimNow, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {

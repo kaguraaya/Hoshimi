@@ -8,7 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -16,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.acgcompass.core.designsystem.FlatCard
 import com.acgcompass.core.designsystem.FlatDivider
+import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PillTabs
 import com.acgcompass.domain.cache.CacheLimitMode
@@ -83,7 +83,7 @@ private fun BackgroundFillControl(state: CacheManagementUiState, onEvent: (Cache
             Text("后台补充")
             Text("应用不在前台时也定期补充：仅在非计费网络且充电时运行，约每 12 小时一次", style = MaterialTheme.typography.bodySmall)
         }
-        Switch(
+        FlatSwitch(
             checked = state.policy.backgroundFillEnabled,
             onCheckedChange = { onEvent(CachePolicyEvent.BackgroundFillChanged(it)) },
         )

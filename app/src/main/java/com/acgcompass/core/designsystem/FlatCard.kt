@@ -1,17 +1,12 @@
-@file:Suppress("MatchingDeclarationName") // 一组扁平化基础组件，文件名取其中最常用的一个。
+@file:Suppress("TooManyFunctions") // 一组互相配套的扁平组件，放在一起便于对照同一套尺寸
 
 package com.acgcompass.core.designsystem
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.LocalIndication
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.InteractionSource
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,61 +15,130 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.ChipColors
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardColors
+import androidx.compose.material3.CardElevation
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Flat design primitives.
+ * 圆角档位（照 FlClash 的 `AppCorner` 与仪表盘卡片）：同一类东西只用同一档，页面才显得严谨。
  *
- * The visual language is deliberately quiet: surfaces are separated by **tone, not lines**. There are no
- * outlines, dividers or drop shadows — a section is a borderless tonal card with generous radius and
- * padding, things inside it sit on a slightly stronger tone, and selection is shown by a filled pill.
- * Everything resolves to Material 3 color roles, so wallpaper-based dynamic color keeps working.
+ * 徽章 8 · 输入框 / 分段选项 16 · 卡片里的色块 20 · 列表卡片与成组的行 24 · 带标题的分区卡片 32 · 按钮与选项药丸全圆。
  */
+object PrismCorner {
+    val Badge = RoundedCornerShape(8.dp)
+    val Input = RoundedCornerShape(16.dp)
+    val Segment = RoundedCornerShape(16.dp)
+    val Block = RoundedCornerShape(20.dp)
+    val Card = RoundedCornerShape(24.dp)
+    val SectionCard = RoundedCornerShape(32.dp)
+}
+
+/** 尺寸档位：页面左右留白 16、卡片之间 8、行高至少 56、选项药丸高 36、分段选项高 44。 */
+object PrismMetrics {
+    val PageGutter = 16.dp
+    val CardGap = 8.dp
+    val RowMinHeight = 56.dp
+    val ChipHeight = 36.dp
+    val SegmentHeight = 44.dp
+    val HeaderGlyph = 18.dp
+    val Hairline = 0.6.dp
+}
+
+/** 旧名保留：现在都从当前表面层级取色（见 [Surfaces]）。 */
 object FlatDefaults {
-    /** Tone of a section card on the page background. */
+    /** 放在当前表面上的卡片 / 色块的填充色。 */
     val cardColor: Color
-        @Composable get() = MaterialTheme.colorScheme.surfaceContainerLow
+        @Composable get() = Surfaces.raisedColor
 
-    /** Tone of a tile / control nested inside a card. */
+    /** 同 [cardColor]：在卡片里调用时得到的就是「卡片里的色块」那一级。 */
     val tileColor: Color
-        @Composable get() = MaterialTheme.colorScheme.surfaceContainerHigh
+        @Composable get() = Surfaces.raisedColor
 
-    val CardPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp)
+    val CardPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
 }
 
 /**
- * Borderless tonal section card with an optional header (small glyph + title, optional trailing slot)
- * and an optional one-line supporting text under it.
+ * 卡片：没有描边、没有投影，靠比所在表面深一级的填充色立起来；里面的内容自动再深一级。
+ * 参数与 Material 的 `Card` 对应，可原地替换（`elevation` / `border` 被忽略——结构不靠线和阴影表达）。
+ */
+@Suppress("LongParameterList", "UNUSED_PARAMETER") // 与 Material Card 的参数一一对应，便于原地替换
+@Composable
+fun PrismCard(
+    modifier: Modifier = Modifier,
+    shape: Shape = PrismCorner.Card,
+    colors: CardColors? = null,
+    elevation: CardElevation? = null,
+    border: BorderStroke? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val level = Surfaces.raised
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = colors?.containerColor ?: Surfaces.colorOf(level),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        SurfaceScope(level) { Column(content = content) }
+    }
+}
+
+/** 可点击的 [PrismCard]：按下只有涟漪，不缩放、不变色块。 */
+@Suppress("LongParameterList", "UNUSED_PARAMETER") // 与 Material Card 的参数一一对应，便于原地替换
+@Composable
+fun PrismCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    shape: Shape = PrismCorner.Card,
+    colors: CardColors? = null,
+    elevation: CardElevation? = null,
+    border: BorderStroke? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val level = Surfaces.raised
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        shape = shape,
+        color = colors?.containerColor ?: Surfaces.colorOf(level),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        SurfaceScope(level) { Column(content = content) }
+    }
+}
+
+/**
+ * 带标题的分区卡片（对应 FlClash 的仪表盘卡片）：圆角 32、内边距 20×18，
+ * 标题行是一个 18dp 的小图标加标题，右侧可放一个控件。
  */
 @Suppress("LongParameterList") // Composable 的可选外观参数。
 @Composable
@@ -83,82 +147,97 @@ fun FlatCard(
     title: String? = null,
     icon: ImageVector? = null,
     supporting: String? = null,
-    containerColor: Color = FlatDefaults.cardColor,
+    containerColor: Color = Color.Unspecified,
     contentPadding: PaddingValues = FlatDefaults.CardPadding,
     trailing: @Composable (RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val level = Surfaces.raised
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = containerColor,
+        shape = PrismCorner.SectionCard,
+        color = if (containerColor == Color.Unspecified) Surfaces.colorOf(level) else containerColor,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        Column(
-            modifier = Modifier.padding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            if (title != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (icon != null) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        trailing?.invoke(this)
-                    }
-                    if (supporting != null) {
-                        Text(
-                            text = supporting,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+        SurfaceScope(level) {
+            Column(
+                modifier = Modifier.padding(contentPadding),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (title != null) FlatCardHeader(title, icon, supporting, trailing)
+                content()
             }
-            content()
+        }
+    }
+}
+
+@Composable
+private fun FlatCardHeader(
+    title: String,
+    icon: ImageVector?,
+    supporting: String?,
+    trailing: @Composable (RowScope.() -> Unit)?,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 26.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(PrismMetrics.HeaderGlyph),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (trailing != null) trailing()
+        }
+        if (supporting != null) {
+            Text(
+                text = supporting,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
 /**
- * Press feedback: the element shrinks slightly while pressed and springs back on release — a quiet
- * physical cue that replaces heavier ripples/outlines on flat surfaces.
+ * 分组标题：放在卡片**外面**、成组内容的上方，左缘与卡片外缘对齐，字色用次要色。
+ * 页面上的分区因此是「标题 + 一张卡片」，而不是卡片套着标题。
  */
-fun Modifier.pressScale(interactionSource: InteractionSource, pressedScale: Float = 0.96f): Modifier = composed {
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "pressScale",
-    )
-    graphicsLayer {
-        scaleX = scale
-        scaleY = scale
+@Composable
+fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Composable (RowScope.() -> Unit)? = null) {
+    Row(
+        modifier = modifier.fillMaxWidth().padding(top = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (trailing != null) trailing()
     }
 }
 
 /**
- * Single-choice pill tabs: borderless pills, the selected one filled with the primary color.
+ * 分段选项（互斥，一组只选一个）：圆角 16、高 44。选中的一段是实心主色，其余取深一级的中性色。
  *
- * With [scrollable] = false the pills share the width equally (good for 2–3 short options). With
- * [scrollable] = true each pill is as wide as its label and the row scrolls horizontally — labels are
- * never truncated, whatever the font or display size.
+ * [scrollable] 为 false 时各段等宽铺满；为 true 时按内容定宽并可横向滑动（选项多或文字长时不截断）。
  */
 @Suppress("LongParameterList") // 与 Material 对应组件的参数一一对应，便于原地替换
 @Composable
@@ -171,62 +250,49 @@ fun <T> PillTabs(
     scrollable: Boolean = options.size > 2,
 ) {
     val rowModifier = if (scrollable) {
-        modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
     } else {
         modifier.fillMaxWidth()
     }
-    Row(modifier = rowModifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val idle = Surfaces.raisedColor
+    Row(modifier = rowModifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { option ->
             val isSelected = option == selected
-            val interactionSource = remember { MutableInteractionSource() }
             val container by animateColorAsState(
-                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else FlatDefaults.tileColor,
-                label = "pillContainer",
+                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else idle,
+                animationSpec = tween(SELECT_DURATION_MS),
+                label = "segmentContainer",
             )
-            Box(
+            val content = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+            Surface(
                 modifier = (if (scrollable) Modifier else Modifier.weight(1f))
-                    .heightIn(min = 44.dp)
-                    .pressScale(interactionSource)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(container)
-                    .selectable(
-                        selected = isSelected,
-                        interactionSource = interactionSource,
-                        indication = LocalIndication.current,
-                        role = Role.Tab,
-                        onClick = { onSelect(option) },
-                    )
-                    .padding(horizontal = 18.dp),
-                contentAlignment = Alignment.Center,
+                    .height(PrismMetrics.SegmentHeight)
+                    .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(option) }),
+                shape = PrismCorner.Segment,
+                color = container,
+                contentColor = content,
             ) {
-                Text(
-                    text = label(option),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    softWrap = false,
-                )
+                Box(Modifier.padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = label(option),
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
         }
     }
 }
 
-/** Multi-choice chip without an outline: a tonal pill that fills with the primary color when selected. */
 @Composable
 fun TonalFilterChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     FlatFilterChip(selected = selected, onClick = onClick, label = { Text(label) }, modifier = modifier)
 }
 
 /**
- * Drop-in replacement for Material's `FilterChip` in the flat style: no outline, tonal when idle,
- * filled with the primary color when selected.
+ * 选项药丸（可多选的筛选 / 标签）：全圆、高 36、左右 16，没有描边。
+ * 未选中取深一级的中性色，选中是实心主色——颜色只用来表示「选中」。
  */
 @Suppress("LongParameterList") // 与 Material 对应组件的参数一一对应，便于原地替换
 @Composable
@@ -239,28 +305,25 @@ fun FlatFilterChip(
     leadingIcon: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
 ) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = label,
-        modifier = modifier,
-        enabled = enabled,
-        leadingIcon = leadingIcon,
-        trailingIcon = trailingIcon,
-        shape = MaterialTheme.shapes.small,
-        border = null,
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = FlatDefaults.tileColor,
-            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            selectedContainerColor = MaterialTheme.colorScheme.primary,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
-            selectedTrailingIconColor = MaterialTheme.colorScheme.onPrimary,
-        ),
+    val container by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Surfaces.raisedColor,
+        animationSpec = tween(SELECT_DURATION_MS),
+        label = "chipContainer",
     )
+    val content = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    Surface(
+        modifier = modifier
+            .height(PrismMetrics.ChipHeight)
+            .selectable(selected = selected, enabled = enabled, role = Role.Checkbox, onClick = onClick),
+        shape = CircleShape,
+        color = container,
+        contentColor = if (enabled) content else content.copy(alpha = DISABLED_ALPHA),
+    ) {
+        ChipContent(label, leadingIcon, trailingIcon)
+    }
 }
 
-/** Drop-in replacement for Material's `AssistChip` in the flat style (tonal, no outline). */
+/** 动作药丸（点一下执行一个动作）：外观同未选中的 [FlatFilterChip]。 */
 @Suppress("LongParameterList") // 与 Material 对应组件的参数一一对应，便于原地替换
 @Composable
 fun FlatAssistChip(
@@ -270,30 +333,76 @@ fun FlatAssistChip(
     enabled: Boolean = true,
     leadingIcon: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
-    shape: Shape = MaterialTheme.shapes.small,
-    colors: ChipColors = AssistChipDefaults.assistChipColors(
-        containerColor = FlatDefaults.tileColor,
-        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    ),
 ) {
-    AssistChip(
+    val content = MaterialTheme.colorScheme.onSurface
+    Surface(
         onClick = onClick,
-        label = label,
-        modifier = modifier,
+        modifier = modifier.height(PrismMetrics.ChipHeight),
         enabled = enabled,
-        leadingIcon = leadingIcon,
-        trailingIcon = trailingIcon,
-        shape = shape,
-        colors = colors,
-        border = null,
-    )
+        shape = CircleShape,
+        color = Surfaces.raisedColor,
+        contentColor = if (enabled) content else content.copy(alpha = DISABLED_ALPHA),
+    ) {
+        ChipContent(label, leadingIcon, trailingIcon)
+    }
+}
+
+@Composable
+private fun ChipContent(
+    label: @Composable () -> Unit,
+    leadingIcon: @Composable (() -> Unit)?,
+    trailingIcon: @Composable (() -> Unit)?,
+) {
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (leadingIcon != null) Box(Modifier.size(CHIP_ICON)) { leadingIcon() }
+        CompositionLocalProvider(
+            androidx.compose.material3.LocalTextStyle provides MaterialTheme.typography.labelLarge,
+            LocalContentColor provides LocalContentColor.current,
+            content = label,
+        )
+        if (trailingIcon != null) Box(Modifier.size(CHIP_ICON)) { trailingIcon() }
+    }
 }
 
 /**
- * Stand-in for Material's `HorizontalDivider` in the flat style: sections are separated by space, not by
- * a line, so this only reserves a little vertical room.
+ * 分隔：成组的行画在同一张卡片里时，行与行之间是一条发丝线（[Surfaces.hairline]）；
+ * 直接放在页面上时不画线，只留间距——页面上的分区靠卡片和留白区分，不靠横线。
  */
 @Composable
 fun FlatDivider(modifier: Modifier = Modifier) {
-    Spacer(modifier = modifier.height(6.dp))
+    if (Surfaces.level == SurfaceLevel.Page) {
+        Spacer(modifier.height(6.dp))
+    } else {
+        Box(modifier.fillMaxWidth().height(PrismMetrics.Hairline).background(Surfaces.hairline))
+    }
 }
+
+/** 开关：关闭时是一条没有描边的中性轨道，开启时是主色。 */
+@Composable
+fun FlatSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        enabled = enabled,
+        colors = SwitchDefaults.colors(
+            uncheckedBorderColor = Color.Transparent,
+            uncheckedTrackColor = Surfaces.colorOf(SurfaceLevel.Inset),
+            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+            disabledUncheckedBorderColor = Color.Transparent,
+        ),
+    )
+}
+
+private val CHIP_ICON: Dp = 18.dp
+private const val SELECT_DURATION_MS = 240
+private const val DISABLED_ALPHA = 0.38f

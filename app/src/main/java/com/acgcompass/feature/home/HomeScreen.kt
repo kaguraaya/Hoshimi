@@ -1,34 +1,37 @@
 package com.acgcompass.feature.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.Mood
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,8 +39,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -47,7 +54,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.FlatCard
+import com.acgcompass.core.designsystem.FlatDefaults
+import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
+import com.acgcompass.core.designsystem.PrismMetrics
+import com.acgcompass.core.designsystem.SectionHeader
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.AcgTopLevelTopBar
@@ -201,7 +216,7 @@ private fun HomeContent(
             top = ScreenContentPadding.Top,
             bottom = ScreenContentPadding.Bottom,
         ),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(PrismMetrics.CardGap),
     ) {
         // 今晚看什么大卡。
         if (HOME_MOD_TODAY in data.enabledModules) {
@@ -211,20 +226,23 @@ private fun HomeContent(
 
             // 今日状态——重定义为「今晚看什么」快捷入口：点某心情直接带预填标签跳推荐器。
             item(key = "moods") {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    SectionTitle("今晚想看哪种？")
-                    HintText("选择状态后，将对应标签带入推荐筛选")
-                }
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                FlatCard(
+                    title = "今晚想看哪种？",
+                    icon = Icons.Outlined.Mood,
+                    supporting = "选一个状态，对应标签会带入推荐筛选",
                 ) {
-                    data.moods.forEach { mood ->
-                        FlatFilterChip(
-                            selected = false,
-                            onClick = { onOpenRecommender(mood.presetTags) },
-                            label = { Text(mood.label) },
-                        )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        data.moods.forEach { mood ->
+                            FlatFilterChip(
+                                selected = false,
+                                onClick = { onOpenRecommender(mood.presetTags) },
+                                label = { Text(mood.label) },
+                            )
+                        }
                     }
                 }
             }
@@ -234,7 +252,7 @@ private fun HomeContent(
             item(key = "seasonal_new_title") { SectionTitle("本季新番") }
             if (data.seasonalNew.isEmpty()) {
                 item(key = "seasonal_new_empty") {
-                    HintText("本季新番正在准备中，也可以前往发现页查看本季榜单")
+                    EmptyHintCard("本季新番正在准备中，也可以前往发现页查看本季榜单")
                 }
             } else {
                 items(data.seasonalNew, key = { "seasonal_new_${it.workId}" }) { card ->
@@ -246,47 +264,24 @@ private fun HomeContent(
         // 时间表：显示当前时刻之后的下一组放送。
         if (HOME_MOD_SEASONAL in data.enabledModules) {
             item(key = "schedule_title") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onOpenSchedule),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SectionTitle("时间表")
-                    Spacer(Modifier.weight(1f))
+                SectionHeader("时间表") {
                     IconButton(onClick = onOpenSchedule) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "查看完整时间表")
                     }
                 }
             }
-            if (data.upcomingBroadcasts.isEmpty()) {
-                item(key = "schedule_empty") {
-                    when {
-                        data.scheduleRefreshing -> androidx.compose.material3.CircularProgressIndicator()
-                        data.scheduleError != null -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                HintText("时间表暂时不可用")
-                                TextButton(onClick = onOpenSchedule) { Text("重试") }
-                            }
-                        }
-                        else -> HintText("时间表暂无即将放送内容")
-                    }
-                }
-            } else {
-                items(data.upcomingBroadcasts, key = { "schedule_${it.scheduleId}" }) { entry ->
-                    BroadcastScheduleRow(entry, onClick = { onOpenWork(entry.workId) })
-                }
+            item(key = "schedule_body") {
+                ScheduleCard(data = data, onOpenWork = onOpenWork, onOpenSchedule = onOpenSchedule)
             }
         }
 
-        // 继续看 / 读 / 玩。
         if (HOME_MOD_CONTINUE in data.enabledModules) {
             item(key = "continue") {
                 SectionTitle("继续看 / 读 / 玩")
             }
             if (data.continueItems.isEmpty()) {
                 item(key = "continue_empty") {
-                    HintText("暂无进行中的作品，可从待补池选择一部开始")
+                    EmptyHintCard("暂无进行中的作品，可从待补池选择一部开始")
                 }
             } else {
                 items(data.continueItems, key = { "continue_${it.workId}" }) { item ->
@@ -304,10 +299,7 @@ private fun HomeContent(
         // 待补池概览。
         if (HOME_MOD_BACKLOG in data.enabledModules) {
             item(key = "backlog_overview") {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    SectionTitle("待补池概览 · 共 ${data.backlogSummary.totalCount} 部")
-                    HintText("快速一览；完整筛选 / 排序 / 批量管理请到「待补池」标签页")
-                }
+                SectionTitle("待补池概览 · 共 ${data.backlogSummary.totalCount} 部")
             }
             data.backlogSummary.recentlyAdded?.let { card ->
                 item(key = "recent_${card.workId}") {
@@ -347,27 +339,56 @@ private fun HomeContent(
     }
 }
 
+/** 时间表：成组的行画在同一张卡片里，行间一条发丝线；空 / 加载 / 出错时卡片里给出说明。 */
+@Composable
+private fun ScheduleCard(data: HomeUiState, onOpenWork: (String) -> Unit, onOpenSchedule: () -> Unit) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
+        when {
+            data.upcomingBroadcasts.isNotEmpty() -> data.upcomingBroadcasts.forEachIndexed { index, entry ->
+                if (index > 0) FlatDivider(Modifier.padding(start = SCHEDULE_DIVIDER_INSET))
+                BroadcastScheduleRow(entry, onClick = { onOpenWork(entry.workId) })
+            }
+            data.scheduleRefreshing -> Box(Modifier.fillMaxWidth().padding(20.dp), Alignment.Center) {
+                androidx.compose.material3.CircularProgressIndicator()
+            }
+            data.scheduleError != null -> Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f)) { HintText("时间表暂时不可用") }
+                TextButton(onClick = onOpenSchedule) { Text("重试") }
+            }
+            else -> Box(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) { HintText("时间表暂无即将放送内容") }
+        }
+    }
+}
+
 @Composable
 private fun BroadcastScheduleRow(entry: BroadcastScheduleEntry, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .heightIn(min = PrismMetrics.RowMinHeight)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AsyncImage(
             model = entry.coverUrl,
             contentDescription = null,
-            modifier = Modifier.size(52.dp),
+            modifier = Modifier
+                .size(SCHEDULE_COVER)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Surfaces.raisedColor),
             contentScale = ContentScale.Crop,
         )
-        Spacer(Modifier.width(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = entry.titleCn ?: entry.title,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = scheduleTimeText(entry),
@@ -378,6 +399,9 @@ private fun BroadcastScheduleRow(entry: BroadcastScheduleEntry, onClick: () -> U
     }
 }
 
+private val SCHEDULE_COVER = 44.dp
+private val SCHEDULE_DIVIDER_INSET = 72.dp
+
 private fun scheduleTimeText(entry: BroadcastScheduleEntry): String {
     val time = entry.airingAtUtcMillis?.let {
         val dateTime = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
@@ -386,7 +410,7 @@ private fun scheduleTimeText(entry: BroadcastScheduleEntry): String {
         } else {
             dateTime.format(DateTimeFormatter.ofPattern("E HH:mm"))
         }
-    } ?: "星期${entry.dayOfWeek.value}"
+    } ?: entry.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.CHINA)
     return buildString {
         append(time)
         entry.episode?.let { append(" · 第").append(it).append("集") }
@@ -395,106 +419,75 @@ private fun scheduleTimeText(entry: BroadcastScheduleEntry): String {
 
 @Composable
 private fun SyncReminderCard(reminder: SyncReminder, onManualSync: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = if (reminder.hasFailure) {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            )
-        } else {
-            CardDefaults.cardColors()
-        },
+    FlatCard(
+        title = if (reminder.hasFailure) "同步提醒 · 有源测试失败" else "同步提醒",
+        icon = Icons.Outlined.Sync,
+        // 出错的卡片整张换成错误容器色，不加描边。
+        containerColor = if (reminder.hasFailure) MaterialTheme.colorScheme.errorContainer else Color.Unspecified,
+        trailing = { TextButton(onClick = onManualSync) { Text("立即同步") } },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SectionTitle(if (reminder.hasFailure) "同步提醒 · 有源测试失败" else "同步提醒")
-            reminder.lines.forEach { line ->
-                val prefix = if (line.failed) "⚠ " else ""
-                HintText("$prefix${line.sourceLabel} · ${line.statusText}")
-            }
-            TextButton(onClick = onManualSync) {
-                Text("立即同步")
-            }
+        reminder.lines.forEach { line ->
+            val prefix = if (line.failed) "⚠ " else ""
+            HintText("$prefix${line.sourceLabel} · ${line.statusText}")
         }
     }
 }
 
 @Composable
 private fun DailyDrawCard(draw: DailyDraw) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    FlatCard(title = "今日补番签", icon = Icons.Outlined.AutoAwesome) {
+        DrawLine("宜", draw.shouldText)
+        DrawLine("忌", draw.shouldNotText)
+    }
+}
+
+/** 色块里的一行：左边一个小标记，右边正文。 */
+@Composable
+private fun DrawLine(mark: String, text: String) {
+    Surface(shape = PrismCorner.Block, color = Surfaces.raisedColor, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "今日补番签",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "宜 · ${draw.shouldText}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = "忌 · ${draw.shouldNotText}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Text(mark, style = MaterialTheme.typography.titleSmall)
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
+/** 今晚看什么：中性卡片 + 这一屏唯一的主色动作（右侧的圆形按钮）。主色不铺满整张卡片。 */
 @Composable
 private fun TonightHeroCard(onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    PrismCard(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = PrismCorner.SectionCard) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(FlatDefaults.CardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = "今晚看什么？",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "按可用时间、偏好与待补池内容生成推荐",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            // 实心按钮、与卡片底色反相：文字按钮在高饱和的主色卡片上（尤其深色模式）几乎看不清。
-            Button(
-                onClick = onClick,
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    contentColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(text = "今晚看什么？", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = "按可用时间、偏好与待补池内容生成推荐",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Surface(
+                modifier = Modifier.size(HERO_ACTION).semantics { contentDescription = "开始决策" },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ) {
-                Text("开始决策", fontWeight = FontWeight.SemiBold)
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                }
             }
         }
     }
 }
+
+private val HERO_ACTION = 56.dp
 
 @Composable
 private fun LabeledWorkCard(label: String, model: WorkCardUiModel, onClick: () -> Unit) {
@@ -506,11 +499,15 @@ private fun LabeledWorkCard(label: String, model: WorkCardUiModel, onClick: () -
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-    )
+    SectionHeader(text)
+}
+
+/** 空状态说明：和有内容时一样占一张卡片，页面结构不会因为没数据而塌成一行字。 */
+@Composable
+private fun EmptyHintCard(text: String) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 18.dp)) { HintText(text) }
+    }
 }
 
 @Composable

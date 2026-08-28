@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -46,6 +45,8 @@ import coil.compose.AsyncImage
 import com.acgcompass.core.designsystem.AppSearchField
 import com.acgcompass.core.designsystem.AppSearchFieldState
 import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import com.acgcompass.domain.visualnovel.VisualNovelSort
@@ -145,7 +146,7 @@ private fun VisualNovelControls(state: VisualNovelUiState, viewModel: VisualNove
 
 @Composable
 private fun VisualNovelError(message: String, onRetry: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    PrismCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(Modifier.padding(16.dp)) {
             Text(message, color = MaterialTheme.colorScheme.error)
             FilledTonalButton(onClick = onRetry) { Text("重试") }
@@ -189,7 +190,7 @@ private fun RankingRefreshStatus(state: VisualNovelUiState) {
 
 @Composable
 private fun VisualNovelCard(item: VisualNovelListItem, onClick: () -> Unit) {
-    Card(
+    PrismCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable(onClick = onClick),
     ) {
         Row(Modifier.padding(12.dp)) {
@@ -204,8 +205,8 @@ private fun VisualNovelCard(item: VisualNovelListItem, onClick: () -> Unit) {
                 },
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
-                error = ColorPainter(MaterialTheme.colorScheme.surfaceVariant),
+                placeholder = ColorPainter(Surfaces.raisedColor),
+                error = ColorPainter(Surfaces.raisedColor),
                 modifier = Modifier.size(width = 84.dp, height = 116.dp).clip(RoundedCornerShape(8.dp)),
             )
             Spacer(Modifier.width(12.dp))

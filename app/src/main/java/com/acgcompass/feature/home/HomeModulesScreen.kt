@@ -10,13 +10,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -28,6 +26,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.designsystem.FlatSwitch
+import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.data.datastore.HomeModulePref
 import com.acgcompass.data.datastore.SettingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -99,7 +99,7 @@ fun HomeModulesRoute(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Card(modifier = Modifier.fillMaxWidth()) {
+            PrismCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     HomeModulePref.entries.forEach { module ->
                         Row(
@@ -114,7 +114,7 @@ fun HomeModulesRoute(
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f),
                             )
-                            Switch(
+                            FlatSwitch(
                                 checked = module.key in enabled,
                                 onCheckedChange = { viewModel.toggle(module.key, it) },
                             )

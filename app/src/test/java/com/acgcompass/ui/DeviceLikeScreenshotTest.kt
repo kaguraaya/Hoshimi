@@ -1,39 +1,61 @@
 package com.acgcompass.ui
 
 import android.app.Application
+import android.graphics.Color as AndroidColor
+import android.graphics.drawable.GradientDrawable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.hasScrollToNodeAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.dp
-import com.acgcompass.core.designsystem.AcgShapes
-import com.acgcompass.core.designsystem.AcgTypography
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.DataSource
+import coil.intercept.Interceptor
+import coil.request.SuccessResult
+import com.acgcompass.app.navigation.AcgBottomNavigation
+import com.acgcompass.app.navigation.TopLevelDestination
+import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.cache.CachePolicy
 import com.acgcompass.domain.model.ImportItem
 import com.acgcompass.domain.model.ImportItemStatus
+import com.acgcompass.domain.schedule.BroadcastScheduleEntry
 import com.acgcompass.feature.cache.CacheManagementUiState
 import com.acgcompass.feature.cache.PolicyCard
+import com.acgcompass.feature.home.BacklogSummary
+import com.acgcompass.feature.home.ContinueItem
 import com.acgcompass.feature.home.DailyDraw
 import com.acgcompass.feature.home.HomeScreen
 import com.acgcompass.feature.home.HomeUiState
+import com.acgcompass.feature.home.HomeWorkCard
 import com.acgcompass.feature.home.SyncReminder
 import com.acgcompass.feature.home.SyncReminderLine
 import com.acgcompass.feature.imports.ImportScreen
 import com.acgcompass.feature.imports.ImportUiState
+import com.acgcompass.feature.mine.MineScreen
+import com.acgcompass.feature.mine.MineStats
+import com.acgcompass.feature.mine.MineUiState
 import com.acgcompass.feature.recommender.RecommenderInput
 import com.acgcompass.feature.recommender.RecommenderScreen
 import com.github.takahirom.roborazzi.captureRoboImage
+import java.time.DayOfWeek
+import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,6 +63,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowLooper
 
 /**
  * 按「最坏情况的真机」渲染：壁纸取色得到的高饱和青色配色 + 放大的字宽（模拟加粗的自定义系统字体）。
@@ -60,6 +83,7 @@ class DeviceLikeScreenshotTest {
 
     private fun render(dark: Boolean, content: @Composable () -> Unit) {
         RuntimeEnvironment.setFontScale(WIDE_FONT_SCALE)
+        Coil.setImageLoader(fakeCoverLoader())
         compose.setContent {
             DeviceLikeTheme(
                 dark,
@@ -72,12 +96,18 @@ class DeviceLikeScreenshotTest {
     fun homeDark() {
         render(dark = true) { SampleHome() }
         shot("device-home-dark")
+        scrollHomeTo("同步提醒")
+        shot("device-home-dark-2")
     }
 
     @Test
     fun homeLight() {
         render(dark = false) { SampleHome() }
         shot("device-home-light")
+        scrollHomeTo("短篇可补")
+        shot("device-home-light-2")
+        scrollHomeTo("同步提醒")
+        shot("device-home-light-3")
     }
 
     @Test
@@ -90,6 +120,18 @@ class DeviceLikeScreenshotTest {
     fun tonightDark() {
         render(dark = true) { SampleTonight() }
         shot("device-tonight-dark")
+    }
+
+    @Test
+    fun mineLight() {
+        render(dark = false) { SampleMineWithDock() }
+        shot("device-mine-light")
+    }
+
+    @Test
+    fun mineDark() {
+        render(dark = true) { SampleMineWithDock() }
+        shot("device-mine-dark")
     }
 
     @Test
@@ -111,16 +153,105 @@ class DeviceLikeScreenshotTest {
         shot("device-cache-policy-light")
     }
 
+    private fun scrollHomeTo(text: String) {
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(text))
+        settle()
+    }
+
+    /** 等封面请求回来并让淡入动画走完，否则截到的是空白占位。 */
+    private fun settle() {
+        repeat(SETTLE_ROUNDS) {
+            compose.waitForIdle()
+            ShadowLooper.idleMainLooper()
+            compose.mainClock.advanceTimeBy(COVER_FADE_MS)
+        }
+        compose.waitForIdle()
+    }
+
+    /** 不联网：任何封面地址都回一张按地址取色的渐变图，卡片里才看得到「有封面」时的真实排版。 */
+    private fun fakeCoverLoader(): ImageLoader {
+        val context = RuntimeEnvironment.getApplication()
+        return ImageLoader.Builder(context)
+            .dispatcher(Dispatchers.Unconfined)
+            .components {
+                add(
+                    Interceptor { chain ->
+                        val seed = chain.request.data.hashCode()
+                        val hue = (seed and HUE_MASK) % FULL_HUE
+                        val top = AndroidColor.HSVToColor(floatArrayOf(hue.toFloat(), 0.45f, 0.85f))
+                        val bottom = AndroidColor.HSVToColor(
+                            floatArrayOf((hue + HUE_SHIFT) % FULL_HUE.toFloat(), 0.6f, 0.5f),
+                        )
+                        SuccessResult(
+                            drawable = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(top, bottom)),
+                            // 关掉淡入：测试里没有真实时钟推进，淡入会停在全透明。
+                            request = chain.request.newBuilder().crossfade(false).build(),
+                            dataSource = DataSource.MEMORY,
+                        )
+                    },
+                )
+            }
+            .build()
+    }
+
     private companion object {
         const val WIDE_FONT_SCALE = 1.15f
+        const val COVER_FADE_MS = 600L
+        const val SETTLE_ROUNDS = 3
+        const val HUE_MASK = 0x7fffffff
+        const val FULL_HUE = 360
+        const val HUE_SHIFT = 40
     }
 }
 
+private fun card(id: String, title: String, subtitle: String, rating: String?, tags: List<String>) = HomeWorkCard(
+    workId = id,
+    card = WorkCardUiModel(
+        coverUrl = "https://example.invalid/cover/$id.jpg",
+        title = title,
+        subtitle = subtitle,
+        type = "TV",
+        ratingText = rating,
+        sourceTags = listOf("Bangumi"),
+        backlogStatus = "想看",
+        completionCost = "12 集 · 约 5 小时",
+        moodRiskTags = tags,
+    ),
+)
+
+private fun broadcast(id: String, title: String, day: DayOfWeek, episode: Int) = BroadcastScheduleEntry(
+    scheduleId = "s$id",
+    workId = id,
+    sourceItemId = id,
+    title = title,
+    titleCn = title,
+    coverUrl = "https://example.invalid/cover/$id.jpg",
+    dayOfWeek = day,
+    episode = episode,
+)
+
 @Composable
 private fun SampleHome() {
+    val frieren = card("1", "葬送的芙莉莲", "葬送のフリーレン · 2023", "Bangumi 8.9", listOf("治愈", "奇幻"))
+    val bocchi = card("2", "孤独摇滚！", "ぼっち・ざ・ろっく！ · 2022", "Bangumi 8.6", listOf("音乐", "搞笑"))
+    val yorimoi = card("3", "比宇宙更远的地方", "宇宙よりも遠い場所 · 2018", "Bangumi 8.7", listOf("青春"))
     HomeScreen(
         state = UiState.Success(
             HomeUiState(
+                seasonalNew = listOf(frieren, bocchi),
+                upcomingBroadcasts = listOf(
+                    broadcast("1", "葬送的芙莉莲 第二季", DayOfWeek.FRIDAY, 7),
+                    broadcast("2", "孤独摇滚！ 第二季", DayOfWeek.SATURDAY, 3),
+                    broadcast("3", "比宇宙更远的地方", DayOfWeek.SUNDAY, 12),
+                ),
+                continueItems = listOf(
+                    ContinueItem("3", yorimoi.card, progressText = "看到第 5 集", nextUpText = "下一集 第 6 集"),
+                ),
+                backlogSummary = BacklogSummary(
+                    totalCount = 42,
+                    recentlyAdded = bocchi,
+                    shortPickable = listOf(yorimoi),
+                ),
                 syncReminder = SyncReminder(
                     lines = listOf(SyncReminderLine("Bangumi", "最近同步 · 刚刚", failed = false)),
                     hasFailure = false,
@@ -137,6 +268,37 @@ private fun SampleHome() {
         onOpenImport = {},
         onOpenWork = {},
     )
+}
+
+/** 「我的」页 + 悬浮底栏：看成组的行、统计块和底栏在一起的效果。 */
+@Composable
+private fun SampleMineWithDock() {
+    Scaffold(
+        bottomBar = {
+            AcgBottomNavigation(currentDestination = TopLevelDestination.ENTRIES.last(), onSelect = {})
+        },
+    ) { padding ->
+        MineScreen(
+            state = UiState.Success(
+                MineUiState(
+                    stats = MineStats(
+                        watched = 312,
+                        watching = 6,
+                        wantToWatch = 42,
+                        onHold = 9,
+                        dropped = 17,
+                        averageRating = 7.4f,
+                        highestRating = 10f,
+                    ),
+                ),
+            ),
+            onNavigateToSettings = {},
+            onOpenPrivacySettings = {},
+            onOpenTasteProfile = {},
+            onOpenAbout = {},
+            modifier = Modifier.padding(padding),
+        )
+    }
 }
 
 @Composable
@@ -187,14 +349,16 @@ private fun SampleImport() {
     )
 }
 
-/** 近似用户设备上壁纸取色得到的青色配色（浅色页面底偏青、默认卡片色很重；深色主容器是亮青）。 */
+/**
+ * 近似用户设备上壁纸取色得到的青色配色（浅色页面底偏青、默认卡片色很重；深色主容器是亮青），
+ * 交给应用主题去做表面中性化——截图看到的就是应用在这台设备上的实际结果。
+ */
 @Composable
 private fun DeviceLikeTheme(dark: Boolean, content: @Composable () -> Unit) {
-    val scheme = if (dark) cyanDark() else cyanLight()
-    MaterialTheme(
-        colorScheme = scheme.copy(surfaceContainerHighest = scheme.surfaceContainer),
-        typography = AcgTypography,
-        shapes = AcgShapes,
+    AcgCompassTheme(
+        darkTheme = dark,
+        dynamicColor = false,
+        baseColorScheme = if (dark) cyanDark() else cyanLight(),
         content = content,
     )
 }
