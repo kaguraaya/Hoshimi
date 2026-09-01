@@ -63,7 +63,7 @@ fun AcgBottomNavigation(
             modifier = Modifier.fillMaxWidth().height(DOCK_HEIGHT),
             shape = CircleShape,
             color = Surfaces.colorOf(dockLevel),
-            shadowElevation = 8.dp,
+            shadowElevation = 12.dp,
         ) {
             SurfaceScope(dockLevel) {
                 Row(

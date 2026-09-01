@@ -106,7 +106,7 @@ private fun CacheItemFilterControls(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FlatFilterChip(
                 selected = filters.source == null,
                 onClick = { onFiltersChange(filters.copy(source = null)) },
@@ -127,7 +127,7 @@ private fun CacheItemFilterControls(
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun CacheKindFilters(filters: CacheItemFilters, onFiltersChange: (CacheItemFilters) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         FlatFilterChip(
             selected = filters.kind == null,
             onClick = { onFiltersChange(filters.copy(kind = null)) },

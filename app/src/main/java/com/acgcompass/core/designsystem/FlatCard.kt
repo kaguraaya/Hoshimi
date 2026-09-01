@@ -54,6 +54,15 @@ import androidx.compose.ui.unit.dp
  */
 object PrismCorner {
     val Badge = RoundedCornerShape(8.dp)
+
+    /** 行里的小缩略图（约 44dp）。 */
+    val Thumb = RoundedCornerShape(8.dp)
+
+    /** 卡片里的封面：与圆角 24、内边距 12 的卡片同心。 */
+    val Cover = RoundedCornerShape(12.dp)
+
+    /** 直接放在页面上的海报（网格、详情页头图）。 */
+    val Poster = RoundedCornerShape(16.dp)
     val Input = RoundedCornerShape(16.dp)
     val Segment = RoundedCornerShape(16.dp)
     val Block = RoundedCornerShape(20.dp)

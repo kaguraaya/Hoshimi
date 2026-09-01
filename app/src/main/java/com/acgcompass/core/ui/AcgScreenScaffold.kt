@@ -12,12 +12,20 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** 页面内容区统一内边距；各页在此基础上叠加 [PaddingValues]。 */
+/**
+ * 悬浮底栏占掉的高度。底栏是**叠在内容上面**的（不占布局空间，圆角外面能看到下面的内容），
+ * 所以可滚动内容要用这个值把底部内边距加大，最后一项才能滚到底栏上方。非顶层页面为 0。
+ */
+val LocalFloatingBarInset = compositionLocalOf { 0.dp }
+
 object ScreenContentPadding {
     /** 横向留白。 */
     val Horizontal: Dp = 16.dp
@@ -39,12 +47,18 @@ object ScreenContentPadding {
      * 底部留白：外层 Scaffold 已消费底部导航栏 / 手势条 inset，此处仅需小段呼吸间距，
      * 避免末项贴边；过大的固定值会导致滚动到底时出现明显空白。
      */
-    val Bottom: Dp = 28.dp
+    val Bottom: Dp
+        @Composable @ReadOnlyComposable
+        get() = BASE_BOTTOM + LocalFloatingBarInset.current
+
+    private val BASE_BOTTOM: Dp = 28.dp
 
     /**
      * 把 [AcgScreenScaffold] 下发的 [innerPadding]（已含标题栏高度）与统一留白合并，
      * 供 LazyColumn `contentPadding` 使用。
      */
+    @Composable
+    @ReadOnlyComposable
     fun lazyList(innerPadding: PaddingValues, extraBottom: Dp = 0.dp): PaddingValues = PaddingValues(
         start = Horizontal,
         end = Horizontal,

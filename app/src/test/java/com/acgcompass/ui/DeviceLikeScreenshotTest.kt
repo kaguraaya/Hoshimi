@@ -3,16 +3,19 @@ package com.acgcompass.ui
 import android.app.Application
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.GradientDrawable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.hasScrollToNodeAction
@@ -31,6 +34,7 @@ import com.acgcompass.app.navigation.TopLevelDestination
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.Cta
+import com.acgcompass.core.ui.LocalFloatingBarInset
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.cache.CachePolicy
 import com.acgcompass.domain.model.ImportItem
@@ -126,6 +130,9 @@ class DeviceLikeScreenshotTest {
     fun mineLight() {
         render(dark = false) { SampleMineWithDock() }
         shot("device-mine-light")
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("想看"))
+        settle()
+        shot("device-mine-light-scrolled")
     }
 
     @Test
@@ -273,33 +280,38 @@ private fun SampleHome() {
 /** 「我的」页 + 悬浮底栏：看成组的行、统计块和底栏在一起的效果。 */
 @Composable
 private fun SampleMineWithDock() {
-    Scaffold(
-        bottomBar = {
-            AcgBottomNavigation(currentDestination = TopLevelDestination.ENTRIES.last(), onSelect = {})
-        },
-    ) { padding ->
-        MineScreen(
-            state = UiState.Success(
-                MineUiState(
-                    stats = MineStats(
-                        watched = 312,
-                        watching = 6,
-                        wantToWatch = 42,
-                        onHold = 9,
-                        dropped = 17,
-                        averageRating = 7.4f,
-                        highestRating = 10f,
+    // 和应用里一样：底栏叠在内容上面，内容用 LocalFloatingBarInset 让出底部。
+    Box(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalFloatingBarInset provides DOCK_SPACE) {
+            MineScreen(
+                state = UiState.Success(
+                    MineUiState(
+                        stats = MineStats(
+                            watched = 312,
+                            watching = 6,
+                            wantToWatch = 42,
+                            onHold = 9,
+                            dropped = 17,
+                            averageRating = 7.4f,
+                            highestRating = 10f,
+                        ),
                     ),
                 ),
-            ),
-            onNavigateToSettings = {},
-            onOpenPrivacySettings = {},
-            onOpenTasteProfile = {},
-            onOpenAbout = {},
-            modifier = Modifier.padding(padding),
+                onNavigateToSettings = {},
+                onOpenPrivacySettings = {},
+                onOpenTasteProfile = {},
+                onOpenAbout = {},
+            )
+        }
+        AcgBottomNavigation(
+            currentDestination = TopLevelDestination.ENTRIES.last(),
+            onSelect = {},
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
 }
+
+private val DOCK_SPACE = 80.dp
 
 @Composable
 private fun SampleTonight() {

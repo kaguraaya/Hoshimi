@@ -31,7 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -545,7 +545,7 @@ private fun SearchHistorySection(
             Text("历史搜索", style = MaterialTheme.typography.titleSmall)
             TextButton(onClick = onClearHistory) { Text("清空") }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             history.forEach { item ->
                 androidx.compose.material3.InputChip(
                     selected = false,
@@ -821,11 +821,14 @@ private fun RankingSection(
         item(key = "scope_tabs") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Bangumi 排行榜（按真实排名）",
+                    text = "Bangumi 排行榜",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     RankingScope.entries.forEach { scope ->
                         FlatFilterChip(
                             selected = scope == rankingScope,
@@ -903,7 +906,7 @@ private fun RankingSection(
         // 榜单仅保留 Bangumi 真实排行（其他源榜单后续再加）。
         item(key = "rank_note") {
             Text(
-                text = "榜单基于 Bangumi 真实排名（排除未排名条目）。其他平台榜单后续接入。",
+                text = "按 Bangumi 的排名排序，尚未获得排名的条目不显示。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -994,7 +997,7 @@ private fun DivergenceBadge(level: DivergenceLevel) {
         style = MaterialTheme.typography.labelSmall,
         color = fg,
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(CircleShape)
             .background(bg)
             .padding(horizontal = 8.dp, vertical = 2.dp),
     )
@@ -1363,7 +1366,11 @@ private fun FilterGroup(title: String, content: @Composable FlowRowScope.() -> U
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
         )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content,
+        )
     }
 }
 

@@ -378,7 +378,10 @@ private fun InputSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     displayTags.forEach { tag ->
                         TonalFilterChip(tag, tag in input.selectedTags, onClick = { onToggleTag(tag) })
                     }
@@ -387,7 +390,10 @@ private fun InputSection(
         }
 
         FlatCard(title = "接受程度", icon = Icons.Outlined.Shield) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 AcceptanceOption.entries.forEach { option ->
                     TonalFilterChip(
                         option.label(),

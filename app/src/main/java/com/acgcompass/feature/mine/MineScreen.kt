@@ -297,7 +297,10 @@ private fun StatisticsCard(stats: MineStats) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 stats.commonTags.forEach { tag ->
                     FlatAssistChip(
                         onClick = {},

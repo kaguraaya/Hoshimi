@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,10 +16,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,6 +35,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.acgcompass.core.ui.LocalFloatingBarInset
 import com.acgcompass.feature.backlog.BacklogRoute
 import com.acgcompass.feature.cache.CacheItemCleanupScreen
 import com.acgcompass.feature.cache.CacheManagementScreen
@@ -98,6 +103,7 @@ fun AcgApp(
         }
     }
 
+    val showDock = TopLevelDestination.isTopLevelRoute(currentRoute)
     Scaffold(
         modifier = modifier.fillMaxSize(),
         // 统一 inset 单一来源模型。
@@ -105,26 +111,36 @@ fun AcgApp(
         // 把消费后的 inset 通过 innerPadding 下发，并用 consumeWindowInsets 标记已消费，
         // 使各页 TopAppBar / 内容统一用零 inset，不各自消费状态栏（各页各自消费状态栏时
         // 时机不一致，会导致首张卡片/封面贴顶或被裁切）。
-        bottomBar = {
-            if (TopLevelDestination.isTopLevelRoute(currentRoute)) {
+        // 底栏不放进 bottomBar 槽：那样 Scaffold 会给它留出一整条矩形空带，圆角外面看不到下面的内容。
+        // 而是叠在内容之上，按圆角轮廓遮挡；可滚动内容通过 LocalFloatingBarInset 加大底部内边距让出位置。
+        snackbarHost = {
+            SnackbarHost(snackbarHostState, Modifier.padding(bottom = if (showDock) DOCK_SPACE else 0.dp))
+        },
+    ) { innerPadding ->
+        Box(Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalFloatingBarInset provides if (showDock) DOCK_SPACE else 0.dp) {
+                AppNavHost(
+                    navController = navController,
+                    predictiveBackEnabled = predictiveBackEnabled,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .consumeWindowInsets(innerPadding),
+                )
+            }
+            if (showDock) {
                 AcgBottomNavigation(
                     currentDestination = currentTopLevel,
                     onSelect = { tab -> navController.navigateToTopLevel(tab) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { innerPadding ->
-        AppNavHost(
-            navController = navController,
-            predictiveBackEnabled = predictiveBackEnabled,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .consumeWindowInsets(innerPadding),
-        )
+        }
     }
 }
+
+/** 底栏高度 64 + 上下各 8 的留白。 */
+private val DOCK_SPACE = 80.dp
 
 /**
  * 应用 [NavHost]：声明五栏占位屏与嵌套路由（详情 / 设置 / 导入 / 推荐器 / 引导）。

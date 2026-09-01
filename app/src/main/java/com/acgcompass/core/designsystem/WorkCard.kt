@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.CardDefaults
@@ -159,7 +158,7 @@ private fun CoverImage(coverUrl: String?, contentDescription: String, modifier: 
     Box(
         modifier = modifier
             .size(width = 72.dp, height = 96.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(PrismCorner.Cover)
             .background(Surfaces.raisedColor),
         contentAlignment = Alignment.Center,
     ) {

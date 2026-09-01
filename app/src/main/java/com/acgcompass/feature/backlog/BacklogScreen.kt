@@ -25,7 +25,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Done
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -35,6 +40,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -63,8 +69,10 @@ import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.ui.AcgTopLevelTopBar
+import com.acgcompass.core.ui.LocalFloatingBarInset
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.model.MediaType
@@ -176,15 +184,25 @@ fun BacklogScreen(
                     // 多选仅在有内容时有意义。
                     if (!isEmpty) {
                         if (!selectionMode) {
-                            TextButton(onClick = onOpenDustMuseum) {
-                                Text("吃灰馆")
+                            IconButton(onClick = onOpenDustMuseum) {
+                                Icon(Icons.Outlined.Inventory2, contentDescription = "吃灰馆")
                             }
-                            TextButton(onClick = onToggleGridMode) {
-                                Text(if (gridMode) "列表" else "网格")
+                            IconButton(onClick = onToggleGridMode) {
+                                Icon(
+                                    imageVector = if (gridMode) {
+                                        Icons.AutoMirrored.Outlined.ViewList
+                                    } else {
+                                        Icons.Outlined.GridView
+                                    },
+                                    contentDescription = if (gridMode) "切换为列表" else "切换为网格",
+                                )
                             }
                         }
-                        TextButton(onClick = onToggleSelectionMode) {
-                            Text(if (selectionMode) "完成" else "多选")
+                        IconButton(onClick = onToggleSelectionMode) {
+                            Icon(
+                                imageVector = if (selectionMode) Icons.Outlined.Done else Icons.Outlined.Checklist,
+                                contentDescription = if (selectionMode) "完成多选" else "多选",
+                            )
                         }
                     }
                 },
@@ -328,7 +346,7 @@ private fun BacklogList(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxSize(),
                 // 外沿 16dp、列间距 12dp；header 全行项也内缩 16dp（与卡片对齐）。
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+                contentPadding = backlogListPadding(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -351,7 +369,7 @@ private fun BacklogList(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // 外沿 16dp；底部 96dp 保证末项不被底栏/手势条遮挡。header 与卡片同宽对齐。
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+                contentPadding = backlogListPadding(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (header != null) {
@@ -393,7 +411,7 @@ private fun BacklogGridItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp)),
+                .clip(PrismCorner.Poster),
             contentAlignment = Alignment.Center,
         ) {
             if (model.coverUrl != null) {
@@ -493,6 +511,11 @@ private fun BacklogEmptyState(onGoImport: () -> Unit, onGoSearch: () -> Unit) {
     }
 }
 
+/** 待补池列表的内边距：底部让出悬浮底栏。 */
+@Composable
+private fun backlogListPadding(): PaddingValues =
+    PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp + LocalFloatingBarInset.current)
+
 /** 批量操作工具栏。空选择时操作为无效（仓库侧忽略）。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -512,7 +535,10 @@ private fun BulkActionBar(selectedCount: Int, onBulk: (BulkOp) -> Unit) {
                 if (selectedCount == 0) "请选择要批量操作的作品" else "对选中的 $selectedCount 项执行：",
                 style = MaterialTheme.typography.labelMedium,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 BulkOp.entries.forEach { op ->
                     FlatAssistChip(
                         onClick = { onBulk(op) },
@@ -665,7 +691,7 @@ private fun FilterSortBar(
 
         // 优先级过滤。
         Text("优先级", style = MaterialTheme.typography.labelMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Priority.entries.forEach { priority ->
                 FlatFilterChip(
                     selected = priority in filter.priorities,
@@ -677,7 +703,7 @@ private fun FilterSortBar(
 
         // 媒介类型过滤。
         Text("类型", style = MaterialTheme.typography.labelMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // 音乐、真人和未知类型不作为待补池的可筛选媒介。
             MediaType.entries.filter { it != MediaType.OTHER }.forEach { mediaType ->
                 FlatFilterChip(
@@ -690,7 +716,7 @@ private fun FilterSortBar(
 
         // 完结状态 / 吃灰过滤。
         Text("吃灰状态", style = MaterialTheme.typography.labelMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             FlatFilterChip(
                 selected = filter.inDustMuseum == null,
                 onClick = { onToggleDustMuseumFilter(null) },
@@ -777,7 +803,10 @@ private fun EditPanel(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("优先级", style = MaterialTheme.typography.labelMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Priority.entries.forEach { priority ->
                     FlatFilterChip(
                         selected = card.item.priority == priority,
@@ -798,7 +827,10 @@ private fun EditPanel(
                 placeholder = { Text("写点想看的理由 / 提醒…") },
                 maxLines = 3,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 FilledTonalButton(onClick = { onSetNote(card.workId, noteDraft) }) {
                     Text("保存备注")
                 }

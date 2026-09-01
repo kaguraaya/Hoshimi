@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
@@ -46,6 +45,7 @@ import com.acgcompass.core.designsystem.AppSearchField
 import com.acgcompass.core.designsystem.AppSearchFieldState
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
@@ -207,7 +207,7 @@ private fun VisualNovelCard(item: VisualNovelListItem, onClick: () -> Unit) {
                 contentScale = ContentScale.Crop,
                 placeholder = ColorPainter(Surfaces.raisedColor),
                 error = ColorPainter(Surfaces.raisedColor),
-                modifier = Modifier.size(width = 84.dp, height = 116.dp).clip(RoundedCornerShape(8.dp)),
+                modifier = Modifier.size(width = 84.dp, height = 116.dp).clip(PrismCorner.Cover),
             )
             Spacer(Modifier.width(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

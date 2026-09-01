@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
@@ -60,8 +59,10 @@ import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.ui.StateScaffold
+import com.acgcompass.core.ui.copyOnLongPress
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelDetail
 import com.acgcompass.domain.visualnovel.VisualNovelImage
@@ -278,6 +279,8 @@ private fun HeaderSection(header: DetailHeader, modifier: Modifier = Modifier) {
                 text = header.title,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
+                // 长按复制标题：方便拿去别处搜索。
+                modifier = Modifier.copyOnLongPress(header.title),
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 header.infoRows.forEach { row -> InfoRow(row) }
@@ -320,7 +323,8 @@ private fun InfoRow(row: DetailInfoRow, modifier: Modifier = Modifier) {
             text = row.value,
             style = MaterialTheme.typography.bodyMedium,
             color = valueColor,
-            modifier = Modifier.weight(1f),
+            // 别名、原名、制作方这些也常被拿去搜索：同样长按复制。
+            modifier = Modifier.weight(1f).then(if (row.isMissing) Modifier else Modifier.copyOnLongPress(row.value)),
         )
     }
 }
@@ -333,7 +337,7 @@ private fun CoverImage(
     onClick: (() -> Unit)? = null,
     blurred: Boolean = false,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = PrismCorner.Poster
     Box(
         modifier = modifier
             .size(width = 108.dp, height = 144.dp)
@@ -615,7 +619,10 @@ private fun EditMyRecordDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text("状态", style = MaterialTheme.typography.labelMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     statuses.forEach { s ->
                         FlatFilterChip(
                             selected = status == s,

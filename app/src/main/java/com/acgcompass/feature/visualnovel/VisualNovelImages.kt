@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -27,6 +26,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.cache.ManagedMediaRecord
@@ -47,7 +47,7 @@ internal fun ManagedVisualNovelImage(
     var retryKey by remember(image.thumbnailUrl, image.url) { mutableIntStateOf(0) }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(PrismCorner.Cover)
             .clickable {
                 if (hidden) onReveal(image.url) else onOpen(image)
             },

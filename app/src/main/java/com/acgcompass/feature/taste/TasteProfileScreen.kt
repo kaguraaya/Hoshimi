@@ -629,7 +629,7 @@ private fun formatLastUpdated(millis: Long): String {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FlowRowChips(items: List<String>) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { FlatAssistChip(onClick = {}, label = { Text(cleanTagLabel(it)) }) }
     }
 }

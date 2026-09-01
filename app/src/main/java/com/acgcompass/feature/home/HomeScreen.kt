@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Search
@@ -379,7 +378,7 @@ private fun BroadcastScheduleRow(entry: BroadcastScheduleEntry, onClick: () -> U
             contentDescription = null,
             modifier = Modifier
                 .size(SCHEDULE_COVER)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(PrismCorner.Thumb)
                 .background(Surfaces.raisedColor),
             contentScale = ContentScale.Crop,
         )
