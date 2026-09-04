@@ -95,7 +95,7 @@ class TasteV4GuardTest : StringSpec({
     "证据量收缩：没有标签的作品回到中性附近，而不是被判成反口味" {
         val profile = build(samples(40) { community, i -> if (i % 2 == 0) 9 else (community).toInt() }, now)
         val untagged = compute(feature("untagged", emptyList(), score = null, votes = 0), profile)
-        untagged.score shouldBeInRange 45..55
+        untagged.tasteSimilarity shouldBeInRange 45..55
         untagged.evidence shouldBe 0.0
         // 同一画像下，标签齐全的作品证据量为 1，置信度更高。
         val tagged = compute(feature("tagged", listOf("奇幻" to 30, "冒险" to 20, "战斗" to 10), null, 0), profile)

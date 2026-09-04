@@ -17,6 +17,7 @@ import com.acgcompass.domain.model.Units
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.taste.AdvancedTasteProfile
 import com.acgcompass.domain.taste.TasteMatchResult
+import com.acgcompass.domain.taste.TasteVerdict
 import com.acgcompass.domain.usecase.AggregateRatingsUseCase
 import com.acgcompass.domain.usecase.PersonalTasteScorer
 import com.acgcompass.domain.visualnovel.VisualNovelDetail
@@ -888,22 +889,26 @@ private val personalTasteScorer = PersonalTasteScorer()
  */
 private fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
     val fraction = (score / 100f).coerceIn(0f, 1f)
-    val qualitative = when {
-        score >= 80 -> "与口味画像高度匹配"
-        score >= 65 -> "可能会喜欢"
-        score >= 45 -> "可能感觉一般"
-        else -> "可能不太喜欢"
-    }
+    // 已评分作品没有预计评分：主分数就是你打的分换算来的，措辞按主分数走（传及格线即不触发「不合口味」）。
+    val predicted = prediction?.rating ?: TasteVerdict.PASS_LINE.takeIf { isRated && fromRatingModel }
+    val qualitative = TasteVerdict.of(score, predicted)
     val lowConf = confidence < 0.4
     // 逐条呈现分维度贡献（含声优 / staff / 来源等，不再只压成一行），正/负向分色；取贡献绝对值最大的前几项。
     val reasonUis = reasons
         .sortedByDescending { kotlin.math.abs(it.contribution) }
         .take(4)
         .map { TasteMatchReasonUi(text = it.label, positive = it.contribution >= 0.0) }
-    val reasonCore = when {
-        reasonUis.any { it.positive } -> "综合你的长期口味给出（下方为主要依据）"
-        reasonUis.isNotEmpty() -> "主要是这些维度拉低了匹配（下方）"
-        else -> "与你的口味画像重合较少，仅供参考"
+    // 主分数来自预计评分；题材相似度只用一句话补充，不给第二个百分数。
+    val reasonCore = if (predicted != null) {
+        // 把百分数的含义说出来：它是预计评分在你自己打分历史里的位置。
+        val basis = if (isRated) "按你的评分" else "按预计评分"
+        "$basis，比你看过的 $score% 作品更合口味。" + TasteVerdict.familiarityNote(tasteSimilarity) + "（下方是题材依据）"
+    } else {
+        when {
+            reasonUis.any { it.positive } -> "综合你的长期口味给出（下方为主要依据）"
+            reasonUis.isNotEmpty() -> "主要是这些维度拉低了匹配（下方）"
+            else -> "与你的口味画像重合较少，仅供参考"
+        }
     }
     val ratedNote = if (isRated) "；你给这部评过分，已据此校准" else ""
     // 置信度独立成文案（不再塞进理由长句）。

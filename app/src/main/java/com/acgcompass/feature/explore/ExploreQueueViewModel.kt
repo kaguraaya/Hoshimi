@@ -201,19 +201,27 @@ class ExploreQueueViewModel @Inject constructor(
     private suspend fun enrichMissingMatches(expectedGeneration: Int) {
         val candidates = unscoredCandidates.take(BACKGROUND_ENRICH_LIMIT)
         val preparingCards = mutableListOf<ExploreCardUiModel>()
-        for ((position, work) in candidates.withIndex()) {
+        // 每次取一小组的标签再打分（仓库内部两路并发），凑够几张就先展示。
+        var position = 0
+        for (group in candidates.chunked(ENRICH_GROUP)) {
             if (generation != expectedGeneration) return
-            workFeatureRepository.ensureBasic(listOf(work.id), networkBudget = 1)
-            val match = tasteEngine.scoreBatch(listOf(work.id), networkBudget = 0)[work.id] ?: continue
+            workFeatureRepository.ensureBasic(group.map { it.id }, networkBudget = group.size)
+            val matches = tasteEngine.scoreBatch(group.map { it.id }, networkBudget = 0)
             if (generation != expectedGeneration) return
-            worksById[work.id] = work
-            rankerCandidates[work.id] = rankerCandidate(work, match)
-            acceptEnrichedCard(
-                position = position,
-                lastPosition = candidates.lastIndex,
-                newCard = work.toExploreCard(match),
-                preparingCards = preparingCards,
-            )
+            for (work in group) {
+                val match = matches[work.id]
+                if (match != null) {
+                    worksById[work.id] = work
+                    rankerCandidates[work.id] = rankerCandidate(work, match)
+                    acceptEnrichedCard(
+                        position = position,
+                        lastPosition = candidates.lastIndex,
+                        newCard = work.toExploreCard(match),
+                        preparingCards = preparingCards,
+                    )
+                }
+                position++
+            }
         }
         finalizePreparingCards(preparingCards)
     }
@@ -344,6 +352,7 @@ class ExploreQueueViewModel @Inject constructor(
         const val BATCH_SIZE = 10
         const val BACKGROUND_ENRICH_LIMIT = 20
         const val MIN_READY_CARDS = 3
+        const val ENRICH_GROUP = 4
         const val EXPLORE_CONTEXT = "explore"
         const val PERCENT = 100
         private const val DAY_MS = 24L * 60 * 60 * 1000

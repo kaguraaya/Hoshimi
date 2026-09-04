@@ -5,6 +5,7 @@ import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.displayTitle
 import com.acgcompass.domain.taste.TasteCategory
 import com.acgcompass.domain.taste.TasteMatchResult
+import com.acgcompass.domain.taste.TasteVerdict
 
 /**
  * 探索队列 UI 契约。
@@ -73,15 +74,7 @@ internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = f
         meta = parts.joinToString(" · "),
         tastePercent = score?.let { "$it%" } ?: "—",
         tasteFraction = (score ?: 0) / 100f,
-        tasteQualitative = when {
-            score == null -> "探索推荐"
-            score >= 80 -> "与口味画像高度匹配"
-            score >= 65 -> "可能会喜欢"
-            // 题材不在常看范围、但预计评分不低：别用「感觉一般」误导（匹配度说的是题材，不是好不好看）。
-            match.satisfaction >= SATISFIED_THRESHOLD -> "题材不常看，但预计会满意"
-            score >= 45 -> "可能感觉一般"
-            else -> "可以试试看"
-        },
+        tasteQualitative = if (score == null) "探索推荐" else TasteVerdict.of(score, match.prediction?.rating),
         reason = reason,
         tags = tags.take(5).map { it.name },
         synopsis = summary?.trim()?.takeIf { it.isNotBlank() },
@@ -113,7 +106,6 @@ private fun exploreReason(match: TasteMatchResult?, discovery: Boolean): String 
 }
 
 private const val MAX_REASON_LABELS = 3
-private const val SATISFIED_THRESHOLD = 65
 
 private fun mediaTypeLabel(t: MediaType): String = when (t) {
     MediaType.ANIME -> "动画"

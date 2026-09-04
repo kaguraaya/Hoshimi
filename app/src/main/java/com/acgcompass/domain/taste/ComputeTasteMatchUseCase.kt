@@ -37,6 +37,13 @@ data class TasteMatchResult(
     /** 社区融合之前的纯画像分（5–95）；已评分作品与 [score] 相同。用于解释「口味本身怎么看」与离线评测。 */
     val profileScore: Int = score,
     /**
+     * 题材相似度：12 维画像给出的「像不像你常看、常给高分的类型」（旧的匹配分）。
+     * 它不回答「你会不会喜欢」，只作为主分数旁边的补充说明。
+     */
+    val tasteSimilarity: Int = score,
+    /** 主分数是否来自评分模型（评分足够多时为 true）；为 false 时主分数仍是旧的画像匹配分。 */
+    val fromRatingModel: Boolean = false,
+    /**
      * 预计满意度（5–95，[TasteScoringParams.satisfactionScore]）：看完大概会有多满意。推荐排序用它；
      * 已评分作品与 [score] 相同（都由显式评分锚定）。
      */
@@ -85,6 +92,8 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         profile: AdvancedTasteProfile,
         userRating: Int? = null,
         tagOverrides: Map<String, TasteCategory> = emptyMap(),
+        /** 批量排序时为 false：「题材相近的已评分作品」只在详情页用，批量算它是白花时间。 */
+        withNeighbors: Boolean = true,
     ): TasteMatchResult {
         val rating = userRating ?: profile.ratedSubjectScores[feature.subjectId]
         val isRated = rating != null
@@ -122,11 +131,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         }
 
         // 已评分作品的分数由显式评分锚定，置信度不受候选标签多少影响。
-        val evidenceFactor = if (isRated) {
-            1.0
-        } else {
-            CONFIDENCE_EVIDENCE_FLOOR + (1.0 - CONFIDENCE_EVIDENCE_FLOOR) * evidence
-        }
+        val evidenceFactor = if (isRated) 1.0 else evidenceConfidence(evidence, CONFIDENCE_EVIDENCE_FLOOR)
         val confidence = evidenceFactor * TasteScoringParams.confidence(
             realSampleCount = profile.sampleCount,
             tagCoverage = profile.coverage.tag,
@@ -136,12 +141,17 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         )
 
         val prediction = profile.divergence?.predict(feature)
+        val likeability = likeabilityOf(profile.divergence, rating, prediction)
+        val satisfaction = likeability
+            ?: fallbackSatisfaction(isRated, score, feature, profile, rawZ, evidence, prediction)
         return TasteMatchResult(
             profileScore = finalScore(p),
-            satisfaction = if (isRated) score else satisfaction(feature, profile, rawZ, evidence, prediction),
+            tasteSimilarity = score,
+            fromRatingModel = likeability != null,
+            satisfaction = satisfaction,
             prediction = prediction,
-            similarRated = profile.divergence?.nearestRated(feature, SIMILAR_RATED_LIMIT).orEmpty(),
-            score = score,
+            similarRated = neighborsOf(profile, feature, withNeighbors),
+            score = likeability ?: score,
             confidence = confidence,
             rawZ = rawZ,
             probability = p,
@@ -159,6 +169,30 @@ class ComputeTasteMatchUseCase @Inject constructor() {
      * 预计评分等于你的均分 → 50，高一个标准差 → 约 77。没有模型（样本太少）时退回
      * 「社区 + 画像」的 [TasteScoringParams.satisfactionScore]。
      */
+    /**
+     * 主分数跟着评分走：已评分用你打的分，未评分用预计评分，都换算成它在你打分历史里的位置。
+     * 这样主分数和「预计你会打几分」永远同向；旧的画像匹配分保留在 tasteSimilarity 里作补充说明。
+     */
+    private fun likeabilityOf(model: PersonalDivergenceModel?, rating: Int?, prediction: RatingPrediction?): Int? {
+        val basis = rating?.toDouble() ?: prediction?.rating
+        return if (model == null || basis == null) null else model.likeability(basis)
+    }
+
+    /** 评分太少、建不了评分模型时的满意度：已评分取匹配分，未评分用社区 + 画像的旧口径。 */
+    @Suppress("LongParameterList") // 旧口径需要的全部输入，逐个传入比打包成对象更直白
+    private fun fallbackSatisfaction(
+        isRated: Boolean,
+        score: Int,
+        feature: WorkFeature,
+        profile: AdvancedTasteProfile,
+        rawZ: Double,
+        evidence: Double,
+        prediction: RatingPrediction?,
+    ): Int = if (isRated) score else satisfaction(feature, profile, rawZ, evidence, prediction)
+
+    private fun neighborsOf(profile: AdvancedTasteProfile, feature: WorkFeature, enabled: Boolean): List<RatedExample> =
+        if (enabled) profile.divergence?.nearestRated(feature, SIMILAR_RATED_LIMIT).orEmpty() else emptyList()
+
     private fun satisfaction(
         feature: WorkFeature,
         profile: AdvancedTasteProfile,
@@ -283,3 +317,6 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         )
     }
 }
+
+/** 候选证据量对置信度的折扣：没有证据时保留 [floor]，证据齐全时不打折。 */
+private fun evidenceConfidence(evidence: Double, floor: Double): Double = floor + (1.0 - floor) * evidence

@@ -21,12 +21,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -69,25 +69,40 @@ class TasteProfileAutoUpdater @Inject constructor(
     @OptIn(FlowPreview::class)
     fun start(scope: CoroutineScope) {
         applicationScope = scope
-        combine(userCollectionDao.observeAll(), backlogDao.observeAll()) { collections, backlog ->
-            val priorityIds = priorityFeatureIds(collections, backlog.map { it.workId })
-            Triple(inputFingerprint(collections, priorityIds), collections, priorityIds)
-        }
+        // 画像只由个人收藏（评分 / 状态 / 短评 / 标签）决定：指纹只看这些。
+        // 待补池的增减不改变画像
+        userCollectionDao.observeAll()
+            .map { collections -> inputFingerprint(collections) to collections }
             .debounce(DEBOUNCE_MS)
             .distinctUntilChanged { old, new -> old.first == new.first }
-            .onEach { (fingerprint, collections, priorityIds) ->
-                recompute(fingerprint, collections, priorityIds, force = false)
+            .onEach { (fingerprint, collections) ->
+                recompute(fingerprint, collections, tasteFeatureIds(collections), force = false)
             }
             .flowOn(dispatchers.io)
             .launchIn(scope)
+        // 待补池新加的作品只需要把标签补回来（详情 / 推荐里好出分），安静地在后台做，不动画像。
+        backlogDao.observeAll()
+            .map { backlog -> backlog.map { it.workId }.filter { it.toIntOrNull() != null }.distinct().sorted() }
+            .debounce(DEBOUNCE_MS)
+            .distinctUntilChanged()
+            .onEach { ids -> prefetchMissingFeatures(ids) }
+            .flowOn(dispatchers.io)
+            .launchIn(scope)
+    }
+
+    /** 后台补齐缺标签的作品，失败就算了（下次再试）；不写任务状态，界面上不会显示「正在分析」。 */
+    private suspend fun prefetchMissingFeatures(ids: List<String>) {
+        if (ids.isEmpty()) return
+        runCatching {
+            workFeatureRepository.ensureBasic(ids, networkBudget = PREFETCH_BUDGET, background = true)
+        }
     }
 
     /** 校验个人输入指纹，仅在输入或特征稳定性发生变化时重建。 */
     suspend fun ensureCurrent(): Boolean {
         val collections = userCollectionDao.getAll()
         if (collections.isEmpty()) return false
-        val priorityIds = priorityFeatureIds(collections, backlogDao.getAll().map { it.workId })
-        return recompute(inputFingerprint(collections, priorityIds), collections, priorityIds, force = false)
+        return recompute(inputFingerprint(collections), collections, tasteFeatureIds(collections), force = false)
     }
 
     /** 手动刷新与自动更新共用同一个互斥任务。 */
@@ -104,8 +119,7 @@ class TasteProfileAutoUpdater @Inject constructor(
     private suspend fun refreshNowInCurrentScope(): Boolean {
         val collections = userCollectionDao.getAll()
         if (collections.isEmpty()) return false
-        val priorityIds = priorityFeatureIds(collections, backlogDao.getAll().map { it.workId })
-        return recompute(inputFingerprint(collections, priorityIds), collections, priorityIds, force = true)
+        return recompute(inputFingerprint(collections), collections, tasteFeatureIds(collections), force = true)
     }
 
     private suspend fun recompute(
@@ -114,19 +128,21 @@ class TasteProfileAutoUpdater @Inject constructor(
         priorityIds: List<String>,
         force: Boolean,
     ): Boolean = updateMutex.withLock {
-        val stableFeatures = workFeatureRepository.hasStableBasicFeatures(priorityIds)
         val previousTask = taskStateDao.get(TASK_KEY)
         val interruptedTask = previousTask?.phase == "COLLECTING" || previousTask?.phase == "BUILDING"
         val savedFingerprintMatches = settingsDataStore.tasteProfileInputFingerprint.first() == fingerprint
-        val canReuse = stableFeatures && savedFingerprintMatches && !interruptedTask
-        if (!force && canReuse) {
+        // 输入没变就不重建；个别作品缺标签不触发重建（缺的在后台补）。
+        if (!force && savedFingerprintMatches && !interruptedTask) {
             if (tasteEngine.currentProfile == null) runCatching { tasteEngine.rebuildFromCache() }
+            prefetchMissingFeatures(priorityIds)
             return@withLock false
         }
-        val basicCollection = collectBasicFeatures(fingerprint, priorityIds)
+        // 自动触发的重建走后台优先级；用户手动点的「重新分析」才用前台优先级抢时间。
+        val basicCollection = collectBasicFeatures(fingerprint, priorityIds, background = !force)
         val basicFeatures = basicCollection.features
-        if (!basicFeatures.keys.containsAll(priorityIds)) {
-            persistFailure(fingerprint, priorityIds.size, "部分个人作品的基础标签尚未补齐")
+        // 个别作品取不到标签时不让整次分析失败：用取到的部分建画像，缺的以后在后台补。
+        if (basicFeatures.isEmpty() && priorityIds.isNotEmpty()) {
+            persistFailure(fingerprint, priorityIds.size, "个人作品的基础标签暂时取不到，稍后会自动重试")
             return@withLock false
         }
         persistBuildingState(basicCollection.state, priorityIds.size)
@@ -151,7 +167,11 @@ class TasteProfileAutoUpdater @Inject constructor(
         true
     }
 
-    private suspend fun collectBasicFeatures(fingerprint: String, priorityIds: List<String>): BasicFeatureCollection {
+    private suspend fun collectBasicFeatures(
+        fingerprint: String,
+        priorityIds: List<String>,
+        background: Boolean,
+    ): BasicFeatureCollection {
         val now = System.currentTimeMillis()
         val previous = taskStateDao.get(TASK_KEY)
         val state = newTaskState(fingerprint, priorityIds.size, now).copy(completedAt = previous?.completedAt)
@@ -160,7 +180,11 @@ class TasteProfileAutoUpdater @Inject constructor(
         var lastPersistedProgress = 0
         val progressStep = max(1, priorityIds.size / MAX_PROGRESS_UPDATES)
         val features = try {
-            workFeatureRepository.ensureBasic(priorityIds, networkBudget = priorityIds.size) { done, total ->
+            workFeatureRepository.ensureBasic(
+                priorityIds,
+                networkBudget = priorityIds.size,
+                background = background,
+            ) { done, total ->
                 progressMutex.withLock {
                     if (done < total && done - lastPersistedProgress < progressStep) return@withLock
                     if (done <= lastPersistedProgress) return@withLock
@@ -213,6 +237,9 @@ class TasteProfileAutoUpdater @Inject constructor(
         const val DEBOUNCE_MS = 1_500L
         const val TASK_KEY = "local_taste_analysis"
         const val RETRY_DELAY_MS = 15L * 60L * 1_000L
+
+        /** 一次后台补标签最多发多少个请求：够补新加的几部，又不会长时间占着限流额度。 */
+        const val PREFETCH_BUDGET = 40
         const val MAX_PROGRESS_UPDATES = 100
     }
 
@@ -275,28 +302,18 @@ class TasteProfileAutoUpdater @Inject constructor(
         val state: BackgroundTaskStateEntity,
     )
 
-    private fun priorityFeatureIds(
+    /** 参与画像的作品 id（只取能映射到 Bangumi 条目的）。 */
+    private fun tasteFeatureIds(
         collections: List<com.acgcompass.data.local.entity.UserCollectionEntity>,
-        backlogIds: List<String>,
-    ): List<String> = (collections.map { it.sourceItemId.ifBlank { it.localWorkId } } + backlogIds)
-        .asSequence()
+    ): List<String> = collections.asSequence()
+        .map { it.sourceItemId.ifBlank { it.localWorkId } }
         .filter { it.toIntOrNull() != null }
         .distinct()
         .sorted()
         .toList()
 
-    private fun inputFingerprint(
-        collections: List<com.acgcompass.data.local.entity.UserCollectionEntity>,
-        priorityIds: List<String>,
-    ): String = java.security.MessageDigest.getInstance("SHA-256")
-        .digest(
-            buildString {
-                append(collections.toTasteInputFingerprint())
-                append('\n')
-                priorityIds.forEach { append("backlog:").append(it).append('\n') }
-            }.toByteArray(Charsets.UTF_8),
-        )
-        .joinToString("") { "%02x".format(it) }
+    private fun inputFingerprint(collections: List<com.acgcompass.data.local.entity.UserCollectionEntity>): String =
+        collections.toTasteInputFingerprint()
 }
 
 internal fun mergeTasteInputTags(personalTags: List<String>, feature: WorkFeature?): List<String> =

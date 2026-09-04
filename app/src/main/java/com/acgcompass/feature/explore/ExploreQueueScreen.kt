@@ -517,7 +517,7 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
                     card.tastePercent,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             Spacer(Modifier.height(8.dp))

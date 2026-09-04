@@ -411,7 +411,7 @@ private fun PlatformRatingRow(rating: PlatformRatingUiModel, modifier: Modifier 
                     text = rating.scoreText.orEmpty(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 val voteText = rating.voteText
                 if (voteText != null) {
@@ -783,7 +783,7 @@ private fun DecisionSection(
                         text = "优先级：${decision.priorityLevel}",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                     decision.priorityReason?.let {
                         Text(
@@ -886,7 +886,7 @@ private fun TasteMatchBlock(
                     text = aiMatch.matchPercentText,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             LinearProgressIndicator(progress = { aiMatch.fraction }, modifier = Modifier.fillMaxWidth())
@@ -920,7 +920,7 @@ private fun TasteMatchBlock(
                             text = tasteMatch.percentText,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                     LinearProgressIndicator(
@@ -1634,7 +1634,8 @@ private fun PredictionStat(label: String, value: String, emphasized: Boolean = f
             text = value,
             style = if (emphasized) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = if (emphasized) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            // 数值一律正文色：颜色只表示状态（选中 / 开启 / 出错），不用来强调数字。
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

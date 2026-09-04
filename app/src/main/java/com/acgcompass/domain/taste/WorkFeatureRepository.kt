@@ -20,6 +20,8 @@ interface WorkFeatureRepository {
     suspend fun ensureBasic(
         subjectIds: List<String>,
         networkBudget: Int,
+        /** 后台补齐时为 true：请求走后台优先级，不和用户正在等的详情 / 搜索抢限流额度。 */
+        background: Boolean = false,
         onProgress: (suspend (done: Int, total: Int) -> Unit)? = null,
     ): Map<String, WorkFeature>
 

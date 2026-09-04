@@ -22,6 +22,9 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -325,8 +328,13 @@ class TasteEngine @Inject constructor(
     }.distinctUntilChanged()
 
     /**
-     * 批量评分（今晚看什么召回后精排用）：对 [subjectIds] 在 [networkBudget] 限额内补齐特征后逐一打分。
-     * 画像不可用时返回空表（调用方回退旧打分）。仅返回成功取到特征者，键为 subjectId。
+     * 批量评分（今晚看什么召回、探索队列组批用）：对 [subjectIds] 在 [networkBudget] 限额内补齐特征后逐一打分。
+     * 画像不可用时返回空表。仅返回取到特征者，键为 subjectId。
+     *
+     * 提速而不改结果：
+     * - 结果按「画像 + 标签覆盖表」记忆：画像没重建、覆盖表没变时，同一部作品不重复算（再次进探索队列几乎瞬间出结果）；
+     * - 没算过的分块并行计算（纯函数，结果与串行完全一致）；
+     * - 不算「题材相近的已评分作品」（只有详情页用）。
      */
     suspend fun scoreBatch(subjectIds: List<String>, networkBudget: Int = 0): Map<String, TasteMatchResult> =
         withContext(dispatchers.io) {
@@ -337,13 +345,45 @@ class TasteEngine @Inject constructor(
                 workFeatureRepository.getFeatures(subjectIds.distinct(), networkBudget)
             }.getOrDefault(emptyMap())
             val tagOverrides = loadTagOverrides()
-            features.mapValues { (_, f) -> computeMatch(f, profile, null, tagOverrides) }
+            val memo = batchMemoFor(profile, tagOverrides)
+            val todo = features.filterKeys { !memo.containsKey(it) }
+            if (todo.isNotEmpty()) {
+                val chunkSize = (todo.size / PARALLEL_CHUNKS + 1).coerceAtLeast(MIN_CHUNK)
+                coroutineScope {
+                    todo.entries.chunked(chunkSize).map { chunk ->
+                        async(dispatchers.default) {
+                            chunk.forEach { (id, f) ->
+                                memo[id] = computeMatch(f, profile, null, tagOverrides, withNeighbors = false)
+                            }
+                        }
+                    }.awaitAll()
+                }
+            }
+            features.keys.mapNotNull { id -> memo[id]?.let { id to it } }.toMap()
         }
 
-    /**
-     * 只读本地缓存的作品特征（不联网）。「今晚看什么」用其中的标签标注人数判断标签代表性；
-     * 未缓存的作品不在返回表里（调用方退回只看标签顺序）。
-     */
+    private class BatchMemo(
+        val profile: AdvancedTasteProfile,
+        val overridesHash: Int,
+        val results: java.util.concurrent.ConcurrentHashMap<String, TasteMatchResult> =
+            java.util.concurrent.ConcurrentHashMap(),
+    )
+
+    @Volatile
+    private var batchMemo: BatchMemo? = null
+
+    /** 画像或标签覆盖表变了就换一张新表；条目过多时清空，避免长期占内存。 */
+    private fun batchMemoFor(
+        profile: AdvancedTasteProfile,
+        overrides: Map<String, TasteCategory>,
+    ): java.util.concurrent.ConcurrentHashMap<String, TasteMatchResult> {
+        val hash = overrides.hashCode()
+        val current = batchMemo
+        val sameInputs = current != null && current.profile === profile && current.overridesHash == hash
+        if (sameInputs && current!!.results.size < BATCH_MEMO_LIMIT) return current.results
+        return BatchMemo(profile, hash).also { batchMemo = it }.results
+    }
+
     suspend fun cachedFeatures(subjectIds: List<String>): Map<String, WorkFeature> = withContext(dispatchers.io) {
         if (subjectIds.isEmpty()) {
             emptyMap()
@@ -390,6 +430,13 @@ class TasteEngine @Inject constructor(
 
         /** 详情页作品特征首次获取失败后的重试间隔。 */
         val FEATURE_RETRY_DELAYS_MS = longArrayOf(2_000L, 6_000L, 15_000L)
+
+        /** 批量评分分成约这么多块并行（手机一般 4–8 核）。 */
+        const val PARALLEL_CHUNKS = 4
+        const val MIN_CHUNK = 32
+
+        /** 批量评分记忆表的上限：超过就整表换新。 */
+        const val BATCH_MEMO_LIMIT = 6_000
 
         /** 隐式信号回看窗口：半年前的滑动代表不了现在的兴趣。 */
         const val IMPLICIT_WINDOW_MS = 180L * 24 * 60 * 60 * 1000

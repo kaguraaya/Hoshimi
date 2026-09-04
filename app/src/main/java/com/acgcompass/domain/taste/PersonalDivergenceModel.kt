@@ -2,6 +2,7 @@ package com.acgcompass.domain.taste
 
 import com.acgcompass.domain.recommend.RecommendSimilarity
 import kotlin.math.ln
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /** 一条分歧归因：某个因素让预计评分比「大众水准」高 / 低了多少分（10 分制）。 */
@@ -89,6 +90,8 @@ class PersonalDivergenceModel private constructor(
     val residualStd: Double,
     /** 你的评分的标准差（把预计评分换算成相对你自己尺度的高低时用）。 */
     val ratingStd: Double,
+    /** 你打过的全部分数（升序）：把预计评分换算成「超过你看过的百分之多少」时用。 */
+    private val sortedRatings: DoubleArray,
     val sampleCount: Int,
     private val examples: List<Pair<RatedExample, Map<String, Double>>>,
 ) {
@@ -114,6 +117,20 @@ class PersonalDivergenceModel private constructor(
         val sorted = examples.map { it.first }.sortedByDescending { it.divergence }
         return sorted.take(limit).filter { it.divergence >= MIN_NOTABLE_DIVERGENCE } to
             sorted.takeLast(limit).reversed().filter { it.divergence <= -MIN_NOTABLE_DIVERGENCE }
+    }
+
+    /**
+     * 喜欢度：[rating] 落在你自己打分历史里的位置，0–100（超过你看过的百分之多少）。
+     *
+     * 评分是整数，直接数「低于它的占比」会在整数点上跳变；这里把每个历史评分当成铺在
+     * [r − 0.5, r + 0.5] 上，得到一条平滑、单调的曲线——预计 7.4 和 7.6 不会差出一大截。
+     * 两端收在 [LIKEABILITY_MIN]–[LIKEABILITY_MAX]：预测不该给出 0% 或 100% 这种绝对的说法。
+     */
+    fun likeability(rating: Double): Int {
+        if (sortedRatings.isEmpty()) return LIKEABILITY_NEUTRAL
+        val below = sortedRatings.sumOf { r -> (rating - (r - HALF_STEP)).coerceIn(0.0, 1.0) }
+        val percent = (PERCENT * below / sortedRatings.size).roundToInt()
+        return percent.coerceIn(LIKEABILITY_MIN, LIKEABILITY_MAX)
     }
 
     /** 大众基线：只看社区评分时，预计你会打几分。无社区评分时取你的均分。 */
@@ -201,6 +218,11 @@ class PersonalDivergenceModel private constructor(
     companion object {
         /** 拟合所需的最少样本（带社区评分的已评分作品）。不足时不建模，调用方退回社区 + 画像口径。 */
         const val MIN_SAMPLES: Int = 8
+        const val LIKEABILITY_MIN: Int = 3
+        const val LIKEABILITY_MAX: Int = 97
+        private const val LIKEABILITY_NEUTRAL: Int = 50
+        private const val HALF_STEP: Double = 0.5
+        private const val PERCENT: Double = 100.0
 
         /** 参与拟合的样本上限（取最近的）；核矩阵 n×n，300 以内在手机上是毫秒级。 */
         const val MAX_SAMPLES: Int = 300
@@ -348,6 +370,7 @@ class PersonalDivergenceModel private constructor(
                     axisWeights = axisRidge(rated, residual),
                     residualStd = sqrt(residual.sumOf { it * it } / n),
                     ratingStd = sqrt(ratings.sumOf { (it - meanR) * (it - meanR) } / n).coerceAtLeast(MIN_RATING_STD),
+                    sortedRatings = ratings.sortedArray(),
                     sampleCount = n,
                     examples = rated.indices.map { i ->
                         RatedExample(rated[i].subjectId, rated[i].rating!!, meanR + slope * (community[i] - meanC)) to

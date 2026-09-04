@@ -61,8 +61,10 @@ class WorkFeatureRepositoryImpl @Inject constructor(
     override suspend fun ensureBasic(
         subjectIds: List<String>,
         networkBudget: Int,
+        background: Boolean,
         onProgress: (suspend (done: Int, total: Int) -> Unit)?,
     ): Map<String, WorkFeature> = withContext(dispatchers.io) {
+        val priority = if (background) RequestPriority.BACKGROUND else RequestPriority.FOREGROUND
         val ids = subjectIds.filter(String::isNotBlank).distinct()
         if (ids.isEmpty()) return@withContext emptyMap()
         val cached = ids.chunked(900).flatMap { workFeatureDao.getByIds(it) }.associateBy { it.subjectId }
@@ -95,7 +97,7 @@ class WorkFeatureRepositoryImpl @Inject constructor(
                 missing.map { (numericId, id) ->
                     async {
                         gate.withPermit {
-                            fetchBasicAndCache(numericId, id)?.let { resolved[id] = it }
+                            fetchBasicAndCache(numericId, id, priority)?.let { resolved[id] = it }
                             tick()
                         }
                     }
@@ -238,8 +240,12 @@ class WorkFeatureRepositoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun fetchBasicAndCache(sid: Int, key: String): WorkFeature? {
-        val dto = (bangumi.getSubjectDto(sid, RequestPriority.FOREGROUND) as? AppResult.Success)?.data
+    private suspend fun fetchBasicAndCache(
+        sid: Int,
+        key: String,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): WorkFeature? {
+        val dto = (bangumi.getSubjectDto(sid, priority) as? AppResult.Success)?.data
             ?: return null
         val entity = dto.toFeatureEntity(key, emptyList(), emptyList(), emptyList()).copy(
             extendedDataUpdatedAt = null,
