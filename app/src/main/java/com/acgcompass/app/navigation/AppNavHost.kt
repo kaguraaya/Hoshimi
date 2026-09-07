@@ -36,6 +36,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.acgcompass.core.ui.LocalFloatingBarInset
+import com.acgcompass.core.ui.withoutTop
 import com.acgcompass.feature.backlog.BacklogRoute
 import com.acgcompass.feature.cache.CacheItemCleanupScreen
 import com.acgcompass.feature.cache.CacheManagementScreen
@@ -122,10 +123,11 @@ fun AcgApp(
                 AppNavHost(
                     navController = navController,
                     predictiveBackEnabled = predictiveBackEnabled,
+                    // 只替页面让出底部（导航条）；状态栏交给各页顶栏自己包住，模糊顶栏才能延伸到屏幕顶端。
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding)
-                        .consumeWindowInsets(innerPadding),
+                        .padding(innerPadding.withoutTop())
+                        .consumeWindowInsets(innerPadding.withoutTop()),
                 )
             }
             if (showDock) {

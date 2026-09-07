@@ -6,6 +6,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.acgcompass.domain.model.ThemePreset
 
 /**
@@ -196,68 +197,68 @@ internal val DarkColors = darkColorScheme(
     surfaceContainerHighest = md_dark_surfaceContainerHighest,
 )
 
-/** 动态取色关闭时按浅/深模式选择的高对比度预设。 */
-@Suppress("MagicNumber", "LongMethod") // ARGB literals are the named, contrast-checked theme tokens.
+/**
+ * 由预设的种子色生成配色（照 FlClash 的 vivid 风格：主色就是所选颜色，表面近灰）。
+ *
+ * - 浅色：主色保留种子色的色相，明度夹在 35–48，白字在上面对比度不低于 4.5；
+ * - 深色：明度提 3 再夹在 62–80，配深色文字（同色相、明度 10）；
+ * - 表面取种子色的色相、极低彩度，交给 [prismColorScheme] 做层级；主色容器同样由它按主色换算。
+ */
 internal fun presetColorScheme(preset: ThemePreset, dark: Boolean): ColorScheme {
     val base = if (dark) DarkColors else LightColors
-    return when (preset) {
-        ThemePreset.OCEAN -> base
-        ThemePreset.SAKURA -> if (dark) {
-            base.copy(
-                primary = Color(0xFFFFB1C8),
-                surfaceTint = Color(0xFFFFB1C8),
-                onPrimary = Color(0xFF53152F),
-                primaryContainer = Color(0xFF6E2943),
-                onPrimaryContainer = Color(0xFFFFD9E5),
-                inversePrimary = Color(0xFF8A3A5B),
-            )
-        } else {
-            base.copy(
-                primary = Color(0xFF8A3A5B),
-                surfaceTint = Color(0xFF8A3A5B),
-                onPrimary = Color.White,
-                primaryContainer = Color(0xFFFFD9E5),
-                onPrimaryContainer = Color(0xFF3A071E),
-                inversePrimary = Color(0xFFFFB1C8),
-            )
-        }
-        ThemePreset.FOREST -> if (dark) {
-            base.copy(
-                primary = Color(0xFF9CD596),
-                surfaceTint = Color(0xFF9CD596),
-                onPrimary = Color(0xFF00390A),
-                primaryContainer = Color(0xFF1D511F),
-                onPrimaryContainer = Color(0xFFB7F2AF),
-                inversePrimary = Color(0xFF356A35),
-            )
-        } else {
-            base.copy(
-                primary = Color(0xFF356A35),
-                surfaceTint = Color(0xFF356A35),
-                onPrimary = Color.White,
-                primaryContainer = Color(0xFFB7F2AF),
-                onPrimaryContainer = Color(0xFF002204),
-                inversePrimary = Color(0xFF9CD596),
-            )
-        }
-        ThemePreset.AMBER -> if (dark) {
-            base.copy(
-                primary = Color(0xFFEBC248),
-                surfaceTint = Color(0xFFEBC248),
-                onPrimary = Color(0xFF3E2E00),
-                primaryContainer = Color(0xFF594400),
-                onPrimaryContainer = Color(0xFFFFE08A),
-                inversePrimary = Color(0xFF765A00),
-            )
-        } else {
-            base.copy(
-                primary = Color(0xFF765A00),
-                surfaceTint = Color(0xFF765A00),
-                onPrimary = Color.White,
-                primaryContainer = Color(0xFFFFE08A),
-                onPrimaryContainer = Color(0xFF241A00),
-                inversePrimary = Color(0xFFEBC248),
-            )
-        }
+    val seed = Color(preset.seed)
+    val seedTone = toneOf(seed)
+    val onPrimary = if (dark) withTone(seed, ON_DARK_PRIMARY_TONE, SEED_CHROMA) else Color.White
+    val startTone = if (dark) {
+        (seedTone + DARK_LIFT).coerceIn(DARK_MIN_TONE, DARK_MAX_TONE)
+    } else {
+        seedTone.coerceIn(LIGHT_MIN_TONE, LIGHT_MAX_TONE)
     }
+    // 饱和色超出 sRGB 色域会被截断、实际亮度偏离设定明度：实测对比度，不够就往远离文字的方向逐级调。
+    val primary = readableTone(seed, startTone, onPrimary, step = if (dark) 1.0 else -1.0)
+    val inverse = if (dark) {
+        withTone(seed, seedTone.coerceIn(LIGHT_MIN_TONE, LIGHT_MAX_TONE), SEED_CHROMA)
+    } else {
+        withTone(seed, (seedTone + DARK_LIFT).coerceIn(DARK_MIN_TONE, DARK_MAX_TONE), SEED_CHROMA)
+    }
+    return base.copy(
+        primary = primary,
+        onPrimary = onPrimary,
+        surfaceTint = primary,
+        inversePrimary = inverse,
+        // 表面带一点种子色的色相（彩度由 prismColorScheme 压到近灰）。
+        surface = withTone(seed, toneOf(base.surface), SURFACE_HUE_CHROMA),
+        background = withTone(seed, toneOf(base.background), SURFACE_HUE_CHROMA),
+    )
 }
+
+/** 从 [startTone] 起按 [step] 调明度，直到 [text] 在上面的对比度达到 [MIN_CONTRAST]（最多调 [MAX_TONE_STEPS] 级）。 */
+private fun readableTone(seed: Color, startTone: Double, text: Color, step: Double): Color {
+    var tone = startTone
+    var color = withTone(seed, tone, SEED_CHROMA)
+    var steps = 0
+    while (contrastRatio(text, color) < MIN_CONTRAST && steps < MAX_TONE_STEPS) {
+        tone += step
+        color = withTone(seed, tone, SEED_CHROMA)
+        steps++
+    }
+    return color
+}
+
+private fun contrastRatio(a: Color, b: Color): Float {
+    val la = a.luminance()
+    val lb = b.luminance()
+    return (maxOf(la, lb) + CONTRAST_OFFSET) / (minOf(la, lb) + CONTRAST_OFFSET)
+}
+
+private const val MIN_CONTRAST = 4.6f
+private const val CONTRAST_OFFSET = 0.05f
+private const val MAX_TONE_STEPS = 30
+private const val LIGHT_MIN_TONE = 35.0
+private const val LIGHT_MAX_TONE = 48.0
+private const val DARK_LIFT = 3.0
+private const val DARK_MIN_TONE = 62.0
+private const val DARK_MAX_TONE = 80.0
+private const val ON_DARK_PRIMARY_TONE = 10.0
+private const val SEED_CHROMA = 200.0
+private const val SURFACE_HUE_CHROMA = 3.0

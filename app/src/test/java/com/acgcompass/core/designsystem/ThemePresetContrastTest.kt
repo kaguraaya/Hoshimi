@@ -15,6 +15,14 @@ class ThemePresetContrastTest : StringSpec({
                 contrast(colors.onPrimaryContainer, colors.primaryContainer) shouldBeGreaterThanOrEqual 4.5f
                 contrast(colors.onSurface, colors.surface) shouldBeGreaterThanOrEqual 4.5f
                 contrast(colors.onSurfaceVariant, colors.surfaceVariant) shouldBeGreaterThanOrEqual 4.5f
+                // 经过表面层级改写后（应用里实际用的配色）同样要达标。
+                val (applied, surfaces) = prismColorScheme(colors)
+                contrast(applied.onPrimary, applied.primary) shouldBeGreaterThanOrEqual 4.5f
+                contrast(applied.onPrimaryContainer, applied.primaryContainer) shouldBeGreaterThanOrEqual 4.5f
+                listOf(surfaces.page, surfaces.card, surfaces.block).forEach { surface ->
+                    contrast(applied.onSurface, surface) shouldBeGreaterThanOrEqual 4.5f
+                    contrast(applied.onSurfaceVariant, surface) shouldBeGreaterThanOrEqual 4.5f
+                }
             }
         }
     }

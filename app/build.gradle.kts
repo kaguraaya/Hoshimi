@@ -80,8 +80,8 @@ android {
         applicationId = "com.kaguraaya.hoshimi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 46
-        versionName = "0.27.0"
+        versionCode = 47
+        versionName = "0.28.0"
 
         // 可选：用不同的包名 / 版本后缀出包（例如手头没有正式签名、想与已安装的正式版并存时）：
         //   ./gradlew assembleRelease -Phoshimi.applicationIdSuffix=.preview -Phoshimi.versionNameSuffix=-preview
@@ -269,6 +269,8 @@ dependencies {
 
     // Images
     implementation(libs.coil.compose)
+    // 顶栏背景模糊（Android 12 起真模糊，更早的系统退回半透明底色）。
+    implementation(libs.haze)
 
     // Background work
     implementation(libs.androidx.work.runtime.ktx)

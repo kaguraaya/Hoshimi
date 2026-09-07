@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,7 +69,9 @@ import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.domain.schedule.BroadcastScheduleEntry
+import dev.chrisbanes.haze.HazeState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -158,12 +161,14 @@ fun HomeScreen(
     onOpenHomeModules: () -> Unit = {},
     onOpenSchedule: () -> Unit = {},
 ) {
+    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             AcgTopLevelTopBar(
                 title = "首页",
+                hazeState = hazeState,
                 actions = {
                     IconButton(onClick = onOpenHomeModules) {
                         Icon(Icons.Filled.Tune, contentDescription = "首页模块设置")
@@ -178,20 +183,22 @@ fun HomeScreen(
             )
         },
     ) { innerPadding ->
-        StateScaffold(
-            state = state,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            onCta = { onOpenImport() },
-        ) { data ->
-            HomeContent(
-                data = data,
-                onManualSync = onManualSync,
-                onOpenRecommender = onOpenRecommender,
-                onOpenWork = onOpenWork,
-                onOpenSchedule = onOpenSchedule,
-            )
+        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
+            StateScaffold(
+                state = state,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                onCta = { onOpenImport() },
+            ) { data ->
+                HomeContent(
+                    data = data,
+                    onManualSync = onManualSync,
+                    onOpenRecommender = onOpenRecommender,
+                    onOpenWork = onOpenWork,
+                    onOpenSchedule = onOpenSchedule,
+                )
+            }
         }
     }
 }

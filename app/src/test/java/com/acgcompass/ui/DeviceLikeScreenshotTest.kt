@@ -130,7 +130,7 @@ class DeviceLikeScreenshotTest {
     fun mineLight() {
         render(dark = false) { SampleMineWithDock() }
         shot("device-mine-light")
-        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("想看"))
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("关于"))
         settle()
         shot("device-mine-light-scrolled")
     }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -148,8 +149,9 @@ fun DetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            // 详情页没有顶栏：自己让出状态栏（外层不替页面让出）。
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            // 状态栏 inset 由外层 Scaffold 统一消费（单一来源模型），此处不再叠加 statusBarsPadding。
             // 顶部额外 8dp 呼吸（共约 24dp），底部保留 24dp 避免末项贴边。
             .padding(16.dp)
             .padding(top = 8.dp)

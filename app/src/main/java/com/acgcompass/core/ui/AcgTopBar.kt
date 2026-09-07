@@ -1,6 +1,5 @@
 package com.acgcompass.core.ui
 
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -10,6 +9,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import dev.chrisbanes.haze.HazeState
 
 /**
  * 顶层页面统一标题栏。
@@ -29,9 +29,11 @@ fun AcgTopLevelTopBar(
     modifier: Modifier = Modifier,
     colors: TopAppBarColors = TopAppBarDefaults.topAppBarColors(),
     actions: @Composable (androidx.compose.foundation.layout.RowScope.() -> Unit) = {},
+    /** 传入时顶栏变成毛玻璃（见 TopBarBlur.kt）。 */
+    hazeState: HazeState? = null,
 ) {
     TopAppBar(
-        modifier = modifier,
+        modifier = if (hazeState != null) modifier.topBarBlur(hazeState) else modifier,
         title = {
             Text(
                 text = title,
@@ -39,9 +41,9 @@ fun AcgTopLevelTopBar(
                 fontWeight = FontWeight.Bold,
             )
         },
-        colors = colors,
+        colors = if (hazeState != null) blurredTopBarColors() else colors,
         actions = actions,
-        // 零 inset，状态栏由外层 Scaffold 统一消费（单一来源模型）。
-        windowInsets = WindowInsets(0, 0, 0, 0),
+        // 顶栏自己包住状态栏区域（外层不替页面让出状态栏）。
+        windowInsets = TopAppBarDefaults.windowInsets,
     )
 }

@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -171,7 +172,7 @@ fun RecommenderScreen(
                         }
                     }
                 },
-                windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+                windowInsets = TopAppBarDefaults.windowInsets,
             )
         },
         // 主操作固定在底部：条件区再长，「生成」也始终在手边，不用滚到页面最下面找。

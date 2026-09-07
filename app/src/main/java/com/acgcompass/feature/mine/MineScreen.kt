@@ -1,6 +1,7 @@
 package com.acgcompass.feature.mine
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -9,6 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -25,12 +32,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatDivider
+import com.acgcompass.core.designsystem.IconWell
+import com.acgcompass.core.designsystem.LetterWell
+import com.acgcompass.core.designsystem.NavRow
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.RowGroup
+import com.acgcompass.core.designsystem.RowGroupDivider
+import com.acgcompass.core.designsystem.SectionHeader
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.data.credential.SourceId
+import dev.chrisbanes.haze.HazeState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -98,48 +113,51 @@ fun MineScreen(
     onSyncBangumi: () -> Unit = {},
     onOpenLibrary: (String?) -> Unit = {},
 ) {
+    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { AcgTopLevelTopBar(title = "我的") },
+        topBar = { AcgTopLevelTopBar(title = "我的", hazeState = hazeState) },
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-        StateScaffold(
-            state = state,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) { ui ->
-            androidx.compose.foundation.lazy.LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                // 父级 StateScaffold 已消费标题栏 innerPadding；此处只叠加统一留白（顶部 16dp 呼吸 + 底部 96dp 不被底栏遮挡）。
-                contentPadding = PaddingValues(
-                    start = ScreenContentPadding.Horizontal,
-                    end = ScreenContentPadding.Horizontal,
-                    top = ScreenContentPadding.Top,
-                    bottom = ScreenContentPadding.Bottom,
-                ),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                item(key = "accounts") { AccountStatusCard(accounts = ui.accounts) }
-                item(key = "sync") {
-                    SyncCard(
-                        bangumiConfigured = ui.accounts.firstOrNull {
-                            it.sourceId == SourceId.BANGUMI
-                        }?.configured == true,
-                        syncStatus = ui.syncStatus,
-                        syncing = syncing,
-                        onSyncBangumi = onSyncBangumi,
-                        onOpenLibrary = onOpenLibrary,
-                    )
-                }
-                item(key = "stats") { StatisticsCard(stats = ui.stats) }
-                item(key = "actions") {
-                    ActionsCard(
-                        onOpenTasteProfile = onOpenTasteProfile,
-                        onNavigateToSettings = onNavigateToSettings,
-                        onOpenPrivacySettings = onOpenPrivacySettings,
-                        onOpenAbout = onOpenAbout,
-                    )
+        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
+            StateScaffold(
+                state = state,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) { ui ->
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    // 父级 StateScaffold 已消费标题栏 innerPadding；此处只叠加统一留白（顶部 16dp 呼吸 + 底部 96dp 不被底栏遮挡）。
+                    contentPadding = PaddingValues(
+                        start = ScreenContentPadding.Horizontal,
+                        end = ScreenContentPadding.Horizontal,
+                        top = ScreenContentPadding.Top,
+                        bottom = ScreenContentPadding.Bottom,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    item(key = "accounts") { AccountStatusCard(accounts = ui.accounts) }
+                    item(key = "sync") {
+                        SyncCard(
+                            bangumiConfigured = ui.accounts.firstOrNull {
+                                it.sourceId == SourceId.BANGUMI
+                            }?.configured == true,
+                            syncStatus = ui.syncStatus,
+                            syncing = syncing,
+                            onSyncBangumi = onSyncBangumi,
+                            onOpenLibrary = onOpenLibrary,
+                        )
+                    }
+                    item(key = "stats") { StatisticsCard(stats = ui.stats) }
+                    item(key = "actions") {
+                        ActionsCard(
+                            onOpenTasteProfile = onOpenTasteProfile,
+                            onNavigateToSettings = onNavigateToSettings,
+                            onOpenPrivacySettings = onOpenPrivacySettings,
+                            onOpenAbout = onOpenAbout,
+                        )
+                    }
                 }
             }
         }
@@ -237,10 +255,11 @@ private fun AccountStatusRowItem(row: AccountStatusRow) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.padding(end = 12.dp)) {
+        LetterWell(row.label)
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Text(row.label, style = MaterialTheme.typography.titleSmall)
             val testedText = row.lastTestedAt
                 ?.let { "最后测试：${TIME_FORMATTER.format(Instant.ofEpochMilli(it))}" }
@@ -329,7 +348,7 @@ private fun StatRow(label: String, value: String) {
     }
 }
 
-/** 入口卡片：口味画像、设置、隐私与数据管理、关于。 */
+/** 入口：口味画像、设置、隐私与数据管理、关于——成组的行，行首圆形图标底，行尾箭头。 */
 @Composable
 private fun ActionsCard(
     onOpenTasteProfile: () -> Unit,
@@ -337,35 +356,27 @@ private fun ActionsCard(
     onOpenPrivacySettings: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
-    SectionCard(title = "更多") {
-        FilledTonalButton(
-            onClick = onOpenTasteProfile,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("口味画像")
-        }
-        FilledTonalButton(
-            onClick = onNavigateToSettings,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("设置")
-        }
-        // 隐私控制、导入导出和缓存管理集中在设置页；此入口会自动展开对应区域。
-        FilledTonalButton(
-            onClick = onOpenPrivacySettings,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                "隐私与数据管理（清除 / 导出 / 导入 / 清理缓存）",
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader("更多")
+        RowGroup {
+            NavRow(
+                title = "口味画像",
+                supporting = "你常看什么、和大众哪里不一样",
+                onClick = onOpenTasteProfile,
+                leading = { IconWell(Icons.Outlined.Insights) },
             )
-        }
-        FilledTonalButton(
-            onClick = onOpenAbout,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("关于")
+            RowGroupDivider()
+            NavRow(title = "设置", onClick = onNavigateToSettings, leading = { IconWell(Icons.Outlined.Settings) })
+            RowGroupDivider()
+            // 隐私控制、导入导出和缓存管理集中在设置页；此入口会自动展开对应区域。
+            NavRow(
+                title = "隐私与数据",
+                supporting = "清除 / 导出 / 导入 / 清理缓存",
+                onClick = onOpenPrivacySettings,
+                leading = { IconWell(Icons.Outlined.Shield) },
+            )
+            RowGroupDivider()
+            NavRow(title = "关于", onClick = onOpenAbout, leading = { IconWell(Icons.Outlined.Info) })
         }
     }
 }

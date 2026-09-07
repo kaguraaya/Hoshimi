@@ -130,6 +130,10 @@ public abstract class GenerateThirdPartyNoticesTask extends DefaultTask {
             case "com.squareup.okhttp3" -> apache("OkHttp", "https://square.github.io/okhttp/");
             case "com.squareup.okio" -> apache("Okio", "https://square.github.io/okio/");
             case "io.coil-kt" -> apache("Coil", "https://coil-kt.github.io/coil/");
+            case "dev.chrisbanes.haze" -> apache("Haze", "https://github.com/chrisbanes/haze");
+            case "co.touchlab" -> apache("Stately", "https://github.com/touchlab/Stately");
+            case "dev.drewhamilton.poko" -> apache("Poko", "https://github.com/drewhamilton/Poko");
+            case "io.github.reactivecircus.cache4k" -> apache("cache4k", "https://github.com/reactivecircus/cache4k");
             case "javax.inject" -> apache("javax.inject", "https://github.com/javax-inject/javax-inject");
             case "jakarta.inject" -> new RuntimeLicenseFamily(
                     "Jakarta Dependency Injection",

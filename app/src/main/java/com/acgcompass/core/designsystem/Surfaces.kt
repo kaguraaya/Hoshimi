@@ -8,8 +8,6 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
-import androidx.core.graphics.ColorUtils
 import kotlin.math.hypot
 import kotlin.math.min
 
@@ -165,21 +163,84 @@ internal fun prismColorScheme(base: ColorScheme): Pair<ColorScheme, PrismSurface
 }
 
 /** 保留 [color] 的色相，把明度设为 [tone]（CIE L*，0–100），彩度不超过 [maxChroma]。 */
-private fun withTone(color: Color, tone: Double, maxChroma: Double): Color {
-    val lab = DoubleArray(LAB_COMPONENTS)
-    ColorUtils.colorToLAB(color.toArgb(), lab)
-    val chroma = hypot(lab[1], lab[2])
+internal fun withTone(color: Color, tone: Double, maxChroma: Double): Color {
+    val lab = Lab.from(color)
+    val chroma = hypot(lab.a, lab.b)
     val scale = if (chroma <= 0.0) 0.0 else min(1.0, maxChroma / chroma)
-    return Color(ColorUtils.LABToColor(tone, lab[1] * scale, lab[2] * scale))
+    return Lab(tone, lab.a * scale, lab.b * scale).toColor()
 }
 
-private fun toneOf(color: Color): Double {
-    val lab = DoubleArray(LAB_COMPONENTS)
-    ColorUtils.colorToLAB(color.toArgb(), lab)
-    return lab[0]
+internal fun toneOf(color: Color): Double = Lab.from(color).l
+
+/**
+ * CIELAB（D65 白点）与 sRGB 互转。纯 Kotlin 实现，不依赖 android.graphics，单元测试里也能用。
+ * 超出 sRGB 色域的结果按通道截断。
+ */
+@Suppress("MagicNumber") // sRGB ↔ XYZ 的标准转换矩阵（IEC 61966-2-1），数值本身就是规范
+private data class Lab(val l: Double, val a: Double, val b: Double) {
+    fun toColor(): Color {
+        val fy = (l + LAB_OFFSET) / LAB_SCALE
+        val fx = fy + a / LAB_A_SCALE
+        val fz = fy - b / LAB_B_SCALE
+        val x = WHITE_X * finv(fx)
+        val y = WHITE_Y * finv(fy)
+        val z = WHITE_Z * finv(fz)
+        val r = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
+        val g = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z
+        val bl = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
+        return Color(gamma(r).toFloat(), gamma(g).toFloat(), gamma(bl).toFloat())
+    }
+
+    companion object {
+        fun from(color: Color): Lab {
+            val r = linear(color.red.toDouble())
+            val g = linear(color.green.toDouble())
+            val b = linear(color.blue.toDouble())
+            val x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / WHITE_X
+            val y = (0.2126729 * r + 0.7151522 * g + 0.0721750 * b) / WHITE_Y
+            val z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / WHITE_Z
+            val fx = f(x)
+            val fy = f(y)
+            val fz = f(z)
+            return Lab(LAB_SCALE * fy - LAB_OFFSET, LAB_A_SCALE * (fx - fy), LAB_B_SCALE * (fy - fz))
+        }
+
+        private fun f(t: Double): Double = if (t > EPSILON) Math.cbrt(t) else (KAPPA * t + LAB_OFFSET) / LAB_SCALE
+
+        private fun finv(t: Double): Double {
+            val cube = t * t * t
+            return if (cube > EPSILON) cube else (LAB_SCALE * t - LAB_OFFSET) / KAPPA
+        }
+
+        private fun linear(c: Double): Double =
+            if (c <= SRGB_LINEAR_LIMIT) c / SRGB_LINEAR_SLOPE else Math.pow((c + SRGB_A) / (1 + SRGB_A), SRGB_GAMMA)
+
+        private fun gamma(c: Double): Double {
+            val v = if (c <= SRGB_GAMMA_LIMIT) {
+                c * SRGB_LINEAR_SLOPE
+            } else {
+                (1 + SRGB_A) * Math.pow(c, 1 / SRGB_GAMMA) - SRGB_A
+            }
+            return v.coerceIn(0.0, 1.0)
+        }
+
+        private const val WHITE_X = 0.95047
+        private const val WHITE_Y = 1.0
+        private const val WHITE_Z = 1.08883
+        private const val EPSILON = 216.0 / 24389.0
+        private const val KAPPA = 24389.0 / 27.0
+        private const val LAB_SCALE = 116.0
+        private const val LAB_OFFSET = 16.0
+        private const val LAB_A_SCALE = 500.0
+        private const val LAB_B_SCALE = 200.0
+        private const val SRGB_LINEAR_LIMIT = 0.04045
+        private const val SRGB_GAMMA_LIMIT = 0.0031308
+        private const val SRGB_LINEAR_SLOPE = 12.92
+        private const val SRGB_A = 0.055
+        private const val SRGB_GAMMA = 2.4
+    }
 }
 
-private const val LAB_COMPONENTS = 3
 private const val DARK_LUMINANCE_THRESHOLD = 0.5f
 
 /** 表面的彩度上限：近灰，只留一点点色相。 */

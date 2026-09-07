@@ -2,8 +2,10 @@ package com.acgcompass.feature.settings
 
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,16 +16,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +47,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,6 +56,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -60,14 +71,21 @@ import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
+import com.acgcompass.core.designsystem.IconWell
+import com.acgcompass.core.designsystem.LetterWell
+import com.acgcompass.core.designsystem.NavRow
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.core.ui.blurredTopBarColors
+import com.acgcompass.core.ui.topBarBlur
+import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.data.credential.SourceId
 import com.acgcompass.data.datastore.SettingsState
 import com.acgcompass.data.datastore.ThemeMode
 import com.acgcompass.domain.model.ThemePreset
+import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 
 /**
@@ -451,28 +469,33 @@ fun SettingsScreenContent(
         }
     }
 
+    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text("设置") },
+                colors = blurredTopBarColors(),
+                modifier = Modifier.topBarBlur(hazeState),
                 navigationIcon = {
                     IconButton(onClick = actions.onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
-                windowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
+                windowInsets = TopAppBarDefaults.windowInsets,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        StateScaffold(
-            state = state,
-            modifier = Modifier.padding(padding),
-            onOpenDoc = actions.onOpenDoc,
-        ) { data ->
-            SettingsList(data = data, actions = actions, onOpenSource = onOpenSource)
+        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
+            StateScaffold(
+                state = state,
+                modifier = Modifier.padding(padding),
+                onOpenDoc = actions.onOpenDoc,
+            ) { data ->
+                SettingsList(data = data, actions = actions, onOpenSource = onOpenSource)
+            }
         }
     }
 }
@@ -613,21 +636,40 @@ private fun AppearanceCard(data: SettingsUiState, actions: SettingsActions, modi
     }
 }
 
+/** 主题色：一排色块（照 FlClash），选中的一块里打勾；颜色就是选项本身，不用文字药丸。 */
 @Composable
 private fun ThemePresetRow(selected: ThemePreset, onSelect: (ThemePreset) -> Unit) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
     ) {
         ThemePreset.entries.forEach { preset ->
-            FlatFilterChip(
-                selected = preset == selected,
-                onClick = { onSelect(preset) },
-                label = { Text(preset.label, maxLines = 1) },
-            )
+            val color = Color(preset.seed)
+            val isSelected = preset == selected
+            Box(
+                modifier = Modifier
+                    .size(SWATCH_SIZE)
+                    .clip(CircleShape)
+                    .background(color)
+                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(preset) })
+                    .semantics { contentDescription = preset.label },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = null,
+                        tint = if (color.luminance() > SWATCH_DARK_CHECK) Color.Black else Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
         }
     }
 }
+
+private val SWATCH_SIZE = 40.dp
+private const val SWATCH_DARK_CHECK = 0.5f
 
 /** 设置二级页的标识键：[SourceId] 枚举名复用为源键；隐私页用独立常量。 */
 internal const val PRIVACY_SOURCE_KEY = "PRIVACY"
@@ -656,42 +698,20 @@ private fun SettingsSummaryRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    PrismCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                )
-                if (!statusText.isNullOrBlank()) {
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
-                if (!lastTestedAtText.isNullOrBlank()) {
-                    Text(
-                        text = "最后测试：$lastTestedAtText",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            TextButton(onClick = onClick) {
-                Text("进入", maxLines = 1)
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                )
-            }
-        }
+    // 行首是来源的首字母圆底（隐私页用盾牌图标），行尾箭头；状态与测试时间合成一行说明。
+    val supporting = listOfNotNull(
+        statusText?.takeIf { it.isNotBlank() },
+        lastTestedAtText?.takeIf { it.isNotBlank() }?.let { "最后测试：$it" },
+    ).joinToString(" · ").ifBlank { null }
+    PrismCard(modifier = modifier.fillMaxWidth()) {
+        NavRow(
+            title = title,
+            supporting = supporting,
+            onClick = onClick,
+            leading = {
+                if (title.startsWith("隐私")) IconWell(Icons.Outlined.Shield) else LetterWell(title)
+            },
+        )
     }
 }
 
