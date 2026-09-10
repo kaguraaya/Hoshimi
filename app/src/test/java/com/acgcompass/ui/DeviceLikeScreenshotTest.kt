@@ -42,6 +42,12 @@ import com.acgcompass.domain.model.ImportItemStatus
 import com.acgcompass.domain.schedule.BroadcastScheduleEntry
 import com.acgcompass.feature.cache.CacheManagementUiState
 import com.acgcompass.feature.cache.PolicyCard
+import com.acgcompass.feature.discover.DiscoverFilter
+import com.acgcompass.feature.discover.DiscoverScreen
+import com.acgcompass.feature.discover.DiscoverTab
+import com.acgcompass.feature.discover.FilterFacets
+import com.acgcompass.feature.discover.RankedWork
+import com.acgcompass.feature.discover.RankingScope
 import com.acgcompass.feature.home.BacklogSummary
 import com.acgcompass.feature.home.ContinueItem
 import com.acgcompass.feature.home.DailyDraw
@@ -139,6 +145,15 @@ class DeviceLikeScreenshotTest {
     fun mineDark() {
         render(dark = true) { SampleMineWithDock() }
         shot("device-mine-dark")
+    }
+
+    @Test
+    fun discoverSearchLight() {
+        render(dark = false) { SampleDiscoverSearch() }
+        shot("device-discover-search-light")
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText("比宇宙更远的地方"))
+        settle()
+        shot("device-discover-search-scrolled")
     }
 
     @Test
@@ -312,6 +327,50 @@ private fun SampleMineWithDock() {
 }
 
 private val DOCK_SPACE = 80.dp
+
+/** 发现-搜索：查询为空时显示历史搜索与最近浏览，搜索框在列表第一项。 */
+@Composable
+private fun SampleDiscoverSearch() {
+    val recent = listOf(
+        card("1", "葬送的芙莉莲", "葬送のフリーレン · 2023", "Bangumi 8.9", listOf("治愈", "奇幻")),
+        card("2", "孤独摇滚！", "ぼっち・ざ・ろっく！ · 2022", "Bangumi 8.6", listOf("音乐", "搞笑")),
+        card("3", "比宇宙更远的地方", "宇宙よりも遠い場所 · 2018", "Bangumi 8.7", listOf("青春")),
+        card("4", "学生会也有洞", "生徒会にも穴はある！ · 2025", "Bangumi 7.4", listOf("搞笑", "校园")),
+    ).map { RankedWork(workId = it.workId, card = it.card) }
+    DiscoverScreen(
+        state = UiState.Empty(Cta("输入作品名开始搜索", "search")),
+        query = "",
+        searchHistory = listOf("芙莉莲", "孤独摇滚", "学生会也有洞", "乱世千金倪亚"),
+        recentlyViewed = recent,
+        tab = DiscoverTab.SEARCH,
+        rankingBoards = emptyList(),
+        scoreDiffItems = emptyList(),
+        filter = DiscoverFilter(),
+        filterFacets = FilterFacets(),
+        filteredCards = emptyList(),
+        poolLoading = false,
+        poolError = null,
+        rankingScope = RankingScope.OVERALL,
+        scopedRanking = UiState.Empty(Cta("暂无", "none")),
+        rankingLoadingMore = false,
+        rankingCanLoadMore = false,
+        onSelectRankingScope = {},
+        onRetryRanking = {},
+        onLoadMoreRanking = {},
+        onLoadPool = {},
+        onQueryChange = {},
+        onSearchSubmit = {},
+        onSelectHistory = {},
+        onRemoveHistory = {},
+        onClearHistory = {},
+        onRetry = {},
+        onOpenWork = {},
+        onOverrideMatch = { _, _ -> },
+        onTabSelect = {},
+        onFilterChange = {},
+        onClearFilter = {},
+    )
+}
 
 @Composable
 private fun SampleTonight() {

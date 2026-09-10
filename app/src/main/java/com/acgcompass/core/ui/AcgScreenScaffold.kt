@@ -38,6 +38,12 @@ val LocalFloatingBarInset = compositionLocalOf { 0.dp }
 @Composable
 private fun statusBarTop(): Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
+/**
+ * 毛玻璃顶栏（含其下固定的标签栏）的总高度。页面把内容铺到顶栏下面时提供它，
+ * 用 [ScreenContentPadding.UnderBarTop] 的列表据此自动让出顶部。没铺到下面的页面为 0。
+ */
+val LocalHeaderInset = compositionLocalOf { 0.dp }
+
 object ScreenContentPadding {
     /** 横向留白。 */
     val Horizontal: Dp = 16.dp
@@ -57,7 +63,11 @@ object ScreenContentPadding {
      * 位于「中间栏（TabRow / 同步动作栏）下方」的列表（发现各 Tab、时光机）使用的顶部留白。
      * 这些列表上方已有中间栏提供分隔，再叠加大段 [Top] 会整体过度下沉，故仅留小段呼吸间距。
      */
-    val UnderBarTop: Dp = 10.dp
+    val UnderBarTop: Dp
+        @Composable @ReadOnlyComposable
+        get() = BASE_UNDER_BAR_TOP + LocalHeaderInset.current
+
+    private val BASE_UNDER_BAR_TOP: Dp = 10.dp
 
     /**
      * 底部留白：外层 Scaffold 已消费底部导航栏 / 手势条 inset，此处仅需小段呼吸间距，

@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -50,8 +49,9 @@ fun AppSearchField(
         },
         placeholder = { Text(state.placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            // 搜索框是填充的药丸：取比所在表面高一级的颜色（页面上是近白，卡片里是灰）。
+            focusedContainerColor = Surfaces.raisedColor,
+            unfocusedContainerColor = Surfaces.raisedColor,
             focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
             unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
             disabledIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
