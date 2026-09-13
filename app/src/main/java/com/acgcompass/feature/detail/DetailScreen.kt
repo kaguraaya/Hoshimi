@@ -30,10 +30,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,9 +56,12 @@ import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
+import com.acgcompass.core.designsystem.PillTabs
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
+import com.acgcompass.core.designsystem.TagPill
+import com.acgcompass.core.designsystem.TagPillTone
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.copyOnLongPress
 import com.acgcompass.domain.cache.CacheAssetKind
@@ -1352,19 +1352,14 @@ private fun DetailTabsSection(tabs: List<DetailTabUiModel>, modifier: Modifier =
     SectionCard(title = "详情", modifier = modifier) {
         var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
         val safeIndex = selectedIndex.coerceIn(0, tabs.lastIndex)
-        ScrollableTabRow(
-            selectedTabIndex = safeIndex,
-            modifier = Modifier.fillMaxWidth(),
-            edgePadding = 0.dp,
-        ) {
-            tabs.forEachIndexed { index, tab ->
-                Tab(
-                    selected = index == safeIndex,
-                    onClick = { selectedIndex = index },
-                    text = { Text(text = tab.title) },
-                )
-            }
-        }
+        // 分段药丸代替带下划线的标签栏（照 FlClash）。
+        PillTabs(
+            options = tabs.indices.toList(),
+            selected = safeIndex,
+            onSelect = { selectedIndex = it },
+            label = { tabs[it].title },
+            scrollable = true,
+        )
         val selected = tabs[safeIndex]
         Text(
             text = selected.body,
@@ -1388,11 +1383,7 @@ private fun DetailTabsSection(tabs: List<DetailTabUiModel>, modifier: Modifier =
 private fun CompletionCostSection(completionCost: CompletionCostUiModel, modifier: Modifier = Modifier) {
     SectionCard(title = "补完成本", modifier = modifier) {
         if (completionCost.available) {
-            SuggestionChip(
-                onClick = {},
-                label = { Text(text = completionCost.bucketLabel) },
-                border = null,
-            )
+            TagPill(text = completionCost.bucketLabel, tone = TagPillTone.Primary)
             Text(
                 text = completionCost.detailText,
                 style = MaterialTheme.typography.bodyMedium,

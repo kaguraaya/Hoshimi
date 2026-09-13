@@ -3,7 +3,6 @@ package com.acgcompass.app.navigation
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -36,6 +35,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -83,23 +85,24 @@ fun AcgBottomNavigation(
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = DOCK_MARGIN, vertical = 8.dp),
     ) {
+        // 底栏背景单独一层（只画底色和投影，不放内容）：镜片和图标画在它上面、不受它的圆角裁剪，
+        // 按住时镜片才能像 FlClash 那样长出底栏之外。
         Surface(
             modifier = Modifier.fillMaxWidth().height(DOCK_HEIGHT),
             shape = CircleShape,
             color = Surfaces.colorOf(dockLevel),
             shadowElevation = 12.dp,
-        ) {
-            SurfaceScope(dockLevel) {
-                BoxWithConstraints(Modifier.fillMaxSize().padding(DOCK_INSET)) {
-                    val slotWidthPx = constraints.maxWidth.toFloat() / entries.size
-                    val selectedIndex = entries.indexOf(currentDestination).takeIf { it >= 0 }
-                    DockBody(
-                        entries = entries,
-                        selectedIndex = selectedIndex,
-                        slotWidthPx = slotWidthPx,
-                        onSelect = onSelect,
-                    )
-                }
+        ) {}
+        SurfaceScope(dockLevel) {
+            BoxWithConstraints(Modifier.fillMaxWidth().height(DOCK_HEIGHT).padding(DOCK_INSET)) {
+                val slotWidthPx = constraints.maxWidth.toFloat() / entries.size
+                val selectedIndex = entries.indexOf(currentDestination).takeIf { it >= 0 }
+                DockBody(
+                    entries = entries,
+                    selectedIndex = selectedIndex,
+                    slotWidthPx = slotWidthPx,
+                    onSelect = onSelect,
+                )
             }
         }
     }
@@ -156,6 +159,7 @@ private fun DockBody(
                     tab = tab,
                     lit = index == litIndex,
                     selected = index == selectedIndex,
+                    magnify = { if (index == litIndex) 1f + LENS_MAGNIFY * lens.lift.value else 1f },
                     onClick = { if (index != selectedIndex) onSelect(tab) },
                     modifier = Modifier.weight(1f),
                 )
@@ -202,7 +206,9 @@ private fun Modifier.dockGestures(
 /** 镜片的位置与缩放。 */
 private class DockLens {
     val x = Animatable(0f)
-    val scale = Animatable(1f)
+
+    /** 0 = 静止，1 = 按住抬起：镜片每边长出 [LENS_GROWTH]，里面的图标放大 [LENS_MAGNIFY]。 */
+    val lift = Animatable(0f)
     var placed by androidx.compose.runtime.mutableStateOf(false)
 
     suspend fun place(target: Float) {
@@ -215,39 +221,48 @@ private fun CoroutineScope.pressLens(lens: DockLens, pointerX: Float) {
     launch {
         if (!lens.placed) lens.place(pointerX) else lens.x.animateTo(pointerX, FollowSpring)
     }
-    launch { lens.scale.animateTo(PRESSED_SCALE, LiftSpring) }
+    launch { lens.lift.animateTo(1f, LiftSpring) }
 }
 
 private fun CoroutineScope.releaseLens(lens: DockLens, target: Float) {
     launch { lens.x.animateTo(target, SettleSpring) }
-    launch { lens.scale.animateTo(1f, PressSpring) }
+    launch { lens.lift.animateTo(0f, PressSpring) }
 }
 
 @Composable
 private fun Lens(lens: DockLens, slotWidthPx: Float) {
     val density = LocalDensity.current
     val widthDp = with(density) { slotWidthPx.toDp() }
-    val color = Surfaces.raisedColor
+    val growthPx = with(density) { LENS_GROWTH.toPx() } * 2f
+    val rest = Surfaces.raisedColor
+    val press = MaterialTheme.colorScheme.onSurface
     Box(
         Modifier
             .fillMaxHeight()
             .width(widthDp)
             .graphicsLayer {
                 translationX = lens.x.value - slotWidthPx / 2f
-                // 果冻感：沿运动方向按速度拉长，同时略压扁，面积大致不变。
+                val lift = lens.lift.value
+                // 照 FlClash 的 _lensRect：抬起时宽高各长 2 × 8dp；拖得快时沿运动方向拉长、竖向压扁（比例 1.4）。
                 val stretch = (abs(lens.x.velocity) / JELLY_VELOCITY).coerceAtMost(JELLY_MAX)
-                scaleX = lens.scale.value * (1f + stretch)
-                scaleY = lens.scale.value * (1f - stretch * JELLY_SQUASH)
+                scaleX = (1f + growthPx * lift / size.width) * (1f + stretch)
+                scaleY = (1f + growthPx * lift / size.height) * (1f - stretch * JELLY_ASPECT)
             }
-            .background(color, CircleShape),
+            .drawBehind {
+                // 抬起时叠一层 8% 的前景色，比静止时略深一点。
+                val tint = press.copy(alpha = PRESS_TINT * lens.lift.value).compositeOver(rest)
+                drawRoundRect(color = tint, cornerRadius = CornerRadius(size.height / 2f))
+            },
     )
 }
 
+@Suppress("LongParameterList") // 一个底栏项的显示状态与回调
 @Composable
 private fun DockItem(
     tab: TopLevelDestination,
     lit: Boolean,
     selected: Boolean,
+    magnify: () -> Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -255,6 +270,11 @@ private fun DockItem(
     Column(
         modifier = modifier
             .fillMaxHeight()
+            .graphicsLayer {
+                val m = magnify()
+                scaleX = m
+                scaleY = m
+            }
             .semantics {
                 role = Role.Tab
                 this.selected = selected
@@ -301,15 +321,17 @@ private fun overdrag(x: Float, slotWidthPx: Float, maxX: Float): Float {
 
 private val DOCK_HEIGHT = 64.dp
 private val DOCK_MARGIN = 20.dp
-private val DOCK_INSET = 6.dp
+private val DOCK_INSET = 4.dp
 private const val DARK_LUMINANCE = 0.5f
 private const val HALF = 0.5f
-private const val PRESSED_SCALE = 1.12f
+private val LENS_GROWTH = 8.dp
+private const val LENS_MAGNIFY = 0.16f
+private const val PRESS_TINT = 0.08f
+private const val JELLY_ASPECT = 1.4f
 private const val OVERDRAG = 0.35f
 private const val PULL_LIMIT = 7f / 32f
 private const val JELLY_VELOCITY = 12_000f
 private const val JELLY_MAX = 0.18f
-private const val JELLY_SQUASH = 0.5f
 
 // FlClash 的弹簧：press 刚度 311 / 阻尼比 0.593；follow 1024 / 0.9；lift 250ms 无回弹；
 // travel 400ms 回弹 0.15；settle 500ms 回弹 0.32。

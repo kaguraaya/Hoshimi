@@ -611,15 +611,7 @@ private fun AppearanceCard(data: SettingsUiState, actions: SettingsActions, modi
                 )
             }
             if (showThemePresets) {
-                Text("浅色预设", style = MaterialTheme.typography.bodyMedium)
-                ThemePresetRow(selected = data.lightThemePreset, onSelect = actions.onSetLightThemePreset)
-                Text("深色预设", style = MaterialTheme.typography.bodyMedium)
-                ThemePresetRow(selected = data.darkThemePreset, onSelect = actions.onSetDarkThemePreset)
-                Text(
-                    "浅色和深色预设会分别保存。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                ThemeColorPicker(data = data, actions = actions)
             }
             ToggleRow(
                 label = "预测性返回手势",
@@ -634,6 +626,24 @@ private fun AppearanceCard(data: SettingsUiState, actions: SettingsActions, modi
             )
         }
     }
+}
+
+/** 照 FlClash：只选一个主题色，浅色 / 深色各自用它生成对应的配色（同一套搭配）。 */
+@Composable
+private fun ThemeColorPicker(data: SettingsUiState, actions: SettingsActions) {
+    Text("主题色", style = MaterialTheme.typography.bodyMedium)
+    ThemePresetRow(
+        selected = data.lightThemePreset,
+        onSelect = { preset ->
+            actions.onSetLightThemePreset(preset)
+            actions.onSetDarkThemePreset(preset)
+        },
+    )
+    Text(
+        "浅色和深色会各自用这个颜色生成对应的配色。",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** 主题色：一排色块（照 FlClash），选中的一块里打勾；颜色就是选项本身，不用文字药丸。 */

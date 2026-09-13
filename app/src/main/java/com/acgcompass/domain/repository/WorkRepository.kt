@@ -53,6 +53,9 @@ interface WorkRepository {
      */
     suspend fun search(query: String): AppResult<List<WorkMatch>>
 
+    /** 渐进式搜索：每个源回来就发一版合并结果，最后一版补完 Bangumi 匹配（与 [search] 的结果一致）。 */
+    fun searchProgressive(query: String): kotlinx.coroutines.flow.Flow<AppResult<List<WorkMatch>>>
+
     /**
      * 聚合某作品的多源评分。缺失源标记为 `missing`，**绝不**用其它源回填；
      * 有效样本不足时社区共识为 `null` 或低置信。

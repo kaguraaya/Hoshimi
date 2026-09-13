@@ -183,6 +183,9 @@ private class FakeWorkRepository(
     override fun observeWork(workId: String): Flow<UiState<Work>> = emptyFlow()
     override fun observeWorks(): Flow<List<Work>> = emptyFlow()
 
+    override fun searchProgressive(query: String): kotlinx.coroutines.flow.Flow<AppResult<List<WorkMatch>>> =
+        kotlinx.coroutines.flow.flow { emit(search(query)) }
+
     override suspend fun search(query: String): AppResult<List<WorkMatch>> = AppResult.Success(matches[query].orEmpty())
     override suspend fun aggregateRatings(workId: String, forceRefresh: Boolean): AppResult<RatingAggregate> =
         throw UnsupportedOperationException("unused")

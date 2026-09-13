@@ -36,6 +36,7 @@ import com.acgcompass.domain.repository.WorkRepository
 import com.acgcompass.domain.taste.AdvancedTasteProfile
 import com.acgcompass.domain.taste.TasteAnalysisController
 import com.acgcompass.domain.taste.TasteMatchResult
+import com.acgcompass.domain.taste.toFallbackFeature
 import com.acgcompass.domain.usecase.GenerateSpoilerRadarUseCase
 import com.acgcompass.domain.usecase.RadarOutcome
 import com.acgcompass.domain.usecase.RadarRequest
@@ -192,15 +193,24 @@ class DetailViewModel @Inject constructor(
             workRepository.observeWork(workId),
             myCollection,
             tasteAnalysis.advancedProfile,
-        ) { workState, collection, profile ->
+            ratings,
+        ) { workState, collection, profile, ratingAggregate ->
             val work = (workState as? UiState.Success)?.data
                 ?: (workState as? UiState.PartialMissing)?.data
-            Triple(work, collection?.rating, profile)
-        }.flatMapLatest { (work, rating, profile) ->
+            TasteInputs(work, collection?.rating, profile, ratingAggregate)
+        }.flatMapLatest { inputs ->
+            val work = inputs.work
+            val profile = inputs.profile
             if (work == null) return@flatMapLatest flowOf(null to profile)
             val bangumiId = runCatching { resolveBangumiSubjectId(work) }.getOrNull()
             val featureId = bangumiId?.toString() ?: work.id
-            tasteAnalysis.observeScore(featureId, rating, allowNetwork = bangumiId != null)
+            // 没有 Bangumi 条目（或一直取不到它的特征）时，用作品自己的标签与评分临时出分。
+            tasteAnalysis.observeScore(
+                featureId,
+                inputs.rating,
+                allowNetwork = bangumiId != null,
+                fallback = work.toFallbackFeature(inputs.ratings),
+            )
                 .map { match -> match to profile }
         }.stateIn(
             scope = viewModelScope,
@@ -1266,3 +1276,10 @@ private fun buildRouteEntries(
 /** AI 输入里每条短评最多带多少字，以及「分歧最大的评分」高低各取几部。 */
 private const val AI_COMMENT_CHARS = 60
 private const val AI_DIVERGENCE_EXAMPLES = 4
+
+private data class TasteInputs(
+    val work: Work?,
+    val rating: Int?,
+    val profile: AdvancedTasteProfile?,
+    val ratings: RatingAggregate?,
+)

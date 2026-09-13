@@ -29,7 +29,13 @@ interface TasteAnalysisController {
 
     suspend fun score(subjectId: String, userRating: Int?, allowNetwork: Boolean): TasteMatchResult?
 
-    fun observeScore(subjectId: String, userRating: Int?, allowNetwork: Boolean): Flow<TasteMatchResult?>
+    /** [fallback]：取不到 Bangumi 特征时用来出分的临时特征（作品自己的标签与评分）。 */
+    fun observeScore(
+        subjectId: String,
+        userRating: Int?,
+        allowNetwork: Boolean,
+        fallback: WorkFeature? = null,
+    ): Flow<TasteMatchResult?>
 }
 
 enum class TasteLocalAnalysisPhase {

@@ -17,6 +17,7 @@ import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.TasteProcessingSummary
 import com.acgcompass.domain.taste.TasteRefreshProgress
 import com.acgcompass.domain.taste.TasteRefreshResult
+import com.acgcompass.domain.taste.WorkFeature
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -89,8 +90,12 @@ class TasteAnalysisCoordinator @Inject constructor(
     override suspend fun score(subjectId: String, userRating: Int?, allowNetwork: Boolean): TasteMatchResult? =
         tasteEngine.score(subjectId, userRating, allowNetwork)
 
-    override fun observeScore(subjectId: String, userRating: Int?, allowNetwork: Boolean): Flow<TasteMatchResult?> =
-        tasteEngine.observeScore(subjectId, userRating, allowNetwork)
+    override fun observeScore(
+        subjectId: String,
+        userRating: Int?,
+        allowNetwork: Boolean,
+        fallback: WorkFeature?,
+    ): Flow<TasteMatchResult?> = tasteEngine.observeScore(subjectId, userRating, allowNetwork, fallback)
 
     private companion object {
         const val LOCAL_ANALYSIS_TASK_KEY = "local_taste_analysis"

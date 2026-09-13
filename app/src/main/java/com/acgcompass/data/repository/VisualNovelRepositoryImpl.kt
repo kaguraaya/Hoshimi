@@ -42,8 +42,11 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 
+@Suppress("TooManyFunctions") // 仓库接口的每个方法 + 详情请求合并所需的少量私有步骤
 @Singleton
 class VisualNovelRepositoryImpl @Inject constructor(
     private val remote: VndbRemoteDataSource,
@@ -58,6 +61,9 @@ class VisualNovelRepositoryImpl @Inject constructor(
     private val settings: SettingsDataStore,
     private val json: Json,
 ) : VisualNovelRepository {
+    private val detailLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+    private val recentDetails = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, VisualNovelDetail>>()
+
     override suspend fun featured(
         sort: VisualNovelSort,
         page: Int,
@@ -82,8 +88,22 @@ class VisualNovelRepositoryImpl @Inject constructor(
         return loadPage(scope, page, forceRefresh) { remote.searchPage(query.trim(), page, pageSize) }
     }
 
-    override suspend fun detail(id: String, forceRefresh: Boolean): AppResult<VisualNovelDetail> {
-        val now = System.currentTimeMillis()
+    /**
+     * 详情页一打开会有两三处同时要同一部作品（预加载、确保入库、评分刷新）：同一 id 串行处理，
+     * [RECENT_DETAIL_MILLIS] 内刚取到的结果直接复用，避免每一处都各自请求 VNDB、各自去 Bangumi 搜一遍匹配。
+     */
+    override suspend fun detail(id: String, forceRefresh: Boolean): AppResult<VisualNovelDetail> =
+        detailLocks.getOrPut(id) { Mutex() }.withLock {
+            val now = System.currentTimeMillis()
+            recentDetails[id]?.takeIf {
+                now - it.first < RECENT_DETAIL_MILLIS
+            }?.let { return@withLock AppResult.Success(it.second) }
+            loadDetail(id, forceRefresh, now).also { result ->
+                if (result is AppResult.Success) recentDetails[id] = now to result.data
+            }
+        }
+
+    private suspend fun loadDetail(id: String, forceRefresh: Boolean, now: Long): AppResult<VisualNovelDetail> {
         val allowAdult = settings.showAdultContent.first()
         val cachedRow = cacheDao.getDetail(id, SourceId.VNDB.name, DETAIL_SECTION)
         val cached = cachedRow?.let { row ->
@@ -220,13 +240,13 @@ class VisualNovelRepositoryImpl @Inject constructor(
     }
 
     private suspend fun addBangumiRating(detail: VisualNovelDetail): VisualNovelDetail {
-        val best = findBangumiMatch(bangumi, detail) ?: return detail
-        val candidate = best.first
-        val confidence = best.second
-        val subjectId = candidate.work.id.toIntOrNull() ?: return detail
+        // 之前已经匹配过（或用户手动指定过）Bangumi 条目就直接用，不每次重新搜索。
+        val knownSubject = sourceLinkDao.getByWork(detail.id)
+            .firstOrNull { it.sourceId == SourceId.BANGUMI.name }
+            ?.sourceItemId?.toIntOrNull()
+        val subjectId = knownSubject ?: matchAndLink(bangumi, sourceLinkDao, detail) ?: return detail
         val now = System.currentTimeMillis()
-        persistBangumiLink(sourceLinkDao, detail.id, subjectId, confidence, now)
-        val bangumiWork = (bangumi.getSubject(subjectId) as? AppResult.Success)?.data ?: candidate.work
+        val bangumiWork = (bangumi.getSubject(subjectId) as? AppResult.Success)?.data ?: return detail
         val rating = fetchAndPersistBangumiRating(bangumi, ratingDao, detail.id, subjectId, now)
         return detail.copy(
             title = bangumiWork.titles.cn
@@ -301,6 +321,7 @@ class VisualNovelRepositoryImpl @Inject constructor(
         const val PRODUCER_SCOPE = "PRODUCER"
         const val DETAIL_SECTION = "VNDB_FULL"
         const val DETAIL_SCHEMA_VERSION = 1
+        const val RECENT_DETAIL_MILLIS = 30_000L
     }
 }
 
@@ -348,6 +369,20 @@ private suspend fun persistVisualNovelPageItem(
             ),
         ),
     )
+}
+
+/** 去 Bangumi 搜索匹配条目；匹配度够高就记住这个关联，返回条目 id。 */
+private suspend fun matchAndLink(
+    bangumi: BangumiRemoteDataSource,
+    sourceLinkDao: SourceLinkDao,
+    detail: VisualNovelDetail,
+): Int? {
+    val match = findBangumiMatch(bangumi, detail)
+    val subjectId = match?.first?.work?.id?.toIntOrNull()
+    if (match != null && subjectId != null) {
+        persistBangumiLink(sourceLinkDao, detail.id, subjectId, match.second, System.currentTimeMillis())
+    }
+    return subjectId
 }
 
 private suspend fun findBangumiMatch(

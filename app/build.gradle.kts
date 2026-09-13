@@ -80,8 +80,8 @@ android {
         applicationId = "com.kaguraaya.hoshimi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 48
-        versionName = "0.28.1"
+        versionCode = 49
+        versionName = "0.28.2"
 
         // 可选：用不同的包名 / 版本后缀出包（例如手头没有正式签名、想与已安装的正式版并存时）：
         //   ./gradlew assembleRelease -Phoshimi.applicationIdSuffix=.preview -Phoshimi.versionNameSuffix=-preview

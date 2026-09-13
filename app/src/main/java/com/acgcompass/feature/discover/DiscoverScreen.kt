@@ -112,6 +112,7 @@ fun DiscoverRoute(
     val tab by viewModel.tab.collectAsStateWithLifecycle()
     val rankingBoards by viewModel.rankingBoards.collectAsStateWithLifecycle()
     val scoreDiffItems by viewModel.scoreDiffItems.collectAsStateWithLifecycle()
+    val scoreDiffBackfilling by viewModel.scoreDiffBackfilling.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val filterFacets by viewModel.filterFacets.collectAsStateWithLifecycle()
     val filteredCards by viewModel.filteredCards.collectAsStateWithLifecycle()
@@ -132,6 +133,7 @@ fun DiscoverRoute(
         tab = tab,
         rankingBoards = rankingBoards,
         scoreDiffItems = scoreDiffItems,
+        scoreDiffBackfilling = scoreDiffBackfilling,
         filter = filter,
         filterFacets = filterFacets,
         filteredCards = filteredCards,
@@ -172,6 +174,7 @@ fun DiscoverRoute(
  * 榜单、评分差异榜和高级筛选由同一页面的状态模型接入。
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList", "LongMethod") // 发现页四个分区的全部状态与回调；布局拆分在各分区函数里
 @Composable
 fun DiscoverScreen(
     state: UiState<List<DiscoverResultItem>>,
@@ -208,6 +211,7 @@ fun DiscoverScreen(
     onFilterChange: (DiscoverFilter) -> Unit,
     onClearFilter: () -> Unit,
     modifier: Modifier = Modifier,
+    scoreDiffBackfilling: Boolean = false,
 ) {
     // 顶栏 + 分区药丸一起做成毛玻璃，内容从下面滚过；搜索框是列表的第一项，跟着内容一起滚走。
     val hazeState = remember { HazeState() }
@@ -283,6 +287,7 @@ fun DiscoverScreen(
 
                         DiscoverTab.SCORE_DIFF -> ScoreDiffSection(
                             items = scoreDiffItems,
+                            backfilling = scoreDiffBackfilling,
                             poolLoading = poolLoading,
                             poolError = poolError,
                             onLoadPool = onLoadPool,
@@ -815,6 +820,7 @@ private fun RankingSection(
 }
 
 /** 评分差异榜分区：中性说明 + 差距榜；无数据时显示「暂无数据」。 */
+@Suppress("LongParameterList", "LongMethod") // 一个分区的完整列表
 @Composable
 private fun ScoreDiffSection(
     items: List<ScoreDiffItem>,
@@ -822,6 +828,7 @@ private fun ScoreDiffSection(
     poolError: String?,
     onLoadPool: () -> Unit,
     onOpenWork: (String) -> Unit,
+    backfilling: Boolean = false,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -852,8 +859,17 @@ private fun ScoreDiffSection(
                 )
             }
         }
+        if (backfilling) {
+            item(key = "backfilling") {
+                Text(
+                    text = "正在为热门作品补充其它平台的评分，补到的作品会陆续出现在这里…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         if (items.isEmpty()) {
-            item { EmptyDataPlaceholder("暂无评分差距较大的作品") }
+            item { EmptyDataPlaceholder(if (backfilling) "暂时还没有评分差距较大的作品" else "暂无评分差距较大的作品") }
         } else {
             items(items, key = { it.workId }) { diff ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -881,14 +897,15 @@ private fun ScoreDiffSection(
     }
 }
 
-/** 分歧程度徽标（丰富化）：按等级着色——显著=错误强调 / 明显=三级容器 / 轻微=中性。 */
+/** 分歧程度徽标：显著=错误色，明显=中性底正文色，轻微=中性底次要色。 */
 @Composable
 private fun DivergenceBadge(level: DivergenceLevel) {
     val (bg, fg) = when (level) {
         DivergenceLevel.STRONG ->
             MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        // 颜色只用来表示状态：显著分歧用错误色，其余用中性底。
         DivergenceLevel.NOTABLE ->
-            MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+            Surfaces.raisedColor to MaterialTheme.colorScheme.onSurface
         DivergenceLevel.SLIGHT ->
             MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }

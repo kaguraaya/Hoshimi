@@ -15,7 +15,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -210,16 +209,9 @@ private fun RouteNodeRow(node: RouteNodeUiModel, onOpenWork: (String) -> Unit, m
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SuggestionChip(
+                FlatAssistChip(
                     onClick = { onOpenWork(node.workId) },
-                    label = {
-                        Text(
-                            text = node.relationLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                        )
-                    },
-                    shape = MaterialTheme.shapes.extraSmall,
-                    border = null,
+                    label = { Text(node.relationLabel) },
                 )
                 FlatAssistChip(
                     onClick = { onOpenWork(node.workId) },

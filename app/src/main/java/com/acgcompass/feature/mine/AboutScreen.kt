@@ -2,24 +2,27 @@ package com.acgcompass.feature.mine
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.NightsStay
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,9 +34,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,8 +47,13 @@ import com.acgcompass.BuildConfig
 import com.acgcompass.R
 import com.acgcompass.core.common.AppInfo
 import com.acgcompass.core.designsystem.AcgCompassTheme
-import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.IconWell
+import com.acgcompass.core.designsystem.NavRow
+import com.acgcompass.core.designsystem.RowGroup
+import com.acgcompass.core.designsystem.RowGroupDivider
+import com.acgcompass.core.designsystem.SectionHeader
 import com.acgcompass.core.designsystem.Surfaces
+import com.acgcompass.core.ui.copyOnLongPress
 
 /**
  * 关于页。展示应用与版本信息，并提供数据来源、开源许可和免责声明的独立入口。
@@ -91,9 +101,30 @@ fun AboutScreen(
                 author = AppInfo.AUTHOR,
                 repoUrl = AppInfo.REPO_URL,
             )
-            AboutNavigationSection("数据来源", "查看作品资料、评分和放送信息的来源", onOpenDataSources)
-            AboutNavigationSection("开源许可", "查看完整运行依赖、开发工具和许可说明", onOpenLicenses)
-            AboutNavigationSection("免责声明", "了解推荐结果、第三方数据和内容版权边界", onOpenDisclaimer)
+            AboutFeaturesSection()
+            SectionHeader("更多信息")
+            RowGroup {
+                NavRow(
+                    title = "数据来源",
+                    supporting = "作品资料、评分和放送信息从哪里来",
+                    onClick = onOpenDataSources,
+                    leading = { IconWell(Icons.Outlined.Storage) },
+                )
+                RowGroupDivider()
+                NavRow(
+                    title = "开源许可",
+                    supporting = "运行依赖、开发工具和许可说明",
+                    onClick = onOpenLicenses,
+                    leading = { IconWell(Icons.Outlined.Description) },
+                )
+                RowGroupDivider()
+                NavRow(
+                    title = "免责声明",
+                    supporting = "推荐结果、第三方数据和内容版权的边界",
+                    onClick = onOpenDisclaimer,
+                    leading = { IconWell(Icons.Outlined.Gavel) },
+                )
+            }
         }
     }
 }
@@ -132,77 +163,57 @@ private fun AboutBrandHeader() {
     }
 }
 
-/**
- * 版本 / 作者 / 仓库信息卡片。附带 GitHub 按钮（logo + 文案），用 [LocalUriHandler]
- * 交系统浏览器打开仓库；仓库地址亦以文字展示，便于复制记忆。
- */
+/** 版本 / 作者 / 仓库：成组的行；仓库一行点按用浏览器打开，长按复制地址。 */
 @Composable
 private fun AboutInfoSection(version: String, author: String, repoUrl: String) {
     val uriHandler = LocalUriHandler.current
-    PrismCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("版本与开发", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            AboutInfoRow(label = "版本", value = version)
-            AboutInfoRow(label = "作者", value = author)
-            Text(
-                text = "项目仓库：$repoUrl",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            FilledTonalButton(
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader("版本与开发")
+        RowGroup {
+            NavRow(title = "版本", onClick = null, trailing = { AboutValue(version) })
+            RowGroupDivider()
+            NavRow(title = "作者", onClick = null, trailing = { AboutValue(author) })
+            RowGroupDivider()
+            NavRow(
+                title = "项目仓库",
+                supporting = repoUrl,
                 onClick = { runCatching { uriHandler.openUri(repoUrl) } },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_github),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("在 GitHub 上查看")
-            }
+                modifier = Modifier.copyOnLongPress(repoUrl),
+                leading = {
+                    IconWell(icon = ImageVector.vectorResource(id = R.drawable.ic_github))
+                },
+            )
         }
     }
 }
 
 @Composable
-private fun AboutInfoRow(label: String, value: String) {
-    Text(
-        text = "$label：$value",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun AboutValue(text: String) {
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
+/** 一句话介绍主要功能，方便第一次打开「关于」的人知道这个应用能做什么。 */
 @Composable
-private fun AboutNavigationSection(title: String, summary: String, onClick: () -> Unit) {
-    PrismCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+private fun AboutFeaturesSection() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader("能做什么")
+        RowGroup {
+            ABOUT_FEATURES.forEachIndexed { index, (icon, title, text) ->
+                if (index > 0) RowGroupDivider()
+                NavRow(title = title, supporting = text, onClick = null, leading = { IconWell(icon) }, trailing = null)
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "进入$title")
         }
     }
 }
+
+private val ABOUT_FEATURES: List<Triple<ImageVector, String, String>> = listOf(
+    Triple(Icons.Outlined.NightsStay, "今晚看什么", "按可用时间、心情和待补池，挑出稳妥 / 探索 / 随机三部"),
+    Triple(Icons.Outlined.Explore, "探索队列", "左右滑认识新作品，你的选择会慢慢影响推荐"),
+    Triple(Icons.Outlined.Insights, "口味画像与预计评分", "从你的评分里学习偏好，估计你会给一部作品打几分"),
+    Triple(Icons.Outlined.Search, "多平台搜索与评分对比", "同时查 Bangumi、AniList、VNDB 等，合并结果、对比评分"),
+    Triple(Icons.Outlined.Inventory2, "待补池与时光机", "记下想看的作品，回看自己的观看与评分变化"),
+    Triple(Icons.Outlined.Lock, "本地优先", "数据存在手机上；AI 功能只在你配置了自己的服务后才会使用"),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

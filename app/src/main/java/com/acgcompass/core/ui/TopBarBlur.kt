@@ -9,6 +9,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
@@ -44,7 +45,14 @@ fun Modifier.topBarBlur(state: HazeState): Modifier {
             noiseFactor = 0f,
             fallbackTint = HazeTint(page.copy(alpha = FALLBACK_ALPHA)),
         ),
-    )
+    ) {
+        // 底部一段逐渐淡出（照 FlClash）：顶栏和下面内容之间没有一条硬边，而是模糊慢慢过渡到清晰。
+        mask = Brush.verticalGradient(
+            0f to Color.Black,
+            FADE_START to Color.Black,
+            1f to Color.Transparent,
+        )
+    }
 }
 
 /** 模糊顶栏用的透明配色：底色交给 [topBarBlur] 画，滚动时也不切换成别的颜色。 */
@@ -70,3 +78,6 @@ fun PaddingValues.withoutTop(): PaddingValues {
 private val BLUR_RADIUS: Dp = 24.dp
 private const val TINT_ALPHA = 0.72f
 private const val FALLBACK_ALPHA = 0.94f
+
+/** 从顶栏高度的这个位置开始淡出，到底边完全透明。 */
+private const val FADE_START = 0.72f

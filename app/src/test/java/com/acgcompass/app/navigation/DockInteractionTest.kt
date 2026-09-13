@@ -57,9 +57,9 @@ class DockInteractionTest {
         compose.waitForIdle()
     }
 
-    /** 底栏内第 [index] 项中心的屏幕坐标（底栏左右各留 20dp + 内边距 6dp，高 64dp、离底 8dp）。 */
+    /** 底栏内第 [index] 项中心的屏幕坐标（底栏左右各留 20dp + 内边距 4dp，高 64dp、离底 8dp）。 */
     private fun slotCenterX(width: Float, index: Int, density: Float): Float {
-        val inset = (20f + 6f) * density
+        val inset = (20f + 4f) * density
         val slot = (width - 2 * inset) / entries.size
         return inset + slot * (index + 0.5f)
     }
@@ -86,7 +86,7 @@ class DockInteractionTest {
         // 还按着：只是镜片在走，页面不切换。
         assertEquals(entries[2], current)
         assertEquals(before, selections)
-        compose.mainClock.advanceTimeBy(80)
+        compose.mainClock.advanceTimeBy(400)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/dock-dragging.png")
         compose.onRoot().performTouchInput { up() }
         compose.waitForIdle()

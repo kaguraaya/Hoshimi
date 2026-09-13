@@ -266,6 +266,20 @@ class TasteEngine @Inject constructor(
             computeMatch(feature, profile, userRating, loadTagOverrides())
         }
 
+    private suspend fun scoreWith(feature: WorkFeature, userRating: Int?): TasteMatchResult? {
+        val profile = profileState.value ?: rebuildFromCache()
+        return if (profile == null || !profile.isUsable) {
+            null
+        } else {
+            computeMatch(
+                feature,
+                profile,
+                userRating,
+                loadTagOverrides(),
+            )
+        }
+    }
+
     /**
      * 首次没取到特征（限流排队 / 网络抖动）时自动重试几次；取到后由 [observeScore] 里的
      * observeFeature 收集并出分。页面上「正在获取」的提示因此真的会自己完成，而不是要用户退出重进。
@@ -284,6 +298,8 @@ class TasteEngine @Inject constructor(
         subjectId: String,
         userRating: Int? = null,
         allowNetwork: Boolean = true,
+        /** 取不到 Bangumi 特征时用来出分的临时特征（见 `toFallbackFeature`）。 */
+        fallback: WorkFeature? = null,
     ): Flow<TasteMatchResult?> = channelFlow {
         if (subjectId.isBlank()) {
             send(null)
@@ -317,7 +333,9 @@ class TasteEngine @Inject constructor(
         }
         var feature = runCatching { workFeatureRepository.getFeature(subjectId, allowNetwork) }.getOrNull()
         if (feature == null) {
-            send(null)
+            val usableFallback = fallback?.takeIf { it.tagCounts.isNotEmpty() }
+            // 有临时特征就先用它出分，不让界面空等；真正的特征到了会由上面的收集自动替换。
+            send(usableFallback?.let { scoreWith(it, userRating) })
             if (allowNetwork) feature = retryFeature(subjectId)
         }
         if (allowNetwork && feature != null &&

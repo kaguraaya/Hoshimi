@@ -67,15 +67,24 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /**
@@ -195,94 +204,91 @@ class WorkRepositoryImpl @Inject constructor(
 
     // --- search ------------------------------------------------------------
 
-    override suspend fun search(query: String): AppResult<List<WorkMatch>> = withContext(dispatchers.io) {
-        runCatchingApp {
-            // 搜索采用「多源并行 + 合并」（而非降级取一源）：Bangumi / AniList / MAL(配置后) / VNDB。
-            // Jikan 仅允许在用户进入具体详情或主动连接测试时访问。
-            // 并行查询，各源失败互不影响（容错）；汇总后按标题相似度重算置信度并排序。
-            val perSource: List<List<WorkMatch>> = coroutineScope {
-                val tasks = listOf(
-                    async { safeSearch { bangumi.searchSubjects(keyword = query) } },
-                    async { safeSearch { anilist.searchMedia(keyword = query) } },
-                    async {
-                        if (mal.isEnabled()) safeSearch { mal.searchAnime(keyword = query) } else emptyList()
-                    },
-                    async { safeSearch { vndb.searchVn(keyword = query) } },
-                )
-                tasks.map { it.await() }
-            }
-
-            val merged = perSource.flatten()
-            // 对缺少 Bangumi 的簇使用标题变体反查并合并，保持不同关键词下的来源集合稳定。
-            val backfilled = merged + backfillBangumi(merged)
-            // 重算置信度后排序：先按匹配置信度降序，再按来源可信度
-            // 作为同分裁决。上层据此分组展示来源标签与匹配置信度。
-            backfilled
-                .map { it.withRecomputedConfidence(query) }
-                .sortedWith(
-                    // 用综合得分（相似度 + 评分人数对数加成，见 representativeScore）排序，
-                    // 让正片在相似度仅略低于同名小条目时仍凭评分人数靠前；再按人数、来源可信度裁决。
-                    compareByDescending<WorkMatch> {
-                        com.acgcompass.domain.matching.representativeScore(
-                            it.matchConfidence.toDouble(),
-                            it.popularity,
-                        )
-                    }
-                        .thenByDescending { it.popularity }
-                        .thenBy { sourceCredibilityRank(it.sourceTag) },
-                )
-                .also { persistMatches(it) }
-        }
-    }
+    override suspend fun search(query: String): AppResult<List<WorkMatch>> =
+        searchProgressive(query).lastOrNull() ?: AppResult.Success(emptyList())
 
     /**
-     * 对搜索结果里「缺少 Bangumi 来源」的作品簇，用其日文/罗马音/规范标题反查 Bangumi 补齐。
-     * 仅动画、限额 [BANGUMI_BACKFILL_BUDGET] 次请求（控开销）；命中需达 [CROSS_MATCH_THRESHOLD]。
-     * best-effort，失败忽略。使搜索结果跨关键词稳定、且统一可由 Bangumi 代表（中文/聚合评分）。
+     * 渐进式搜索：四个源并行，**哪个先回来就先发一版结果**，不必等最慢的源（通常是 VNDB）；
+     * 全部回来后再补 Bangumi 匹配并发最终结果。最终结果与排序和一次性返回的完全一致。
+     */
+    override fun searchProgressive(query: String): Flow<AppResult<List<WorkMatch>>> = channelFlow {
+        val merged = mutableListOf<WorkMatch>()
+        val lock = Mutex()
+        val sources: List<suspend () -> List<WorkMatch>> = listOf(
+            { safeSearch { bangumi.searchSubjects(keyword = query) } },
+            { safeSearch { anilist.searchMedia(keyword = query) } },
+            { if (mal.isEnabled()) safeSearch { mal.searchAnime(keyword = query) } else emptyList() },
+            { safeSearch { vndb.searchVn(keyword = query) } },
+        )
+        sources.map { source ->
+            launch {
+                val found = source()
+                if (found.isEmpty()) return@launch
+                val snapshot = lock.withLock {
+                    merged += found
+                    merged.toList()
+                }
+                send(AppResult.Success(rankSearchResults(query, snapshot).also { persistMatches(it) }))
+            }
+        }.joinAll()
+        val all = lock.withLock { merged.toList() }
+        val final = runCatchingApp { rankSearchResults(query, all + backfillBangumi(all)).also { persistMatches(it) } }
+        send(final)
+    }.flowOn(dispatchers.io)
+
+    private fun rankSearchResults(query: String, matches: List<WorkMatch>): List<WorkMatch> = matches
+        .map { it.withRecomputedConfidence(query) }
+        .sortedWith(
+            compareByDescending<WorkMatch> {
+                com.acgcompass.domain.matching.representativeScore(it.matchConfidence.toDouble(), it.popularity)
+            }
+                .thenByDescending { it.popularity }
+                .thenBy { sourceCredibilityRank(it.sourceTag) },
+        )
+
+    /**
+     * 只在其它源出现、Bangumi 没搜到的动画：用它的日文 / 罗马音 / 原名再去 Bangumi 搜一次补上。
+     * 各作品之间并行（最多 [BACKFILL_CONCURRENCY] 路，仍受 Bangumi 限流约束）；同一作品的几个标题按顺序试，
+     * 搜到就停。总请求数不超过 [BANGUMI_BACKFILL_BUDGET]。
      */
     private suspend fun backfillBangumi(matches: List<WorkMatch>): List<WorkMatch> {
         if (matches.isEmpty()) return emptyList()
-        val clusters = com.acgcompass.domain.matching.clusterMatches(matches)
-        val result = mutableListOf<WorkMatch>()
-        var budget = BANGUMI_BACKFILL_BUDGET
-        for (cluster in clusters) {
-            if (budget <= 0) break
-            if (cluster.any { it.sourceTag == SourceId.BANGUMI }) continue
-            val rep = com.acgcompass.domain.matching.representativeOf(cluster)
-            if (rep.work.mediaType != com.acgcompass.domain.model.MediaType.ANIME) continue
-            val queries = listOfNotNull(
-                rep.work.titles.ja,
-                rep.work.titles.romaji,
-                rep.work.titles.canonical,
-            ).filter { it.isNotBlank() }.distinct()
-            for (q in queries) {
-                if (budget <= 0) break
-                budget--
-                val hits = (bangumi.searchSubjects(keyword = q) as? AppResult.Success)?.data.orEmpty()
-                val best = hits
-                    // 仅接受动画条目，排除同名的小说/漫画/游戏（如「負けヒロインが多すぎる！」
-                    // 小说 343241、或「ぬきたし」原作 VN），避免把非动画条目当作动画的 Bangumi 代表，
-                    // 导致评分人数 / 简介错配（rep 已确认是动画，见上方 mediaType 判定）。
-                    .filter { it.work.mediaType == com.acgcompass.domain.model.MediaType.ANIME }
-                    .map { m -> m to candidateTitles(m).maxOf { matchConfidence(candidate = it, query = q) } }
-                    // 用综合得分（相似度 + 评分人数对数加成，见 representativeScore）择优，
-                    // 让正片在相似度仅略低于续作/小条目时仍凭评分人数胜出（如正片 27330 人 vs 第二季 11 人）。
-                    .maxWithOrNull(
-                        compareBy<Pair<WorkMatch, Double>>(
-                            { com.acgcompass.domain.matching.representativeScore(it.second, it.first.popularity) },
-                            { it.first.popularity },
-                        ),
-                    )
-                if (best != null && best.second >= CROSS_MATCH_THRESHOLD) {
-                    result += best.first.copy(matchConfidence = best.second.toFloat())
-                    break
-                }
-            }
+        val budget = java.util.concurrent.atomic.AtomicInteger(BANGUMI_BACKFILL_BUDGET)
+        val gate = Semaphore(BACKFILL_CONCURRENCY)
+        val targets = com.acgcompass.domain.matching.clusterMatches(matches)
+            .filter { cluster -> cluster.none { it.sourceTag == SourceId.BANGUMI } }
+            .map { com.acgcompass.domain.matching.representativeOf(it) }
+            .filter { it.work.mediaType == com.acgcompass.domain.model.MediaType.ANIME }
+        return coroutineScope {
+            targets.map { rep -> async { gate.withPermit { backfillOne(rep, budget) } } }.awaitAll().filterNotNull()
         }
-        return result
     }
 
-    /** 单源搜索容错包装：成功返回结果，失败 / 异常返回空列表（一个源失败不影响其它源）。 */
+    private suspend fun backfillOne(rep: WorkMatch, budget: java.util.concurrent.atomic.AtomicInteger): WorkMatch? {
+        val queries = listOfNotNull(rep.work.titles.ja, rep.work.titles.romaji, rep.work.titles.canonical)
+            .filter { it.isNotBlank() }
+            .distinct()
+        var found: WorkMatch? = null
+        for (q in queries) {
+            if (budget.getAndDecrement() <= 0) break
+            val hits = (bangumi.searchSubjects(keyword = q) as? AppResult.Success)?.data.orEmpty()
+            val best = hits
+                .filter { it.work.mediaType == com.acgcompass.domain.model.MediaType.ANIME }
+                .map { m -> m to candidateTitles(m).maxOf { matchConfidence(candidate = it, query = q) } }
+                .maxWithOrNull(
+                    compareBy<Pair<WorkMatch, Double>>(
+                        { com.acgcompass.domain.matching.representativeScore(it.second, it.first.popularity) },
+                        { it.first.popularity },
+                    ),
+                )
+            if (best != null && best.second >= CROSS_MATCH_THRESHOLD) {
+                found = best.first.copy(matchConfidence = best.second.toFloat())
+                break
+            }
+        }
+        return found
+    }
+
     private suspend fun safeSearch(block: suspend () -> AppResult<List<WorkMatch>>): List<WorkMatch> = try {
         when (val result = block()) {
             is AppResult.Success -> result.data
@@ -1237,6 +1243,7 @@ class WorkRepositoryImpl @Inject constructor(
 
         /** 跨源补齐 Bangumi 的请求预算（单次搜索最多反查次数，控开销）。 */
         const val BANGUMI_BACKFILL_BUDGET = 8
+        const val BACKFILL_CONCURRENCY = 2
 
         /** 跨平台交叉验证的标题相似度阈值（高阈值避免误配，宁缺毋滥）。 */
         const val CROSS_MATCH_THRESHOLD = 0.86

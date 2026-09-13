@@ -222,7 +222,7 @@ fun TasteProfileScreen(
                         )
                     }
                     Text(
-                        "把兜底为题材的未知社区标签交 AI 归入更精确维度并缓存，提升画像 / 评分",
+                        "让 AI 把认不出类别的社区标签归到更准确的维度，口味画像和预计评分会更准",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

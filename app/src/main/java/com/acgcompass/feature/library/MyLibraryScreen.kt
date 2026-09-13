@@ -14,8 +14,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
+import com.acgcompass.core.designsystem.PillTabs
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.ui.AcgScreenScaffold
@@ -165,21 +164,14 @@ private fun StatusTabs(
     onSelectTab: (LibraryStatusTab) -> Unit,
 ) {
     val tabs = LibraryStatusTab.entries
-    val selectedIndex = tabs.indexOf(selectedTab).coerceAtLeast(0)
-    ScrollableTabRow(
-        selectedTabIndex = selectedIndex,
-        modifier = Modifier.fillMaxWidth(),
-        edgePadding = ScreenContentPadding.Horizontal,
-    ) {
-        tabs.forEach { tab ->
-            val count = counts[tab] ?: 0
-            Tab(
-                selected = tab == selectedTab,
-                onClick = { onSelectTab(tab) },
-                text = { Text(text = "${tab.label} $count") },
-            )
-        }
-    }
+    PillTabs(
+        options = tabs,
+        selected = selectedTab,
+        onSelect = onSelectTab,
+        label = { tab -> "${tab.label} ${counts[tab] ?: 0}" },
+        modifier = Modifier.padding(horizontal = ScreenContentPadding.Horizontal, vertical = 8.dp),
+        scrollable = true,
+    )
 }
 
 /** 单条目：作品卡片 + 详情 / 加入待补池操作。 */

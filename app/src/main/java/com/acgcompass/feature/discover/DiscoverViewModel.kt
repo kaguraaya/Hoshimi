@@ -6,6 +6,7 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.model.SourceRef
+import com.acgcompass.domain.model.WorkMatch
 import com.acgcompass.domain.repository.BacklogRepository
 import com.acgcompass.domain.repository.PublicCacheWorkRepository
 import com.acgcompass.domain.repository.WorkRepository
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -76,7 +78,8 @@ class DiscoverViewModel @Inject constructor(
                         return@flow
                     }
                     emit(UiState.Loading)
-                    emit(searchToState(trimmed))
+                    // 每个源回来就刷新一次结果，不用等最慢的源。
+                    emitAll(workRepository.searchProgressive(trimmed).map { toSearchState(trimmed, it) })
                 }
             }
             .catch { throwable ->
@@ -207,11 +210,11 @@ class DiscoverViewModel @Inject constructor(
      * 之后不随公共池缓存写入持续刷新，避免用户浏览时列表跳动；再次进入页面时重新取样。
      * 由 [refreshFilterSnapshot] 填充。
      */
-    private val _filterSnapshot = MutableStateFlow<List<WorkRatings>>(emptyList())
+    private val filterSnapshotState = MutableStateFlow<List<WorkRatings>>(emptyList())
 
     /** 当前作品集合可选的筛选取值（年份 / 篇幅 / 风险 / 心情标签）。基于快照，避免缓存写库时选项抖动。 */
     val filterFacets: StateFlow<FilterFacets> =
-        _filterSnapshot
+        filterSnapshotState
             .map { buildFilterFacets(it) }
             .stateIn(
                 scope = viewModelScope,
@@ -221,7 +224,7 @@ class DiscoverViewModel @Inject constructor(
 
     /** 应用高级筛选后的作品卡片列表，保留真实 work id 供详情跳转。 */
     val filteredCards: StateFlow<List<RankedWork>> =
-        combine(_filterSnapshot, _filter) { works, filter ->
+        combine(filterSnapshotState, _filter) { works, filter ->
             applyFilter(works, filter).map { RankedWork(it.work.id, it.toFilteredCard()) }
         }.stateIn(
             scope = viewModelScope,
@@ -238,7 +241,7 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch {
             val works = runCatching { publicCacheWorkRepository.observePublicCachedWorks().first() }
                 .getOrDefault(emptyList())
-            _filterSnapshot.value = works
+            filterSnapshotState.value = works
                 .map { WorkRatings(work = it, ratings = workRepository.aggregateRatingsCached(it.id)) }
                 .shuffled()
         }
@@ -523,9 +526,12 @@ class DiscoverViewModel @Inject constructor(
                     .sortedByDescending { it.topVotes() }
                     .take(SCORE_DIFF_BACKFILL_LIMIT)
                     .map { it.work.id }
-                // Discovery never starts source lookups. Scores appear here only after a user opened
-                // the corresponding detail page and the per-source result was cached.
-                targets.forEach { id -> runCatching { workRepository.aggregateRatingsCached(id) } }
+                // 逐部去其它平台查评分（按标题交叉匹配 AniList / MAL 等），查到就落库，差异榜随之出现。
+                // 一次进入最多查 [SCORE_DIFF_BACKFILL_LIMIT] 部、按顺序进行，不和详情页抢限流额度；失败的跳过。
+                // 只读缓存的话，公共池作品多半只有一个评分源，差异榜会一直是空的。
+                for (id in targets) {
+                    runCatching { workRepository.aggregateRatings(id, forceRefresh = false) }
+                }
                 scoreDiffBackfilledOnce = true
             } finally {
                 _scoreDiffBackfilling.value = false
@@ -557,9 +563,9 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
-    /** 执行搜索，将跨源合并和排序后的仓库结果映射为 [UiState]。 */
-    private suspend fun searchToState(query: String): UiState<List<DiscoverResultItem>> =
-        when (val result = workRepository.search(query)) {
+    /** 把一版（可能是中间版）跨源合并结果映射为 [UiState]。 */
+    private fun toSearchState(query: String, result: AppResult<List<WorkMatch>>): UiState<List<DiscoverResultItem>> =
+        when (result) {
             is AppResult.Success -> {
                 val items = sortResults(query, mergeCrossSource(result.data))
                 if (items.isEmpty()) UiState.Empty(NO_RESULT_CTA) else UiState.Success(items)
@@ -602,7 +608,7 @@ class DiscoverViewModel @Inject constructor(
         const val RANKING_PAGE_SIZE = 30
 
         /** 评分差异回填单次联网交叉验证的作品数上限（控请求量）。 */
-        const val SCORE_DIFF_BACKFILL_LIMIT = 12
+        const val SCORE_DIFF_BACKFILL_LIMIT = 20
 
         /** 等待公共池写回（observeWorks）的超时，超时则用当前快照（毫秒）。 */
         const val POOL_READY_TIMEOUT_MS = 8_000L
