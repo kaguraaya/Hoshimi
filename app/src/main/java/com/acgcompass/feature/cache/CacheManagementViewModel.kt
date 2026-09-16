@@ -130,10 +130,10 @@ class CacheManagementViewModel @Inject constructor(
             if (usage.publicWorkCount >= target) {
                 "已达到公共缓存上限：${usage.publicWorkCount}/$target 部"
             } else {
-                "本轮填充已结束：当前 ${usage.publicWorkCount}/$target 部，仍可继续补充"
+                "本次填充已结束：当前 ${usage.publicWorkCount}/$target 部，仍可继续补充"
             }
         } else {
-            "本轮填充已结束：公共缓存 ${usage.publicWorkCount} 部，仍按空间上限管理"
+            "本次填充已结束：公共缓存 ${usage.publicWorkCount} 部，仍按空间上限管理"
         }
     }
 

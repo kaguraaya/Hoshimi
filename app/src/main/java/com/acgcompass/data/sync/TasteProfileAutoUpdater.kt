@@ -148,7 +148,7 @@ class TasteProfileAutoUpdater @Inject constructor(
         persistBuildingState(basicCollection.state, priorityIds.size)
         val records = buildTasteRecords(collections, basicFeatures)
         // 基础画像只使用已落库的评分、收藏状态、短评和经过校验的作品标签；
-        // Staff、角色和声优等扩展特征缺失时不影响本轮基础画像完成。
+        // Staff、角色和声优等扩展特征缺失时不影响本次基础画像完成。
         val result = runCatching { tasteProfileRepository.importAndCompute(records) }.getOrNull()
         if (result !is AppResult.Success) {
             persistFailure(fingerprint, priorityIds.size)

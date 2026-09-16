@@ -35,6 +35,7 @@ import com.acgcompass.domain.usecase.TasteTagTaxonomy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -98,6 +100,8 @@ class RecommenderViewModel @Inject constructor(
             .map { it.candidatePool }
             .distinctUntilChanged()
             .mapLatest { pool -> computeAvailableTags(pool) }
+            // 统计候选池标签同样是纯计算，放到后台线程，切换候选池时界面不卡。
+            .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
@@ -173,7 +177,9 @@ class RecommenderViewModel @Inject constructor(
             return
         }
         _result.value = UiState.Loading
-        viewModelScope.launch {
+        // 候选去重、硬过滤、意图匹配和排序都是纯计算，几千部作品时要好几百毫秒：放到后台线程，
+        // 主线程只负责画加载动画。
+        viewModelScope.launch(Dispatchers.Default) {
             try {
                 val candidates = loadCandidates(current.candidatePool)
                 _result.value = recommendFromWorks(current, candidates)
@@ -422,7 +428,7 @@ class RecommenderViewModel @Inject constructor(
         if (filtered.isEmpty()) return UiState.Empty(NO_CANDIDATE_CTA)
 
         // 接受程度「可慢热 / 可致郁 / 可党争」：没勾选的风险气质按其在作品里的代表性做软惩罚
-        // （不是硬排除——只沾一点的不受影响，主打这种气质的才明显下沉）；用户这次主动选了同名标签时不罚。
+        // （不是硬排除——只沾一点的不受影响，主打这种气质的才明显下沉）；用户本次主动选了同名标签时不罚。
         val untolerated = RISK_TAGS.filterKeys { it !in input.acceptances }
             .filterValues { tags -> tags.none { it in selectedTags } }
         val riskById: Map<String, Pair<String, Double>> = if (untolerated.isEmpty()) {
@@ -567,7 +573,7 @@ class RecommenderViewModel @Inject constructor(
     private fun subjectIdOf(w: Work): String? =
         if (w.primarySource == SourceId.BANGUMI) w.id.takeIf { it.toIntOrNull() != null } else null
 
-    /** 记录本轮「今晚看什么」曝光（支撑重复推荐冷却与后续点击统计）。best-effort，失败静默不影响结果。 */
+    /** 记录本次「今晚看什么」曝光（支撑重复推荐冷却与后续点击统计）。best-effort，失败静默不影响结果。 */
     private suspend fun recordExposure(works: List<Work>) {
         runCatching {
             val now = System.currentTimeMillis()

@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,6 +37,7 @@ import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.domain.repository.VisualNovelRepository
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -171,7 +173,7 @@ private fun ProducerWorkCard(item: VisualNovelListItem, onClick: () -> Unit) {
                     model = item.previewUrl ?: item.work.coverUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(width = 64.dp, height = 88.dp),
+                    modifier = Modifier.size(width = 64.dp, height = 88.dp).clip(PrismCorner.Cover),
                 )
                 Column {
                     Text(item.work.titles.canonical)

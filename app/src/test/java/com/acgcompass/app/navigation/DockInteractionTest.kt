@@ -79,7 +79,18 @@ class DockInteractionTest {
         compose.onRoot().performTouchInput {
             val y = height - (8f + 32f) * density
             down(androidx.compose.ui.geometry.Offset(slotCenterX(width.toFloat(), 2, density), y))
-            moveTo(androidx.compose.ui.geometry.Offset(slotCenterX(width.toFloat(), 3, density), y))
+        }
+        compose.mainClock.advanceTimeBy(300)
+        compose.onRoot().performTouchInput {
+            val y = height - (8f + 32f) * density
+            // 停在第 2、3 格之间：镜片横跨两格，两边的图标应各有一部分变色。
+            val between = (slotCenterX(width.toFloat(), 2, density) + slotCenterX(width.toFloat(), 3, density)) / 2f
+            moveTo(androidx.compose.ui.geometry.Offset(between + 6f * density, y))
+        }
+        compose.mainClock.advanceTimeBy(400)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/dock-between.png")
+        compose.onRoot().performTouchInput {
+            val y = height - (8f + 32f) * density
             moveTo(androidx.compose.ui.geometry.Offset(slotCenterX(width.toFloat(), 4, density), y))
         }
         compose.waitForIdle()

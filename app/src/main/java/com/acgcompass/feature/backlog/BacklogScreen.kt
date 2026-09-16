@@ -46,6 +46,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -70,16 +72,21 @@ import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismCorner
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.LocalFloatingBarInset
+import com.acgcompass.core.ui.LocalHeaderInset
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.core.ui.topBarBlurSource
+import com.acgcompass.core.ui.withoutTop
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.Priority
 import com.acgcompass.domain.repository.BacklogFilter
 import com.acgcompass.domain.repository.BacklogSort
 import com.acgcompass.domain.repository.BulkOp
+import dev.chrisbanes.haze.HazeState
 
 /**
  * 待补池路由入口。连接 [BacklogViewModel] 并把
@@ -174,12 +181,14 @@ fun BacklogScreen(
         // 仅当切到「全部」(null) 或「仅吃灰」(true) 才算激活，便于「清除筛选」回到默认。
         filter.inDustMuseum != false
     // 列表 / 网格排版切换（网格=3 列只显示封面）；形态由 DataStore 持久化记忆。
+    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             AcgTopLevelTopBar(
                 title = if (selectionMode) "已选 ${selectedIds.size} 项" else "待补池",
+                hazeState = hazeState,
                 actions = {
                     // 多选仅在有内容时有意义。
                     if (!isEmpty) {
@@ -210,88 +219,18 @@ fun BacklogScreen(
         },
         floatingActionButton = {},
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                // 标题栏下方留出 8dp 呼吸，叠加首个动作行/筛选卡自身留白形成可见间距。
-                .padding(top = 8.dp),
-        ) {
-            when {
-                isEmpty && hasActiveFilter -> {
-                    // 待补池有作品但当前筛选无结果——保留筛选栏，显示「无匹配」+清除筛选，不当成空池。
-                    FilterCard(
-                        filter = filter,
-                        sort = sort,
-                        onSortSelected = onSortSelected,
-                        onTogglePriorityFilter = onTogglePriorityFilter,
-                        onToggleMediaTypeFilter = onToggleMediaTypeFilter,
-                        onToggleDustMuseumFilter = onToggleDustMuseumFilter,
-                        onClearFilters = onClearFilters,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            "没有符合当前筛选条件的作品",
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Button(
-                            onClick = onClearFilters,
-                            modifier = Modifier.padding(top = 12.dp),
-                        ) { Text("清除筛选", maxLines = 1) }
-                    }
-                }
-                isEmpty -> {
-                    // 空池友好引导卡（导入 / 搜索添加），而不是孤零零的占位。
-                    BacklogEmptyState(
-                        onGoImport = onGoImport,
-                        onGoSearch = onGoSearch,
-                    )
-                }
-                selectionMode -> {
-                    // 批量操作栏作为列表 header 随内容一起滚动（不固定在顶部）。
-                    BacklogList(
-                        state = state,
-                        selectionMode = selectionMode,
-                        selectedIds = selectedIds,
-                        gridMode = gridMode,
-                        onSetPriority = onSetPriority,
-                        onSetNote = onSetNote,
-                        onToggleSelect = onToggleSelect,
-                        onOpenDetail = onOpenDetail,
-                        modifier = Modifier.weight(1f),
-                        header = {
-                            BulkActionBar(
-                                selectedCount = selectedIds.size,
-                                onBulk = onBulk,
-                            )
-                        },
-                    )
-                }
-                else -> {
-                    // 一键抽番按钮 + 筛选/排序卡作为列表 header 随内容一起滚动（不固定在顶部）。
-                    BacklogList(
-                        state = state,
-                        selectionMode = selectionMode,
-                        selectedIds = selectedIds,
-                        gridMode = gridMode,
-                        onSetPriority = onSetPriority,
-                        onSetNote = onSetNote,
-                        onToggleSelect = onToggleSelect,
-                        onOpenDetail = onOpenDetail,
-                        modifier = Modifier.weight(1f),
-                        header = {
-                            // 一键抽番移入内容区操作行，避免悬浮 FAB 遮挡卡片「查看详情」按钮。
-                            Button(
-                                onClick = onDraw,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                            ) { Text("一键抽番", maxLines = 1) }
+        // 列表铺到毛玻璃顶栏下面滚过；顶部空间由列表留白（LocalHeaderInset）和空状态各自让出。
+        val topInset = innerPadding.calculateTopPadding() + 8.dp
+        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
+            CompositionLocalProvider(LocalHeaderInset provides topInset) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding.withoutTop()),
+                ) {
+                    when {
+                        isEmpty && hasActiveFilter -> {
+                            // 待补池有作品但当前筛选无结果——保留筛选栏，显示「无匹配」+清除筛选，不当成空池。
                             FilterCard(
                                 filter = filter,
                                 sort = sort,
@@ -300,9 +239,85 @@ fun BacklogScreen(
                                 onToggleMediaTypeFilter = onToggleMediaTypeFilter,
                                 onToggleDustMuseumFilter = onToggleDustMuseumFilter,
                                 onClearFilters = onClearFilters,
+                                modifier = Modifier.padding(horizontal = 16.dp).padding(top = topInset),
                             )
-                        },
-                    )
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                Text(
+                                    "没有符合当前筛选条件的作品",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                                Button(
+                                    onClick = onClearFilters,
+                                    modifier = Modifier.padding(top = 12.dp),
+                                ) { Text("清除筛选", maxLines = 1) }
+                            }
+                        }
+                        isEmpty -> {
+                            // 空池友好引导卡（导入 / 搜索添加），而不是孤零零的占位。
+                            Box(Modifier.padding(top = topInset)) {
+                                BacklogEmptyState(
+                                    onGoImport = onGoImport,
+                                    onGoSearch = onGoSearch,
+                                )
+                            }
+                        }
+                        selectionMode -> {
+                            // 批量操作栏作为列表 header 随内容一起滚动（不固定在顶部）。
+                            BacklogList(
+                                state = state,
+                                selectionMode = selectionMode,
+                                selectedIds = selectedIds,
+                                gridMode = gridMode,
+                                onSetPriority = onSetPriority,
+                                onSetNote = onSetNote,
+                                onToggleSelect = onToggleSelect,
+                                onOpenDetail = onOpenDetail,
+                                modifier = Modifier.weight(1f),
+                                header = {
+                                    BulkActionBar(
+                                        selectedCount = selectedIds.size,
+                                        onBulk = onBulk,
+                                    )
+                                },
+                            )
+                        }
+                        else -> {
+                            // 一键抽番按钮 + 筛选/排序卡作为列表 header 随内容一起滚动（不固定在顶部）。
+                            BacklogList(
+                                state = state,
+                                selectionMode = selectionMode,
+                                selectedIds = selectedIds,
+                                gridMode = gridMode,
+                                onSetPriority = onSetPriority,
+                                onSetNote = onSetNote,
+                                onToggleSelect = onToggleSelect,
+                                onOpenDetail = onOpenDetail,
+                                modifier = Modifier.weight(1f),
+                                header = {
+                                    // 一键抽番移入内容区操作行，避免悬浮 FAB 遮挡卡片「查看详情」按钮。
+                                    Button(
+                                        onClick = onDraw,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                    ) { Text("一键抽番", maxLines = 1) }
+                                    FilterCard(
+                                        filter = filter,
+                                        sort = sort,
+                                        onSortSelected = onSortSelected,
+                                        onTogglePriorityFilter = onTogglePriorityFilter,
+                                        onToggleMediaTypeFilter = onToggleMediaTypeFilter,
+                                        onToggleDustMuseumFilter = onToggleDustMuseumFilter,
+                                        onClearFilters = onClearFilters,
+                                    )
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -411,14 +426,17 @@ private fun BacklogGridItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(PrismCorner.Poster),
+                .clip(PrismCorner.Poster)
+                .background(Surfaces.raisedColor),
             contentAlignment = Alignment.Center,
         ) {
             if (model.coverUrl != null) {
+                // 裁切铺满。
                 AsyncImage(
                     model = model.coverUrl,
                     contentDescription = model.title,
                     modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
                 )
             } else {
                 Text(
@@ -513,8 +531,12 @@ private fun BacklogEmptyState(onGoImport: () -> Unit, onGoSearch: () -> Unit) {
 
 /** 待补池列表的内边距：底部让出悬浮底栏。 */
 @Composable
-private fun backlogListPadding(): PaddingValues =
-    PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp + LocalFloatingBarInset.current)
+private fun backlogListPadding(): PaddingValues = PaddingValues(
+    start = 16.dp,
+    end = 16.dp,
+    top = 4.dp + LocalHeaderInset.current,
+    bottom = 96.dp + LocalFloatingBarInset.current,
+)
 
 /** 批量操作工具栏。空选择时操作为无效（仓库侧忽略）。 */
 @OptIn(ExperimentalLayoutApi::class)

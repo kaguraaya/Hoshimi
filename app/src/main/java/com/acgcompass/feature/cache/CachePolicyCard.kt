@@ -131,10 +131,10 @@ private fun FillRunStatus(state: CacheManagementUiState) {
 }
 
 private fun String?.toSourceStatusText(): String = when (this) {
-    "TARGET_REACHED" -> "此源本轮配额已完成"
+    "TARGET_REACHED" -> "此源本次配额已完成"
     "EXHAUSTED" -> "此源候选已耗尽"
     "RUNNING" -> "正在补充"
-    "FAILED" -> "本轮失败，可稍后继续"
+    "FAILED" -> "本次失败，可稍后继续"
     null -> "暂无"
     else -> this
 }

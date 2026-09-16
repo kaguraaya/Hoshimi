@@ -33,12 +33,12 @@ import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.IconWell
-import com.acgcompass.core.designsystem.LetterWell
 import com.acgcompass.core.designsystem.NavRow
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.RowGroup
 import com.acgcompass.core.designsystem.RowGroupDivider
 import com.acgcompass.core.designsystem.SectionHeader
+import com.acgcompass.core.designsystem.entryIconFor
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
@@ -258,7 +258,7 @@ private fun AccountStatusRowItem(row: AccountStatusRow) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LetterWell(row.label)
+        IconWell(entryIconFor(row.label))
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
             Text(row.label, style = MaterialTheme.typography.titleSmall)
             val testedText = row.lastTestedAt

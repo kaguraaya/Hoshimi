@@ -91,7 +91,7 @@ object AiTaskSpecs {
      * 不要解释、不要使用 Markdown 代码块；同样保留剧透保护规则。
      */
     fun repairPrompt(originalSystemPrompt: String): String = buildString {
-        appendLine("上一轮输出不是合法 JSON 或缺少必需字段。仅输出符合下述要求的合法 JSON 对象。")
+        appendLine("上一次输出不是合法 JSON 或缺少必需字段。仅输出符合下述要求的合法 JSON 对象。")
         appendLine("严格要求：")
         appendLine("- 只输出 JSON 对象本身，不要任何解释文字，不要使用 Markdown 代码块或反引号。")
         appendLine("- 必须包含目标格式要求的全部字段；无法确定的字段使用合理的空值（空字符串 / 空数组 / 0），并降低 confidence。")

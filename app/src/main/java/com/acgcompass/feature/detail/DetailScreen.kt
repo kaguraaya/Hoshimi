@@ -21,9 +21,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Label
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Radar
+import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -44,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -53,11 +67,11 @@ import coil.compose.AsyncImage
 import coil.imageLoader
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatAssistChip
+import com.acgcompass.core.designsystem.FlatCard
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PillTabs
-import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.designsystem.TagPill
@@ -352,6 +366,8 @@ private fun CoverImage(
                 model = coverUrl,
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize().then(if (blurred) Modifier.blur(18.dp) else Modifier),
+                // 裁切铺满，圆角才落在图片上（完整显示时上下会留空，像被切平）。
+                contentScale = ContentScale.Crop,
             )
             if (blurred) {
                 Text(
@@ -1420,30 +1436,33 @@ private fun ChipFlowRow(items: List<String>, modifier: Modifier = Modifier) {
     }
 }
 
-/** 统一的区块卡片容器（标题 + 内容槽）。 */
+/**
+ * 统一的区块卡片：FlClash 式分区卡片（圆角 32、内边距 20×18、18dp 小图标 + 标题），
+ * 取比页面高一级的底色、不描边。图标按标题挑（[sectionIconFor]）。
+ */
 @Composable
 private fun SectionCard(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    PrismCard(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = Surfaces.raisedColor,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            content()
-        }
-    }
+    FlatCard(modifier = modifier, title = title, icon = sectionIconFor(title)) { content() }
 }
+
+private fun sectionIconFor(title: String): ImageVector =
+    SECTION_ICONS.firstOrNull { (keywords, _) -> keywords.any { it in title } }?.second ?: Icons.Outlined.Info
+
+/** 标题关键词 → 分区图标（按顺序匹配第一个）。 */
+private val SECTION_ICONS: List<Pair<List<String>, ImageVector>> = listOf(
+    listOf("路线") to Icons.Outlined.Route,
+    listOf("评分") to Icons.Outlined.StarOutline,
+    listOf("共识") to Icons.Outlined.Groups,
+    listOf("记录") to Icons.Outlined.EditNote,
+    listOf("决策") to Icons.Outlined.Lightbulb,
+    listOf("标签") to Icons.AutoMirrored.Outlined.Label,
+    listOf("VNDB") to Icons.Outlined.AutoStories,
+    listOf("截图") to Icons.Outlined.Image,
+    listOf("开发商", "发行商") to Icons.Outlined.Business,
+    listOf("关联") to Icons.Outlined.Link,
+    listOf("补完") to Icons.Outlined.Schedule,
+    listOf("剧透", "雷达") to Icons.Outlined.Radar,
+)
 
 // region 预览
 

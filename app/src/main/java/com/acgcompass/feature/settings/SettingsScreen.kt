@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -72,9 +71,9 @@ import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.IconWell
-import com.acgcompass.core.designsystem.LetterWell
 import com.acgcompass.core.designsystem.NavRow
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.entryIconFor
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
@@ -708,7 +707,7 @@ private fun SettingsSummaryRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 行首是来源的首字母圆底（隐私页用盾牌图标），行尾箭头；状态与测试时间合成一行说明。
+    // 行首是入口的圆形图标底（按标题挑图标），行尾箭头；状态与测试时间合成一行说明。
     val supporting = listOfNotNull(
         statusText?.takeIf { it.isNotBlank() },
         lastTestedAtText?.takeIf { it.isNotBlank() }?.let { "最后测试：$it" },
@@ -719,7 +718,7 @@ private fun SettingsSummaryRow(
             supporting = supporting,
             onClick = onClick,
             leading = {
-                if (title.startsWith("隐私")) IconWell(Icons.Outlined.Shield) else LetterWell(title)
+                IconWell(entryIconFor(title))
             },
         )
     }

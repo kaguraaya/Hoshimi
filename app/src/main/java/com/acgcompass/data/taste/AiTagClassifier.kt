@@ -782,7 +782,7 @@ private data class BatchClassificationResult(
 /** 一轮分类的结果（供设置页展示反馈）。 */
 sealed interface TagClassifyOutcome {
 
-    /** 完成：本轮成功分类并落库 [classified] 个标签（共请求 [requested] 个）。 */
+    /** 完成：本次成功分类并落库 [classified] 个标签（共请求 [requested] 个）。 */
     data class Done(
         val classified: Int,
         val requested: Int,

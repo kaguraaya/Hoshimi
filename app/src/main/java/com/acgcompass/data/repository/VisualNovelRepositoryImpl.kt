@@ -90,7 +90,7 @@ class VisualNovelRepositoryImpl @Inject constructor(
 
     /**
      * 详情页一打开会有两三处同时要同一部作品（预加载、确保入库、评分刷新）：同一 id 串行处理，
-     * [RECENT_DETAIL_MILLIS] 内刚取到的结果直接复用，避免每一处都各自请求 VNDB、各自去 Bangumi 搜一遍匹配。
+     * [RECENT_DETAIL_MILLIS] 内刚取到的结果直接复用
      */
     override suspend fun detail(id: String, forceRefresh: Boolean): AppResult<VisualNovelDetail> =
         detailLocks.getOrPut(id) { Mutex() }.withLock {

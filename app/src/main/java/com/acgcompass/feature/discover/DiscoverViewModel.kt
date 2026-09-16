@@ -528,7 +528,6 @@ class DiscoverViewModel @Inject constructor(
                     .map { it.work.id }
                 // 逐部去其它平台查评分（按标题交叉匹配 AniList / MAL 等），查到就落库，差异榜随之出现。
                 // 一次进入最多查 [SCORE_DIFF_BACKFILL_LIMIT] 部、按顺序进行，不和详情页抢限流额度；失败的跳过。
-                // 只读缓存的话，公共池作品多半只有一个评分源，差异榜会一直是空的。
                 for (id in targets) {
                     runCatching { workRepository.aggregateRatings(id, forceRefresh = false) }
                 }

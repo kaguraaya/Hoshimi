@@ -2,6 +2,7 @@
 
 package com.acgcompass.feature.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,6 +41,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
+import com.acgcompass.core.designsystem.PrismCorner
+import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.domain.schedule.BroadcastScheduleEntry
 import com.acgcompass.domain.schedule.BroadcastScheduleRepository
 import com.acgcompass.domain.schedule.WeeklyBroadcastSchedule
@@ -217,7 +221,10 @@ private fun ScheduleEntryRow(entry: BroadcastScheduleEntry, onClick: () -> Unit)
         AsyncImage(
             model = entry.coverUrl,
             contentDescription = null,
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier
+                .size(64.dp)
+                .clip(PrismCorner.Cover)
+                .background(Surfaces.raisedColor),
             contentScale = ContentScale.Crop,
         )
         Spacer(Modifier.width(12.dp))

@@ -2,6 +2,7 @@ package com.acgcompass.feature.timemachine
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,9 +37,14 @@ import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.Cta
+import com.acgcompass.core.ui.LocalHeaderInset
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.core.ui.blurredTopBarColors
+import com.acgcompass.core.ui.topBarBlur
+import com.acgcompass.core.ui.topBarBlurSource
+import dev.chrisbanes.haze.HazeState
 
 /**
  * 时光机路由入口。连接 [TimeMachineViewModel] 并把状态下发给无状态 [TimeMachineScreen]。
@@ -89,78 +96,86 @@ fun TimeMachineScreen(
             onMessageShown()
         }
     }
+    // 标题和同步动作栏一起做成毛玻璃顶栏，报告列表从下面滚过（同发现页）。
+    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { AcgTopLevelTopBar(title = "时光机") },
+        topBar = {
+            Column(Modifier.topBarBlur(hazeState)) {
+                AcgTopLevelTopBar(title = "时光机", colors = blurredTopBarColors())
+                SyncActionBar(
+                    syncing = syncing,
+                    onCaptureLocalSnapshot = onCaptureLocalSnapshot,
+                    onSyncFromBangumi = onSyncFromBangumi,
+                )
+            }
+        },
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .topBarBlurSource(hazeState),
         ) {
-            SyncActionBar(
-                syncing = syncing,
-                onCaptureLocalSnapshot = onCaptureLocalSnapshot,
-                onSyncFromBangumi = onSyncFromBangumi,
-            )
-            StateScaffold(
-                state = state,
-                modifier = Modifier.fillMaxSize(),
-            ) { data ->
-                LazyColumn(
+            CompositionLocalProvider(LocalHeaderInset provides innerPadding.calculateTopPadding()) {
+                StateScaffold(
+                    state = state,
                     modifier = Modifier.fillMaxSize(),
-                    // 顶部留白让首张报告卡与动作栏拉开距离；底部 96dp 保证末项不被底栏遮挡（顶层页）。
-                    contentPadding = PaddingValues(
-                        start = ScreenContentPadding.Horizontal,
-                        end = ScreenContentPadding.Horizontal,
-                        top = ScreenContentPadding.UnderBarTop,
-                        bottom = ScreenContentPadding.Bottom,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    data.overview?.let { overview ->
-                        item(key = "overview") { OverviewCard(overview = overview) }
-                    }
-                    data.baselineHeadline?.let { headline ->
-                        item(key = "headline") {
-                            Text(
-                                text = headline,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
+                ) { data ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        // 顶部留白让首张报告卡与动作栏拉开距离；底部 96dp 保证末项不被底栏遮挡（顶层页）。
+                        contentPadding = PaddingValues(
+                            start = ScreenContentPadding.Horizontal,
+                            end = ScreenContentPadding.Horizontal,
+                            top = ScreenContentPadding.UnderBarTop,
+                            bottom = ScreenContentPadding.Bottom,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        data.overview?.let { overview ->
+                            item(key = "overview") { OverviewCard(overview = overview) }
                         }
-                    }
-                    if (data.baselineGroups.isNotEmpty()) {
-                        item(key = "baseline-title") {
-                            Text(
-                                text = "基线收藏（点击分组展开）",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
+                        data.baselineHeadline?.let { headline ->
+                            item(key = "headline") {
+                                Text(
+                                    text = headline,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
                         }
-                        items(
-                            count = data.baselineGroups.size,
-                            key = { idx -> "baseline-${data.baselineGroups[idx].statusLabel}" },
-                        ) { idx ->
-                            BaselineGroupCard(group = data.baselineGroups[idx], onOpenWork = onOpenWork)
+                        if (data.baselineGroups.isNotEmpty()) {
+                            item(key = "baseline-title") {
+                                Text(
+                                    text = "基线收藏（点击分组展开）",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            items(
+                                count = data.baselineGroups.size,
+                                key = { idx -> "baseline-${data.baselineGroups[idx].statusLabel}" },
+                            ) { idx ->
+                                BaselineGroupCard(group = data.baselineGroups[idx], onOpenWork = onOpenWork)
+                            }
                         }
-                    }
-                    item(key = "report") { ReportCard(report = data.report) }
-                    data.timeline.forEach { period ->
-                        item(key = "period-${period.label}") {
-                            Text(
-                                text = period.label,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                        items(
-                            count = period.entries.size,
-                            key = { idx -> "${period.label}-$idx" },
-                        ) { idx ->
-                            TimelineRow(entry = period.entries[idx], onOpenWork = onOpenWork)
+                        item(key = "report") { ReportCard(report = data.report) }
+                        data.timeline.forEach { period ->
+                            item(key = "period-${period.label}") {
+                                Text(
+                                    text = period.label,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            items(
+                                count = period.entries.size,
+                                key = { idx -> "${period.label}-$idx" },
+                            ) { idx ->
+                                TimelineRow(entry = period.entries[idx], onOpenWork = onOpenWork)
+                            }
                         }
                     }
                 }

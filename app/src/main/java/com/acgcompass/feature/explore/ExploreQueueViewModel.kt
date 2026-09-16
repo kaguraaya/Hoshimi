@@ -201,7 +201,7 @@ class ExploreQueueViewModel @Inject constructor(
     private suspend fun enrichMissingMatches(expectedGeneration: Int) {
         val candidates = unscoredCandidates.take(BACKGROUND_ENRICH_LIMIT)
         val preparingCards = mutableListOf<ExploreCardUiModel>()
-        // 每次取一小组的标签再打分（仓库内部两路并发），凑够几张就先展示。
+        // 现在每次取一小组（仓库内部两路并发），凑够几张就先展示。
         var position = 0
         for (group in candidates.chunked(ENRICH_GROUP)) {
             if (generation != expectedGeneration) return

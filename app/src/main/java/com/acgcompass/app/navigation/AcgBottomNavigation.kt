@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions") // 底栏的布局、手势、镜片几何与绘制放在一起，便于对照 FlClash 的同名实现
+
 package com.acgcompass.app.navigation
 
 import androidx.compose.animation.core.Animatable
@@ -36,8 +38,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -46,6 +56,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -129,7 +140,6 @@ private fun DockBody(
         if (lens.placed) lens.x.animateTo(x, TravelSpring) else lens.place(x)
     }
 
-    val litIndex = if (hoverIndex >= 0) hoverIndex else selectedIndex ?: -1
     Box(
         Modifier
             .fillMaxSize()
@@ -150,20 +160,104 @@ private fun DockBody(
                 },
             ),
     ) {
-        if (lens.placed && (selectedIndex != null || hoverIndex >= 0)) {
-            Lens(lens = lens, slotWidthPx = slotWidthPx)
-        }
-        Row(Modifier.fillMaxSize().selectableGroup()) {
-            entries.forEachIndexed { index, tab ->
-                DockItem(
-                    tab = tab,
-                    lit = index == litIndex,
-                    selected = index == selectedIndex,
-                    magnify = { if (index == litIndex) 1f + LENS_MAGNIFY * lens.lift.value else 1f },
-                    onClick = { if (index != selectedIndex) onSelect(tab) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
+        val showLens = lens.placed && (selectedIndex != null || hoverIndex >= 0)
+        val growthPx = with(LocalDensity.current) { LENS_GROWTH.toPx() } * 2f
+        if (showLens) Lens(lens = lens, slotWidthPx = slotWidthPx)
+        // 底层：普通颜色的图标（读屏用这一层），挖掉镜片区域——镜片里只显示上层放大的主色图标，不会重影。
+        DockRow(
+            entries = entries,
+            selectedIndex = selectedIndex,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            onSelect = onSelect,
+            modifier = Modifier
+                .selectableGroup()
+                .drawWithContent {
+                    if (!showLens) {
+                        drawContent()
+                    } else {
+                        clipPath(lensPath(lensRect(lens, slotWidthPx, size.height, growthPx)), ClipOp.Difference) {
+                            this@drawWithContent.drawContent()
+                        }
+                    }
+                },
+        )
+        // 上层：主色图标，只在镜片的圆角轮廓里显示，并随镜片放大（见 [LensedIcons]）。
+        if (showLens) LensedIcons(entries, selectedIndex, lens, slotWidthPx, growthPx, onSelect)
+    }
+}
+
+private fun lensPath(rect: Rect): Path = Path().apply { addRoundRect(RoundRect(rect, CornerRadius(rect.height / 2f))) }
+
+/**
+ * 镜片里的主色图标：只在镜片的圆角轮廓里显示，并随镜片放大——镜片盖住图标的哪一部分，哪一部分就变色
+ * （照 FlClash 的 _LensPart.inside / _LensClip），拖动时颜色跟着镜片边缘扫过图标。
+ */
+@Suppress("LongParameterList") // 镜片几何所需的全部输入
+@Composable
+private fun LensedIcons(
+    entries: List<TopLevelDestination>,
+    selectedIndex: Int?,
+    lens: DockLens,
+    slotWidthPx: Float,
+    growthPx: Float,
+    onSelect: (TopLevelDestination) -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clearAndSetSemantics {}
+            .drawWithContent {
+                clipPath(lensPath(lensRect(lens, slotWidthPx, size.height, growthPx))) {
+                    this@drawWithContent.drawContent()
+                }
+            },
+    ) {
+        DockRow(
+            entries = entries,
+            selectedIndex = selectedIndex,
+            tint = MaterialTheme.colorScheme.primary,
+            onSelect = onSelect,
+            modifier = Modifier.graphicsLayer {
+                val m = 1f + LENS_MAGNIFY * lens.lift.value
+                scaleX = m
+                scaleY = m
+                transformOrigin = TransformOrigin((lens.x.value / size.width).coerceIn(0f, 1f), HALF)
+            },
+        )
+    }
+}
+
+/** 镜片在底栏内容坐标里的矩形（与 [Lens] 的绘制一致：抬起时变大、拖得快时拉长压扁）。 */
+private fun lensRect(lens: DockLens, slotWidthPx: Float, heightPx: Float, growthPx: Float): Rect {
+    val lift = lens.lift.value
+    val stretch = (abs(lens.x.velocity) / JELLY_VELOCITY).coerceAtMost(JELLY_MAX)
+    val width = (slotWidthPx + growthPx * lift) * (1f + stretch)
+    val height = (heightPx + growthPx * lift) * (1f - stretch * JELLY_ASPECT)
+    return Rect(
+        left = lens.x.value - width / 2f,
+        top = (heightPx - height) / 2f,
+        right = lens.x.value + width / 2f,
+        bottom = (heightPx + height) / 2f,
+    )
+}
+
+@Composable
+private fun DockRow(
+    entries: List<TopLevelDestination>,
+    selectedIndex: Int?,
+    tint: Color,
+    onSelect: (TopLevelDestination) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.fillMaxSize()) {
+        entries.forEachIndexed { index, tab ->
+            DockItem(
+                tab = tab,
+                selected = index == selectedIndex,
+                tint = tint,
+                onClick = { if (index != selectedIndex) onSelect(tab) },
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -231,50 +325,38 @@ private fun CoroutineScope.releaseLens(lens: DockLens, target: Float) {
 
 @Composable
 private fun Lens(lens: DockLens, slotWidthPx: Float) {
-    val density = LocalDensity.current
-    val widthDp = with(density) { slotWidthPx.toDp() }
-    val growthPx = with(density) { LENS_GROWTH.toPx() } * 2f
+    val growthPx = with(LocalDensity.current) { LENS_GROWTH.toPx() } * 2f
     val rest = Surfaces.raisedColor
     val press = MaterialTheme.colorScheme.onSurface
     Box(
         Modifier
-            .fillMaxHeight()
-            .width(widthDp)
-            .graphicsLayer {
-                translationX = lens.x.value - slotWidthPx / 2f
-                val lift = lens.lift.value
-                // 照 FlClash 的 _lensRect：抬起时宽高各长 2 × 8dp；拖得快时沿运动方向拉长、竖向压扁（比例 1.4）。
-                val stretch = (abs(lens.x.velocity) / JELLY_VELOCITY).coerceAtMost(JELLY_MAX)
-                scaleX = (1f + growthPx * lift / size.width) * (1f + stretch)
-                scaleY = (1f + growthPx * lift / size.height) * (1f - stretch * JELLY_ASPECT)
-            }
+            .fillMaxSize()
             .drawBehind {
+                // 照 FlClash 的 _lensRect：抬起时宽高各长 2 × 8dp；拖得快时沿运动方向拉长、竖向压扁（比例 1.4）。
+                val rect = lensRect(lens, slotWidthPx, size.height, growthPx)
                 // 抬起时叠一层 8% 的前景色，比静止时略深一点。
                 val tint = press.copy(alpha = PRESS_TINT * lens.lift.value).compositeOver(rest)
-                drawRoundRect(color = tint, cornerRadius = CornerRadius(size.height / 2f))
+                drawRoundRect(
+                    color = tint,
+                    topLeft = rect.topLeft,
+                    size = rect.size,
+                    cornerRadius = CornerRadius(rect.height / 2f),
+                )
             },
     )
 }
 
-@Suppress("LongParameterList") // 一个底栏项的显示状态与回调
 @Composable
 private fun DockItem(
     tab: TopLevelDestination,
-    lit: Boolean,
     selected: Boolean,
-    magnify: () -> Float,
+    tint: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val content = if (lit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .graphicsLayer {
-                val m = magnify()
-                scaleX = m
-                scaleY = m
-            }
             .semantics {
                 role = Role.Tab
                 this.selected = selected
@@ -288,15 +370,15 @@ private fun DockItem(
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
     ) {
         Icon(
-            imageVector = if (lit) tab.selectedIcon else tab.unselectedIcon,
+            imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
             contentDescription = null,
-            tint = content,
+            tint = tint,
             modifier = Modifier.size(24.dp),
         )
         Text(
             text = tab.label,
             style = MaterialTheme.typography.labelSmall,
-            color = content,
+            color = tint,
             maxLines = 1,
             softWrap = false,
         )

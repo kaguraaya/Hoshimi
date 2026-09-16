@@ -209,7 +209,7 @@ class WorkRepositoryImpl @Inject constructor(
 
     /**
      * 渐进式搜索：四个源并行，**哪个先回来就先发一版结果**，不必等最慢的源（通常是 VNDB）；
-     * 全部回来后再补 Bangumi 匹配并发最终结果。最终结果与排序和一次性返回的完全一致。
+     * 全部回来后再补 Bangumi 匹配并发最终结果。最终结果与排序与一次性返回时完全一致。
      */
     override fun searchProgressive(query: String): Flow<AppResult<List<WorkMatch>>> = channelFlow {
         val merged = mutableListOf<WorkMatch>()

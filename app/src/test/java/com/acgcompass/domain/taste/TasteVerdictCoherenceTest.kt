@@ -9,12 +9,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlin.random.Random
 
-/**
- * 主分数与预计评分必须同向。
- *
- * 避免两套算法互相矛盾（预计会打 7.5 的作品，主分数却显示 16%「可能不太喜欢」）：
- * 主分数就是预计评分在用户自己打分历史里的位置。
- */
+/** 主分数与预计评分必须同向：主分数是预计评分在用户自己打分历史里的位置。 */
 class TasteVerdictCoherenceTest : StringSpec({
 
     val neutral = listOf("日常", "校园", "冒险", "奇幻", "科幻", "音乐", "运动", "历史")

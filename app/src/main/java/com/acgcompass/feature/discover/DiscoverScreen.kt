@@ -315,8 +315,9 @@ fun DiscoverScreen(
  */
 @Composable
 private fun ExploreQueueCompassAction(onClick: () -> Unit) {
-    val tint = MaterialTheme.colorScheme.onSurface
     IconButton(onClick = onClick) {
+        // 与顶栏其它图标同色（取 IconButton 提供的内容色）。
+        val tint = androidx.compose.material3.LocalContentColor.current
         Canvas(
             modifier = Modifier
                 .size(24.dp)

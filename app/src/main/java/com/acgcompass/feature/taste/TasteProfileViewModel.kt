@@ -111,7 +111,7 @@ class TasteProfileViewModel @Inject constructor(
                     _message.value = when (result) {
                         TagClassificationResult.COMPLETED -> {
                             val count = tagClassificationController.state.value.classified
-                            if (count > 0) "已完成 $count 个 AI 标签升维分类" else "本轮没有新增有效分类"
+                            if (count > 0) "已完成 $count 个 AI 标签升维分类" else "本次没有新增有效分类"
                         }
                         TagClassificationResult.PARTIAL -> "部分标签请求失败，已保留进度，可稍后继续"
                         TagClassificationResult.NOTHING_TO_DO -> "没有待分类的新标签"
