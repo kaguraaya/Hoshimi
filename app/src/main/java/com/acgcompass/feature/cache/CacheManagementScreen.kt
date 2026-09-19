@@ -37,6 +37,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 import kotlinx.coroutines.launch
@@ -64,6 +65,7 @@ fun CacheManagementScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("缓存管理") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

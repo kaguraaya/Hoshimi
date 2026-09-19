@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.data.datastore.HomeModulePref
 import com.acgcompass.data.datastore.SettingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -77,6 +78,7 @@ fun HomeModulesRoute(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("首页模块") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

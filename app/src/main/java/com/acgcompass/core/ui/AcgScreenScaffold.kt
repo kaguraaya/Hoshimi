@@ -33,7 +33,7 @@ import dev.chrisbanes.haze.HazeState
 val LocalFloatingBarInset = compositionLocalOf { 0.dp }
 
 /**
- * 状态栏高度。顶栏自己包住状态栏（外层不替页面让出），铺在顶栏下面的列表要把它算进顶部留白。
+ * 状态栏高度。顶栏自己包住状态栏，铺在顶栏下面的列表要把它算进顶部留白。
  */
 @Composable
 private fun statusBarTop(): Dp = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -57,7 +57,7 @@ object ScreenContentPadding {
         @Composable
         get() = BASE_TOP + statusBarTop()
 
-    private val BASE_TOP: Dp = 68.dp
+    private val BASE_TOP: Dp = 76.dp
 
     /**
      * 位于「中间栏（TabRow / 同步动作栏）下方」的列表（发现各 Tab、时光机）使用的顶部留白。
@@ -128,6 +128,7 @@ fun AcgScreenScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = {
                     Text(
                         text = title,
@@ -143,7 +144,7 @@ fun AcgScreenScaffold(
                 actions = actions,
                 // 底色交给毛玻璃画；调用方给的标题 / 图标颜色保留。
                 colors = colors.copy(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
-                // 顶栏自己包住状态栏区域（外层不替页面让出状态栏），毛玻璃因此能一直延伸到屏幕顶端。
+                // 顶栏自己包住状态栏区域，毛玻璃因此能一直延伸到屏幕顶端。
                 windowInsets = TopAppBarDefaults.windowInsets,
                 modifier = Modifier.topBarBlur(hazeState),
             )

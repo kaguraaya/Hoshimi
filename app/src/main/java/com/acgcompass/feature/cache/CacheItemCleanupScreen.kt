@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 
@@ -50,6 +51,7 @@ fun CacheItemCleanupScreen(onBack: () -> Unit, viewModel: CacheManagementViewMod
     Scaffold(
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("选择作品缓存") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

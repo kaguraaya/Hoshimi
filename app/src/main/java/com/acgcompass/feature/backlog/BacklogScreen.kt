@@ -35,8 +35,6 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -257,7 +255,7 @@ fun BacklogScreen(
                             }
                         }
                         isEmpty -> {
-                            // 空池友好引导卡（导入 / 搜索添加），而不是孤零零的占位。
+                            // 空池友好引导卡（导入 / 搜索添加）。
                             Box(Modifier.padding(top = topInset)) {
                                 BacklogEmptyState(
                                     onGoImport = onGoImport,
@@ -266,7 +264,7 @@ fun BacklogScreen(
                             }
                         }
                         selectionMode -> {
-                            // 批量操作栏作为列表 header 随内容一起滚动（不固定在顶部）。
+                            // 批量操作栏作为列表 header 随内容一起滚动。
                             BacklogList(
                                 state = state,
                                 selectionMode = selectionMode,
@@ -286,7 +284,7 @@ fun BacklogScreen(
                             )
                         }
                         else -> {
-                            // 一键抽番按钮 + 筛选/排序卡作为列表 header 随内容一起滚动（不固定在顶部）。
+                            // 一键抽番按钮 + 筛选/排序卡作为列表 header 随内容一起滚动。
                             BacklogList(
                                 state = state,
                                 selectionMode = selectionMode,
@@ -684,31 +682,19 @@ private fun FilterSortBar(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // 排序下拉 + 清除过滤。
-        var sortMenuExpanded by remember { mutableStateOf(false) }
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilledTonalButton(onClick = { sortMenuExpanded = true }) {
-                Text("排序：${sort.label()}")
-            }
-            DropdownMenu(
-                expanded = sortMenuExpanded,
-                onDismissRequest = { sortMenuExpanded = false },
-            ) {
-                BacklogSort.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.label()) },
-                        onClick = {
-                            onSortSelected(option)
-                            sortMenuExpanded = false
-                        },
-                    )
-                }
-            }
+        // 排序与优先级一样用药丸单选。
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("排序", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
             TextButton(onClick = onClearFilters) { Text("清除筛选") }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            BacklogSort.entries.forEach { option ->
+                FlatFilterChip(
+                    selected = option == sort,
+                    onClick = { onSortSelected(option) },
+                    label = { Text(option.label()) },
+                )
+            }
         }
 
         // 优先级过滤。

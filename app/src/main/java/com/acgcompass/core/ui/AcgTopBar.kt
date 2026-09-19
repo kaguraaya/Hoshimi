@@ -9,7 +9,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
+
+/** 顶栏内容区高度（不含状态栏），与 FlClash 页面顶栏一致。 */
+val AcgTopBarHeight = 72.dp
 
 /**
  * 顶层页面统一标题栏。
@@ -33,6 +37,7 @@ fun AcgTopLevelTopBar(
     hazeState: HazeState? = null,
 ) {
     TopAppBar(
+        expandedHeight = AcgTopBarHeight,
         modifier = if (hazeState != null) modifier.topBarBlur(hazeState) else modifier,
         title = {
             Text(
@@ -43,7 +48,7 @@ fun AcgTopLevelTopBar(
         },
         colors = if (hazeState != null) blurredTopBarColors() else colors,
         actions = actions,
-        // 顶栏自己包住状态栏区域（外层不替页面让出状态栏）。
+        // 顶栏自己包住状态栏区域。
         windowInsets = TopAppBarDefaults.windowInsets,
     )
 }

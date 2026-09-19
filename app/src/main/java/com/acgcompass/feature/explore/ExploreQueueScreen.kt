@@ -77,6 +77,7 @@ import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.designsystem.TagPill
 import com.acgcompass.core.designsystem.TagPillRow
 import com.acgcompass.core.designsystem.TagPillTone
+import com.acgcompass.core.ui.AcgTopBarHeight
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -133,6 +134,7 @@ fun ExploreQueueScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("探索队列", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -440,7 +442,7 @@ private fun SwipeStamp(
 }
 
 /**
- * 卡片正面：封面（带底部渐变遮罩与「跨界探索」标识）、标题、口味匹配度、推荐理由与题材标签。
+ * 卡片正面：封面（带底部渐变遮罩与「换个口味」标识）、标题、口味匹配度、推荐理由与题材标签。
  * 内容区域可滚动，长标题或多标签不会被截断。
  */
 @Composable
@@ -471,7 +473,7 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
             )
             if (card.discovery) {
                 TagPill(
-                    text = "跨界探索",
+                    text = "换个口味",
                     tone = TagPillTone.Tertiary,
                     modifier = Modifier
                         .align(Alignment.TopStart)

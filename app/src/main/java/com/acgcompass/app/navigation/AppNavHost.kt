@@ -113,7 +113,7 @@ fun AcgApp(
         // 使各页 TopAppBar / 内容统一用零 inset，不各自消费状态栏（各页各自消费状态栏时
         // 时机不一致，会导致首张卡片/封面贴顶或被裁切）。
         // 底栏不放进 bottomBar 槽：那样 Scaffold 会给它留出一整条矩形空带，圆角外面看不到下面的内容。
-        // 而是叠在内容之上，按圆角轮廓遮挡；可滚动内容通过 LocalFloatingBarInset 加大底部内边距让出位置。
+        // 底栏叠在内容之上，按圆角轮廓遮挡；可滚动内容通过 LocalFloatingBarInset 加大底部内边距让出位置。
         snackbarHost = {
             SnackbarHost(snackbarHostState, Modifier.padding(bottom = if (showDock) DOCK_SPACE else 0.dp))
         },

@@ -34,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -90,18 +91,9 @@ internal fun CoverViewerDialog(media: ViewerMedia, onDismiss: () -> Unit, onMess
                 },
             contentAlignment = Alignment.Center,
         ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = scale <= SWIPE_ZOOM_THRESHOLD,
-                beyondViewportPageCount = 1,
-            ) { page ->
-                val pageMedia = gallery[page]
-                ZoomableViewerImage(pageMedia, scale, offset) { pan, zoom ->
-                    val nextScale = (scale * zoom).coerceIn(1f, 5f)
-                    scale = nextScale
-                    offset = if (nextScale > 1f) offset + pan * nextScale else Offset.Zero
-                }
+            ViewerPager(gallery, pagerState, scale, offset) { nextScale, nextOffset ->
+                scale = nextScale
+                offset = nextOffset
             }
 
             GalleryNavigation(
@@ -117,6 +109,36 @@ internal fun CoverViewerDialog(media: ViewerMedia, onDismiss: () -> Unit, onMess
                     saving = false
                     onMessage(if (ok) "已保存到相册" else "保存失败，请稍后重试")
                 }
+            }
+        }
+    }
+}
+
+/** 大图翻页：缩放只作用于当前页，并按页裁剪，相邻页不会跟着放大、也不会露进屏幕。 */
+@Composable
+private fun ViewerPager(
+    gallery: List<ViewerMedia>,
+    pagerState: androidx.compose.foundation.pager.PagerState,
+    scale: Float,
+    offset: Offset,
+    onZoom: (Float, Offset) -> Unit,
+) {
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize(),
+        userScrollEnabled = scale <= SWIPE_ZOOM_THRESHOLD,
+        beyondViewportPageCount = 1,
+        pageSpacing = 16.dp,
+    ) { page ->
+        val active = page == pagerState.currentPage
+        Box(Modifier.fillMaxSize().clipToBounds()) {
+            ZoomableViewerImage(
+                media = gallery[page],
+                scale = if (active) scale else 1f,
+                offset = if (active) offset else Offset.Zero,
+            ) { pan, zoom ->
+                val nextScale = (scale * zoom).coerceIn(1f, 5f)
+                onZoom(nextScale, if (nextScale > 1f) offset + pan * nextScale else Offset.Zero)
             }
         }
     }

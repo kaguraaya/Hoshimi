@@ -43,6 +43,7 @@ import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.domain.schedule.BroadcastScheduleEntry
 import com.acgcompass.domain.schedule.BroadcastScheduleRepository
 import com.acgcompass.domain.schedule.WeeklyBroadcastSchedule
@@ -123,6 +124,7 @@ private fun BroadcastScheduleScreen(
     Scaffold(
         topBar = {
             androidx.compose.material3.TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("放送时间表") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

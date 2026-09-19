@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,6 +64,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.acgcompass.core.designsystem.SurfaceLevel
 import com.acgcompass.core.designsystem.SurfaceScope
 import com.acgcompass.core.designsystem.Surfaces
@@ -373,11 +375,12 @@ private fun DockItem(
             imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
             contentDescription = null,
             tint = tint,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(DOCK_ICON),
         )
+        Spacer(Modifier.height(DOCK_LABEL_GAP))
         Text(
             text = tab.label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = DOCK_LABEL_SIZE, lineHeight = DOCK_LABEL_LINE),
             color = tint,
             maxLines = 1,
             softWrap = false,
@@ -401,7 +404,13 @@ private fun overdrag(x: Float, slotWidthPx: Float, maxX: Float): Float {
     }
 }
 
-private val DOCK_HEIGHT = 64.dp
+private val DOCK_HEIGHT = 62.dp
+
+// 与 FlClash 底栏一致：图标 28dp、标签 10sp、间距 2dp。
+private val DOCK_ICON = 28.dp
+private val DOCK_LABEL_GAP = 2.dp
+private val DOCK_LABEL_SIZE = 10.sp
+private val DOCK_LABEL_LINE = 12.sp
 private val DOCK_MARGIN = 20.dp
 private val DOCK_INSET = 4.dp
 private const val DARK_LUMINANCE = 0.5f

@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.acgcompass.core.ui.AcgTopBarHeight
 
 /**
  * Bangumi OAuth2 授权登录页。
@@ -87,6 +88,7 @@ private fun BangumiOAuthScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("用 Bangumi 登录") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

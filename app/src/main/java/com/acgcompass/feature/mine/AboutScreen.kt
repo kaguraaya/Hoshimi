@@ -53,6 +53,7 @@ import com.acgcompass.core.designsystem.RowGroup
 import com.acgcompass.core.designsystem.RowGroupDivider
 import com.acgcompass.core.designsystem.SectionHeader
 import com.acgcompass.core.designsystem.Surfaces
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.core.ui.copyOnLongPress
 
 /**
@@ -72,6 +73,7 @@ fun AboutScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("关于") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -222,6 +224,7 @@ fun AboutDocumentScreen(title: String, paragraphs: List<String>, onBack: () -> U
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text(title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -259,6 +262,7 @@ fun AboutLicenseScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("开源许可") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

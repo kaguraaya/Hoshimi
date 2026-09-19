@@ -47,6 +47,7 @@ import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import com.acgcompass.domain.visualnovel.VisualNovelSort
@@ -63,6 +64,7 @@ fun VisualNovelRoute(
     Scaffold(
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("视觉小说 · Galgame") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismCorner
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.domain.repository.VisualNovelRepository
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -126,6 +127,7 @@ fun VndbProducerRoute(
     Scaffold(
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("厂商作品 · ${state.producerName ?: state.producerId}") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
