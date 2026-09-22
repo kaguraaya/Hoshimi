@@ -301,10 +301,17 @@ data class TasteMatchReasonUi(
 data class DetailTabUiModel(
     val title: String,
     val body: String,
+    val status: TabStatus = TabStatus.READY,
 ) {
-    /** 是否有有效内容（非「暂无数据」占位）。 */
-    val available: Boolean get() = body != NO_DATA
+    /** 是否有有效内容（非占位文字）。 */
+    val available: Boolean get() = status == TabStatus.READY && body != NO_DATA
 }
+
+/** 详情 Tab 的加载状态：失败时界面给出「重新加载」。 */
+enum class TabStatus { READY, LOADING, FAILED }
+
+/** Bangumi 扩展资料（角色、Staff、关联、短评）的加载进度。 */
+enum class ExtrasLoad { LOADING, LOADED, NO_SOURCE }
 
 /**
  * 补完成本分类：按集数 × 单集时长 / 卷数 / 估计游玩时长归类为「今晚 / 周末 / 长期坑」。
@@ -341,6 +348,9 @@ data class DetailExtras(
     val vndbDetail: VisualNovelDetail? = null,
     val vndbLoading: Boolean = false,
     val vndbError: String? = null,
+    val bangumiLoad: ExtrasLoad = ExtrasLoad.LOADING,
+    val creditsFailed: Boolean = false,
+    val commentsFailed: Boolean = false,
 )
 
 /** 观看路线分区；MAIN/OPTIONAL/SKIPPABLE 仅限动画，DERIVED 表示非动画衍生作品或原作。 */
@@ -976,16 +986,34 @@ private fun Work.toTabs(
     extras: DetailExtras = DetailExtras(),
     radar: SpoilerRadarResult? = null,
 ): List<DetailTabUiModel> = listOf(
-    // 简介来自 Work.summary（Bangumi 等主源条目 summary，已入库）；缺失「暂无数据」。
-    DetailTabUiModel("简介", summary?.takeIf { it.isNotBlank() } ?: NO_DATA),
-    // 评论摘要 = 真实他人短评（next.bgm.tv/p1）+ 无剧透评价雷达折叠的口碑概览；都缺失才「暂无数据」。
-    DetailTabUiModel("评论摘要", reviewSummaryWithComments(extras.comments, radar)),
-    DetailTabUiModel("角色 · Staff", extras.charactersStaffBody),
-    DetailTabUiModel("关联作品", extras.relationsBody),
+    summaryTab(summary, extras.bangumiLoad),
+    // 评论摘要 = 真实他人短评（next.bgm.tv/p1）+ 无剧透评价雷达折叠的口碑概览。
+    extrasTab("评论摘要", reviewSummaryWithComments(extras.comments, radar), extras, extras.commentsFailed),
+    extrasTab("角色 · Staff", extras.charactersStaffBody, extras, extras.creditsFailed),
+    extrasTab("关联作品", extras.relationsBody, extras, extras.creditsFailed),
     // 移除重复的「观看路线」文字 Tab——结构化「观看路线（智能选择主线）」区块已单独展示可点击作品行。
     DetailTabUiModel("平台数据", platformDataSummary(ratings)),
     DetailTabUiModel("我的记录", personalRecordSummary(personal)),
 )
+
+private fun summaryTab(summary: String?, load: ExtrasLoad): DetailTabUiModel {
+    val text = summary?.takeIf { it.isNotBlank() }
+    return when {
+        text != null -> DetailTabUiModel("简介", text)
+        load == ExtrasLoad.LOADING -> DetailTabUiModel("简介", "正在加载简介…", TabStatus.LOADING)
+        else -> DetailTabUiModel("简介", NO_DATA)
+    }
+}
+
+/** 有内容就显示；没有内容时区分「加载中」「加载失败」「没有 Bangumi 条目」和真的没有。 */
+private fun extrasTab(title: String, body: String, extras: DetailExtras, failed: Boolean): DetailTabUiModel = when {
+    body != NO_DATA -> DetailTabUiModel(title, body)
+    extras.bangumiLoad == ExtrasLoad.LOADING -> DetailTabUiModel(title, "正在从 Bangumi 加载…", TabStatus.LOADING)
+    failed -> DetailTabUiModel(title, "Bangumi 暂时没有响应，没能加载这部分资料。", TabStatus.FAILED)
+    extras.bangumiLoad == ExtrasLoad.NO_SOURCE ->
+        DetailTabUiModel(title, "这部作品没有对应的 Bangumi 条目，暂无这部分资料。")
+    else -> DetailTabUiModel(title, NO_DATA)
+}
 
 /**
  * 评论摘要 = 对大众口碑/评论的**内容性**摘要（好评点、争议点、适合人群、观看时机），

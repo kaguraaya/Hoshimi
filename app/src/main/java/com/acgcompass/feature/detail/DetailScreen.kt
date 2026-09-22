@@ -44,6 +44,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -137,6 +138,7 @@ fun DetailRoute(
                 onAnalyzeMatchWithAi = viewModel::onAnalyzeMatchWithAi,
                 onUpdateMyRecord = viewModel::onUpdateMyRecord,
                 onSyncVndbRecordToBangumi = viewModel::onSyncVndbRecordToBangumi,
+                onRetry = viewModel::retry,
             ),
         )
     }
@@ -163,7 +165,7 @@ fun DetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            // 详情页没有顶栏：自己让出状态栏（外层不替页面让出）。
+            // 详情页没有顶栏：自己让出状态栏。
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             // 顶部额外 8dp 呼吸（共约 24dp），底部保留 24dp 避免末项贴边。
@@ -208,7 +210,7 @@ fun DetailScreen(
             onAddMainline = actions.onAddMainline,
             onAddAllSeries = actions.onAddAllSeries,
         )
-        DetailTabsSection(tabs = state.tabs)
+        DetailTabsSection(tabs = state.tabs, onRetry = actions.onRetry)
         CompletionCostSection(completionCost = state.completionCost)
     }
 }
@@ -1040,6 +1042,7 @@ data class DetailScreenActions(
     val onUpdateMyRecord: (String?, Int?, Int?, String?, List<String>?, Boolean) -> Unit =
         { _, _, _, _, _, _ -> },
     val onSyncVndbRecordToBangumi: () -> Unit = {},
+    val onRetry: () -> Unit = {},
 )
 
 @Composable
@@ -1363,7 +1366,7 @@ private fun ReasonsBlock(title: String, reasons: List<String>, modifier: Modifie
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DetailTabsSection(tabs: List<DetailTabUiModel>, modifier: Modifier = Modifier) {
+private fun DetailTabsSection(tabs: List<DetailTabUiModel>, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     if (tabs.isEmpty()) return
     SectionCard(title = "详情", modifier = modifier) {
         var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
@@ -1383,10 +1386,15 @@ private fun DetailTabsSection(tabs: List<DetailTabUiModel>, modifier: Modifier =
             color = if (selected.available) {
                 MaterialTheme.colorScheme.onSurface
             } else {
-                // 未接入数据源的 Tab 显示「暂无数据」，绝不伪造。
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
+        if (selected.status == TabStatus.LOADING) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        if (selected.status == TabStatus.FAILED) {
+            TextButton(onClick = onRetry) { Text("重新加载") }
+        }
     }
 }
 

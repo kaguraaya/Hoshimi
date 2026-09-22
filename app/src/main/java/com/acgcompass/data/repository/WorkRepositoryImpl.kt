@@ -128,6 +128,8 @@ class WorkRepositoryImpl @Inject constructor(
     private val workFeatureRepository: WorkFeatureRepository,
 ) : WorkRepository, PublicCacheWorkRepository, CacheFillController {
 
+    private val profileAttempts = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     // --- observeWork -------------------------------------------------------
 
     override fun observeWork(workId: String): Flow<UiState<Work>> = combine(
@@ -829,7 +831,10 @@ class WorkRepositoryImpl @Inject constructor(
                     }
                     now - it.fetchedAt >= ttl
                 }
-                if (forceRefresh || stale) refreshRatingsAndWork(workId, forceRefresh)
+                val needsProfile = needsFullProfile(workId, now)
+                if (forceRefresh || stale || needsProfile) {
+                    refreshRatingsAndWork(workId, forceRefresh, refreshProfile = needsProfile)
+                }
                 // 单一可信源：从 Room 读取每源评分行，聚合（缺失源保留 null，绝不回填）。
                 val perSource = ratingDao.getByWork(workId).toRatingAggregate().perSource
                 aggregateRatingsUseCase(perSource)
@@ -846,14 +851,26 @@ class WorkRepositoryImpl @Inject constructor(
      * 尽力刷新作品全部来源的评分，并使用主来源更新作品资料字段。
      * 任何失败都被吞掉以保持韧性（绝不崩溃，缺失即「暂无数据」）。
      */
-    private suspend fun refreshRatingsAndWork(workId: String, forceRefresh: Boolean) {
+    /**
+     * 收藏同步、放送表等列表接口不带完整简介；本地作品没有简介时补拉一次完整条目。
+     * 同一作品 6 小时内只补一次，避免真没简介的条目反复请求。
+     */
+    private suspend fun needsFullProfile(workId: String, now: Long): Boolean {
+        val missingSummary = workDao.getById(workId)?.let { it.summary.isNullOrBlank() } ?: false
+        val recentlyTried = profileAttempts[workId]?.let { now - it < DetailCacheTtl.COMMENTS_MILLIS } ?: false
+        val needed = missingSummary && !recentlyTried
+        if (needed) profileAttempts[workId] = now
+        return needed
+    }
+
+    private suspend fun refreshRatingsAndWork(workId: String, forceRefresh: Boolean, refreshProfile: Boolean = false) {
         ensureWorkAvailable(workId)
         val primarySource = workDao.getById(workId)?.let { sourceIdFromName(it.primarySource) }
         val sourcePairs = linkedSourcePairs(workId, primarySource)
         val bangumiPair = sourcePairs.firstOrNull { it.first == SourceId.BANGUMI }
         coroutineScope {
             listOf(
-                async { refreshBangumiBundle(workId, bangumiPair, forceRefresh) },
+                async { refreshBangumiBundle(workId, bangumiPair, forceRefresh || refreshProfile) },
                 async { refreshLinkedRatings(workId, sourcePairs, forceRefresh) },
                 async { enrichViaCrossSourceSearch(workId) },
                 async { refreshPrimaryWork(workId, sourcePairs) },
