@@ -18,6 +18,7 @@ import com.acgcompass.domain.model.TagNoise
 import com.acgcompass.domain.model.TasteProfile
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.recommend.RecommendSimilarity
+import com.acgcompass.domain.recommend.SessionFit
 import com.acgcompass.domain.recommend.TonightRanker
 import com.acgcompass.domain.recommend.intent.IntentExplain
 import com.acgcompass.domain.recommend.intent.IntentMatch
@@ -274,7 +275,7 @@ class RecommenderViewModel @Inject constructor(
         // 第一步：硬过滤（仅裁剪，不打分）——媒介/时间/已看过抛弃/期末保护/未完结/不要X/标签。
         val prefiltered = candidates.asSequence()
             .filter { w ->
-                w.mediaType == MediaType.ANIME && w.fitsTimeBudget(input.time) && w.id !in excludeIds &&
+                w.mediaType == MediaType.ANIME && w.id !in excludeIds &&
                     // 单集都放不进这段时间（20 分钟配剧场版）的直接排除；时长未知放行。
                     TonightRanker.episodeFitsBudget(w.units.episodeMinutes, input.time?.availableMinutes) &&
                     // 期末保护模式——排除长篇/未完结/高耗能（致郁·上头·烧脑）。
@@ -448,6 +449,16 @@ class RecommenderViewModel @Inject constructor(
             }.toMap()
         }
 
+        val sessionById = filtered.associate { s ->
+            val w = s.work
+            w.id to SessionFit.evaluate(
+                input.time?.availableMinutes,
+                w.units.episodes,
+                w.units.episodeMinutes,
+                w.tags.map { it.name },
+            )
+        }
+
         // 第三步：今晚分精排 + 三档选片（稳妥 = 最高分；探索 = 与稳妥题材拉开；随机 = 高分段加权抽样），
         // 同系列最多占一个名额。详见 [TonightRanker]。
         val byId = filtered.associateBy { it.work.id }
@@ -458,23 +469,27 @@ class RecommenderViewModel @Inject constructor(
                     id = w.id,
                     taste = s.personal.toDouble(),
                     intentFit = if (tagSelected) s.intent?.fit ?: 0.0 else null,
-                    dominantConflict = ((s.intent?.dominantConflict ?: 0.0) + riskById[w.id]?.second.orZero())
-                        .coerceAtMost(1.0),
+                    dominantConflict = (
+                        (s.intent?.dominantConflict ?: 0.0) + riskById[w.id]?.second.orZero() +
+                            lateNightPenalty(input, w)
+                        ).coerceAtMost(1.0),
                     scoreCap = s.intent?.scoreCap,
                     community10 = s.bayes10?.toDouble(),
-                    sessionFit = TonightRanker.sessionFit(
-                        w.units.episodes,
-                        w.units.episodeMinutes,
-                        input.time?.availableMinutes,
-                    ),
-                    completionEase = TonightRanker.completionEase(
-                        w.units.episodes,
-                        when (w.status) {
-                            com.acgcompass.domain.model.ReleaseStatus.FINISHED -> true
-                            com.acgcompass.domain.model.ReleaseStatus.UNKNOWN -> null
-                            else -> false
-                        },
-                    ),
+                    sessionFit = sessionById.getValue(w.id).score,
+                    timeWeight = SessionFit.weight(input.time?.availableMinutes),
+                    completionEase = if (AcceptanceOption.LONG_FORM in input.acceptances) {
+                        // 「长篇也行」：不因集数多而降权。
+                        TonightRanker.completionEase(null, null)
+                    } else {
+                        TonightRanker.completionEase(
+                            w.units.episodes,
+                            when (w.status) {
+                                com.acgcompass.domain.model.ReleaseStatus.FINISHED -> true
+                                com.acgcompass.domain.model.ReleaseStatus.UNKNOWN -> null
+                                else -> false
+                            },
+                        )
+                    },
                     daysSinceExposure = exposureAt[w.id]?.let { (now - it).toDouble() / MILLIS_PER_DAY },
                     releaseYear = w.year,
                     franchiseKey = RecommendSimilarity.franchiseKey(
@@ -507,6 +522,10 @@ class RecommenderViewModel @Inject constructor(
                 else -> "综合口碑与你的口味挑选$ratingPart"
             }
             val riskNote = riskById[s.work.id]?.let { "；带明显的「${it.first}」气质" }.orEmpty()
+            val timeNote = sessionById[s.work.id]?.let { fitResult ->
+                val total = s.work.units.episodes?.let { e -> s.work.units.episodeMinutes?.let { e * it } }
+                SessionFit.note(fitResult, total)
+            }?.let { "；$it" }.orEmpty()
             // 探索档补一句「和稳妥选择哪里不同」，让三档的差别看得见。
             val contrast = if (kind == RecommendationKind.GAMBLE && safeTitle != null) {
                 "；题材与《$safeTitle》错开，换个口味"
@@ -517,7 +536,7 @@ class RecommenderViewModel @Inject constructor(
                 kind = kind,
                 workId = s.work.id,
                 card = s.work.toRecommendCard(),
-                reason = "${kind.tagline()}。$fit$contrast$riskNote",
+                reason = "${kind.tagline()}。$fit$timeNote$contrast$riskNote",
                 matchPercent = s.tasteFraction?.takeIf { s.tasteAvailable }
                     ?.let { (it * PERCENT).toInt().coerceIn(0, PERCENT) },
             )
@@ -593,6 +612,13 @@ class RecommenderViewModel @Inject constructor(
     }
 
     /** 期末保护——排除长篇坑/未完结/高耗能（致郁·上头·烧脑）作品。 */
+    /** 深夜模式：主打悬疑剧情、致郁、上头的作品容易一集接一集停不下来，往后排。 */
+    private fun lateNightPenalty(input: RecommenderInput, w: Work): Double {
+        if (!input.lateNightMode) return 0.0
+        val heavy = SessionFit.SERIAL_TAGS + "上头"
+        return if (w.tags.take(LATE_NIGHT_TAG_WINDOW).any { it.name in heavy }) LATE_NIGHT_PENALTY else 0.0
+    }
+
     private fun passesFinalsProtection(w: Work): Boolean {
         if (w.completionCost == com.acgcompass.domain.model.CompletionCost.LONG_HAUL) return false
         if (w.status != com.acgcompass.domain.model.ReleaseStatus.FINISHED) return false
@@ -650,6 +676,9 @@ class RecommenderViewModel @Inject constructor(
             AcceptanceOption.DEPRESSING to listOf("致郁", "致郁系", "虐心", "胃痛", "黑深残"),
             AcceptanceOption.SHIPPING_WAR to listOf("党争", "修罗场"),
         )
+
+        private const val LATE_NIGHT_TAG_WINDOW = 4
+        private const val LATE_NIGHT_PENALTY = 0.5
 
         /** 风险气质的代表性达到多少才算「主打」并触发软惩罚。 */
         const val RISK_MIN_REPRESENTATIVENESS = 0.3

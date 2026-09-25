@@ -45,6 +45,8 @@ object TonightRanker {
         val scoreCap: Int? = null,
         val community10: Double? = null,
         val sessionFit: Double = NEUTRAL,
+        /** 时间拟合的权重；时间越短越高，多出的部分从口味权重里扣。 */
+        val timeWeight: Double = TasteScoringParams.TONIGHT_W_TIME_FIT,
         val completionEase: Double = NEUTRAL,
         val daysSinceExposure: Double? = null,
         val releaseYear: Int? = null,
@@ -79,12 +81,13 @@ object TonightRanker {
     fun score(c: Candidate, currentYear: Int): Double {
         val p = TasteScoringParams
         val wIntent = if (c.intentFit != null) p.TONIGHT_W_INTENT_TAG else 0.0
-        val wTaste = p.TONIGHT_W_TASTE + (p.TONIGHT_W_INTENT_TAG - wIntent)
+        val wTime = c.timeWeight.coerceIn(0.0, p.TONIGHT_W_TASTE)
+        val wTaste = p.TONIGHT_W_TASTE + (p.TONIGHT_W_INTENT_TAG - wIntent) - (wTime - p.TONIGHT_W_TIME_FIT)
         val community = c.community10?.let { ((it - 5.0) / 4.0).coerceIn(0.0, 1.0) } ?: NEUTRAL
         val novelty = c.daysSinceExposure?.let { 1.0 - repeatDecay(it) } ?: 1.0
         val positive = wTaste * c.taste.coerceIn(0.0, 1.0) +
             wIntent * (c.intentFit ?: 0.0).coerceIn(0.0, 1.0) +
-            p.TONIGHT_W_TIME_FIT * c.sessionFit.coerceIn(0.0, 1.0) +
+            wTime * c.sessionFit.coerceIn(0.0, 1.0) +
             p.TONIGHT_W_COMMUNITY * community +
             p.TONIGHT_W_NOVELTY * novelty +
             p.TONIGHT_W_COMPLETION_EASE * c.completionEase.coerceIn(0.0, 1.0) +

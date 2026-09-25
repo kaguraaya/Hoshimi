@@ -70,6 +70,7 @@ import com.acgcompass.core.designsystem.TagPillTone
 import com.acgcompass.core.designsystem.TonalFilterChip
 import com.acgcompass.core.designsystem.WorkCard
 import com.acgcompass.core.designsystem.WorkCardUiModel
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
 
@@ -163,6 +164,7 @@ fun RecommenderScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             androidx.compose.material3.TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("今晚看什么", fontWeight = FontWeight.SemiBold) },
                 // 这是从首页进入的二级页面，需要显式的返回入口（此前只能靠系统返回手势）。
                 navigationIcon = {
@@ -219,10 +221,9 @@ fun RecommenderScreen(
                 onToggleLateNight = onToggleLateNight,
             )
 
-            // 深夜提醒仅显示状态提示，不改变筛选结果。
             if (input.lateNightMode) {
                 Text(
-                    text = "已启用深夜提醒，请合理安排休息时间。",
+                    text = "已开启深夜模式：少推停不下来的剧情向，看完记得早点休息。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
@@ -269,7 +270,7 @@ private fun SubmitButton(enabled: Boolean, submitted: Boolean, onClick: () -> Un
         }
         Text(
             text = when {
-                !enabled -> "先选择可用时间"
+                !enabled -> "先选今晚能看多久"
                 submitted -> "换一批"
                 else -> "生成今晚推荐"
             },
@@ -295,19 +296,19 @@ private fun ModeSwitches(
         Column {
             ModeSwitchRow(
                 label = "单一推荐模式",
-                supporting = "只给一部最稳妥的，不用纠结",
+                supporting = "只推荐最稳妥的一部，不用纠结",
                 checked = input.indecisionMode,
                 onToggle = onToggleIndecision,
             )
             ModeSwitchRow(
                 label = "低负担模式",
-                supporting = "过滤长篇 / 致郁 / 高投入 / 未完结",
+                supporting = "排除长篇、致郁、烧脑和未完结的作品",
                 checked = input.finalsProtectionMode,
                 onToggle = onToggleFinalsProtection,
             )
             ModeSwitchRow(
-                label = "深夜提醒",
-                supporting = "提醒合理安排休息，不影响结果",
+                label = "深夜模式",
+                supporting = "避开容易停不下来的悬疑剧情和致郁作品，并提醒早点休息",
                 checked = input.lateNightMode,
                 onToggle = onToggleLateNight,
             )
@@ -354,12 +355,17 @@ private fun InputSection(
     onToggleAcceptance: (AcceptanceOption) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FlatCard(title = "我有多少时间", icon = Icons.Outlined.Schedule) {
+        FlatCard(
+            title = "今晚能看多久",
+            icon = Icons.Outlined.Schedule,
+            supporting = input.time?.hint() ?: "按这一次能看的时长挑，不要求整部看完",
+        ) {
             PillTabs(
                 options = TimeBudget.entries,
                 selected = input.time,
                 onSelect = onSelectTime,
                 label = { it.label() },
+                scrollable = false,
             )
         }
 
@@ -390,7 +396,11 @@ private fun InputSection(
             }
         }
 
-        FlatCard(title = "接受程度", icon = Icons.Outlined.Shield) {
+        FlatCard(
+            title = "内容偏好",
+            icon = Icons.Outlined.Shield,
+            supporting = "没勾的气质会排得靠后；「别太烧脑」「只看已完结」会直接排除",
+        ) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

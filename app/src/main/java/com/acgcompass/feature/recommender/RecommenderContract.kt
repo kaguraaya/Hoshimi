@@ -25,10 +25,8 @@ import com.acgcompass.domain.repository.DrawCriteria
 // region 输入选项
 
 /**
- * 时间预算选择：20 分钟 / 1 小时 / 2-3 小时 / 周末通宵。
- *
- * [availableMinutes] 映射到 [DrawCriteria.availableMinutes] 的硬过滤上限；`null` 表示不限时长
- * （周末通宵）。仓库按补完成本分桶（今晚≈120min / 周末≈600min / 长期坑=∞）做粗粒度裁剪。
+ * 今晚这一次能看多久（不是整部作品的总时长）。`null` 分钟数表示不限时。
+ * 排序见 [com.acgcompass.domain.recommend.SessionFit]。
  */
 enum class TimeBudget(val availableMinutes: Int?) {
     TWENTY_MIN(20),
@@ -38,10 +36,18 @@ enum class TimeBudget(val availableMinutes: Int?) {
     ;
 
     fun label(): String = when (this) {
-        TWENTY_MIN -> "20 分钟"
-        ONE_HOUR -> "1 小时"
-        TWO_THREE_HOURS -> "2-3 小时"
-        WEEKEND -> "周末通宵"
+        TWENTY_MIN -> "20分钟"
+        ONE_HOUR -> "1小时"
+        TWO_THREE_HOURS -> "2-3小时"
+        WEEKEND -> "不限"
+    }
+
+    /** 选中后显示在时间选项下方，说明会怎么挑。 */
+    fun hint(): String = when (this) {
+        TWENTY_MIN -> "大约一集的时间：优先泡面番、短片和每集相对独立的日常、搞笑番"
+        ONE_HOUR -> "两三集的时间：优先能看完的短篇，或看几集就能停的作品"
+        TWO_THREE_HOURS -> "一部电影或半季的时间：剧场版、短篇和 6 集左右的作品更合适"
+        WEEKEND -> "时间充裕：可以一口气看完一整季"
     }
 }
 
@@ -64,34 +70,29 @@ private const val TONIGHT_COMPLETION_MINUTES = 120
 private const val WEEKEND_COMPLETION_MINUTES = 600
 
 /**
- * 接受程度选择：可慢热 / 可致郁 / 可党争 / 可长篇 / 不要剧透 / 不要太累 / 不要未完结。
+ * 内容偏好（可多选）。
  *
- * 语义分两类：
- * - 「可 X」放宽风险白名单（[toleratedRiskTag] 非空时把该风险加入 [DrawCriteria.riskTolerance]）。
- * - 「不要 X」为硬性拒绝：
- *   - [NO_SPOILER]：无剧透——本地规则推荐器无法判断正文剧透，仅保留约束供 AI 路径处理。
- *   - [NO_TIRING]：不要太累——拒绝「上头 / 烧脑」高耗能风险（即使放宽也不纳入白名单）。
- *   - [NO_UNFINISHED]：不要未完结——复用 [DrawCriteria.finalsProtection]，要求作品已完结
- *     （注意：仓库的 finalsProtection 同时排除「长期坑」，方向偏保守，符合「不要未完结」诉求）。
+ * - 「慢热也行 / 能接受致郁 / 不介意修罗场」：没勾选时，主打这类气质的作品排序会往后放（不是排除）。
+ * - 「长篇也行」：不因集数多而降权。
+ * - 「别太烧脑」：排除主打烧脑、上头、意识流的作品。
+ * - 「只看已完结」：排除未完结作品。
  */
 enum class AcceptanceOption(val toleratedRiskTag: String?) {
     SLOW_BURN("慢热"),
     DEPRESSING("致郁"),
     SHIPPING_WAR("党争"),
     LONG_FORM(null),
-    NO_SPOILER(null),
     NO_TIRING(null),
     NO_UNFINISHED(null),
     ;
 
     fun label(): String = when (this) {
-        SLOW_BURN -> "可慢热"
-        DEPRESSING -> "可致郁"
-        SHIPPING_WAR -> "可党争"
-        LONG_FORM -> "可长篇"
-        NO_SPOILER -> "不要剧透"
-        NO_TIRING -> "不要太累"
-        NO_UNFINISHED -> "不要未完结"
+        SLOW_BURN -> "慢热也行"
+        DEPRESSING -> "能接受致郁"
+        SHIPPING_WAR -> "不介意修罗场"
+        LONG_FORM -> "长篇也行"
+        NO_TIRING -> "别太烧脑"
+        NO_UNFINISHED -> "只看已完结"
     }
 }
 
@@ -170,7 +171,7 @@ data class RecommenderInput(
     val indecisionMode: Boolean = false,
     /** 期末周保护模式：过滤长篇 / 致郁 / 高上头 / 未完结。 */
     val finalsProtectionMode: Boolean = false,
-    /** 深夜提醒模式：温柔提醒早点休息，不强行劝睡。 */
+    /** 深夜模式：剧情连贯、致郁的作品往后排，并提醒早点休息。 */
     val lateNightMode: Boolean = false,
     /** 候选池——待补池（默认）或全部作品。 */
     val candidatePool: CandidatePool = CandidatePool.BACKLOG,

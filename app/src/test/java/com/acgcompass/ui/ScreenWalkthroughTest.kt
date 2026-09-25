@@ -102,7 +102,7 @@ class ScreenWalkthroughTest {
         }
 
         // 1. 初始：没选时间，底部固定的主按钮禁用并提示原因（不需要滚动就能看到）。
-        compose.onNodeWithText("先选择可用时间").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("先选今晚能看多久").assertIsDisplayed().assertIsNotEnabled()
         shot("tonight-1-initial")
 
         // 2. 选时间与标签。
@@ -169,7 +169,7 @@ class ScreenWalkthroughTest {
 
         // 第 1 张：跨界候选，带预计评分。
         compose.onNodeWithText("1 / 3").assertIsDisplayed()
-        compose.onNodeWithText("跨界探索").assertIsDisplayed()
+        compose.onNodeWithText("换个口味").assertIsDisplayed()
         compose.onNodeWithText("预计你会打 8.1 · 大众基线 8.4").assertIsDisplayed()
         shot("explore-1-card")
 
