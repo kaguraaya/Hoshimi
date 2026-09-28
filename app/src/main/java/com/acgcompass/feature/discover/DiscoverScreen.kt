@@ -39,6 +39,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -73,6 +74,7 @@ import com.acgcompass.core.designsystem.AppSearchField
 import com.acgcompass.core.designsystem.AppSearchFieldState
 import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatFilterChip
+import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.PillTabs
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismMetrics
@@ -99,6 +101,7 @@ private const val TAB_ANIM_MS = 220
  *
  * @param onOpenWork 点击结果进入作品详情（`detailRoute(workId)`）。
  */
+@Suppress("LongMethod") // 收集各状态流并逐个传给无状态界面
 @Composable
 fun DiscoverRoute(
     onOpenWork: (String) -> Unit,
@@ -113,6 +116,7 @@ fun DiscoverRoute(
     val rankingBoards by viewModel.rankingBoards.collectAsStateWithLifecycle()
     val scoreDiffItems by viewModel.scoreDiffItems.collectAsStateWithLifecycle()
     val scoreDiffBackfilling by viewModel.scoreDiffBackfilling.collectAsStateWithLifecycle()
+    val scoreDiffAutoBackfill by viewModel.scoreDiffAutoBackfill.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val filterFacets by viewModel.filterFacets.collectAsStateWithLifecycle()
     val filteredCards by viewModel.filteredCards.collectAsStateWithLifecycle()
@@ -133,7 +137,12 @@ fun DiscoverRoute(
         tab = tab,
         rankingBoards = rankingBoards,
         scoreDiffItems = scoreDiffItems,
-        scoreDiffBackfilling = scoreDiffBackfilling,
+        scoreDiffBackfill = ScoreDiffBackfillUi(
+            running = scoreDiffBackfilling,
+            autoEnabled = scoreDiffAutoBackfill,
+            onToggleAuto = viewModel::onToggleScoreDiffAutoBackfill,
+            onBackfillMore = viewModel::onBackfillMoreScoreDiff,
+        ),
         filter = filter,
         filterFacets = filterFacets,
         filteredCards = filteredCards,
@@ -211,7 +220,7 @@ fun DiscoverScreen(
     onFilterChange: (DiscoverFilter) -> Unit,
     onClearFilter: () -> Unit,
     modifier: Modifier = Modifier,
-    scoreDiffBackfilling: Boolean = false,
+    scoreDiffBackfill: ScoreDiffBackfillUi = ScoreDiffBackfillUi(),
 ) {
     // 顶栏 + 分区药丸一起做成毛玻璃，内容从下面滚过；搜索框是列表的第一项，跟着内容一起滚走。
     val hazeState = remember { HazeState() }
@@ -287,7 +296,7 @@ fun DiscoverScreen(
 
                         DiscoverTab.SCORE_DIFF -> ScoreDiffSection(
                             items = scoreDiffItems,
-                            backfilling = scoreDiffBackfilling,
+                            backfill = scoreDiffBackfill,
                             poolLoading = poolLoading,
                             poolError = poolError,
                             onLoadPool = onLoadPool,
@@ -820,6 +829,44 @@ private fun RankingSection(
     }
 }
 
+/** 评分差异页「补充其它平台评分」的状态与操作。 */
+data class ScoreDiffBackfillUi(
+    val running: Boolean = false,
+    val autoEnabled: Boolean = true,
+    val onToggleAuto: (Boolean) -> Unit = {},
+    val onBackfillMore: () -> Unit = {},
+)
+
+/** 自动补评分开关 + 手动再补一批。 */
+@Composable
+private fun ScoreDiffBackfillCard(backfill: ScoreDiffBackfillUi) {
+    PrismCard(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("自动补充其它平台评分", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        text = "打开本页时，为只有一个平台评分的热门作品去 AniList、MAL 等查评分，每次最多 20 部",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                FlatSwitch(checked = backfill.autoEnabled, onCheckedChange = backfill.onToggleAuto)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (backfill.running) "正在补充，补到的作品会陆续出现…" else "也可以手动再查一批",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = backfill.onBackfillMore, enabled = !backfill.running) { Text("再补一批") }
+            }
+            if (backfill.running) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
 /** 评分差异榜分区：中性说明 + 差距榜；无数据时显示「暂无数据」。 */
 @Suppress("LongParameterList", "LongMethod") // 一个分区的完整列表
 @Composable
@@ -829,8 +876,9 @@ private fun ScoreDiffSection(
     poolError: String?,
     onLoadPool: () -> Unit,
     onOpenWork: (String) -> Unit,
-    backfilling: Boolean = false,
+    backfill: ScoreDiffBackfillUi = ScoreDiffBackfillUi(),
 ) {
+    val backfilling = backfill.running
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         // 底部留白保证末项不被底栏遮挡（顶层页）。
@@ -860,15 +908,7 @@ private fun ScoreDiffSection(
                 )
             }
         }
-        if (backfilling) {
-            item(key = "backfilling") {
-                Text(
-                    text = "正在为热门作品补充其它平台的评分，补到的作品会陆续出现在这里…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        item(key = "backfill_control") { ScoreDiffBackfillCard(backfill) }
         if (items.isEmpty()) {
             item { EmptyDataPlaceholder(if (backfilling) "暂时还没有评分差距较大的作品" else "暂无评分差距较大的作品") }
         } else {

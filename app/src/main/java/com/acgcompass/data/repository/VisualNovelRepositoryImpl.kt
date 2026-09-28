@@ -63,6 +63,7 @@ class VisualNovelRepositoryImpl @Inject constructor(
 ) : VisualNovelRepository {
     private val detailLocks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
     private val recentDetails = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, VisualNovelDetail>>()
+    private val linkAttempts: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     override suspend fun featured(
         sort: VisualNovelSort,
@@ -239,6 +240,14 @@ class VisualNovelRepositoryImpl @Inject constructor(
         tagWriter.persist(page.items.map { it.work })
     }
 
+    override suspend fun linkBangumiIfMissing(detail: VisualNovelDetail): VisualNovelDetail? {
+        if (detail.bangumiSubjectId != null || !linkAttempts.add(detail.id)) return null
+        return addBangumiRating(detail).takeIf { it.bangumiSubjectId != null }?.also { enriched ->
+            persistDetail(enriched, System.currentTimeMillis())
+            recentDetails.remove(detail.id)
+        }
+    }
+
     private suspend fun addBangumiRating(detail: VisualNovelDetail): VisualNovelDetail {
         // 之前已经匹配过（或用户手动指定过）Bangumi 条目就直接用，不每次重新搜索。
         val knownSubject = sourceLinkDao.getByWork(detail.id)
@@ -385,25 +394,50 @@ private suspend fun matchAndLink(
     return subjectId
 }
 
+/**
+ * 依次用展示标题、原名、去掉副标题的原名去 Bangumi 搜索，命中就停。
+ * 不限制 nsfw：登录了 Bangumi 的用户才能搜到 R18 条目，未登录时接口本身会隐藏。
+ */
 private suspend fun findBangumiMatch(
     bangumi: BangumiRemoteDataSource,
     detail: VisualNovelDetail,
 ): Pair<WorkMatch, Double>? {
+    val year = detail.released?.take(RELEASE_YEAR_LENGTH)?.toIntOrNull()
+    // 「Rance X -決戦-」→「Rance X」：去掉常见的副标题括注。
+    val shortTitle = detail.originalTitle?.replace(SUBTITLE_PATTERN, "")?.trim()
+    val queries = listOfNotNull(detail.title, detail.originalTitle, shortTitle)
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
+        .take(MAX_MATCH_QUERIES)
+    for (query in queries) {
+        bestBangumiMatch(bangumi, query, detail, year)?.let { return it }
+    }
+    return null
+}
+
+private suspend fun bestBangumiMatch(
+    bangumi: BangumiRemoteDataSource,
+    query: String,
+    detail: VisualNovelDetail,
+    year: Int?,
+): Pair<WorkMatch, Double>? {
     val candidates = (
         bangumi.searchSubjects(
-            keyword = detail.title,
-            filter = BangumiSearchFilterDto(type = listOf(BangumiSubjectType.GAME), nsfw = false),
+            keyword = query,
+            filter = BangumiSearchFilterDto(type = listOf(BangumiSubjectType.GAME)),
             limit = 10,
         ) as? AppResult.Success
         )?.data.orEmpty()
-    val year = detail.released?.take(RELEASE_YEAR_LENGTH)?.toIntOrNull()
     return candidates
         .filter { it.work.mediaType == MediaType.GAME || it.work.mediaType == MediaType.VN }
         .map { candidate ->
             val confidence = candidate.work.allTitleVariants().maxOfOrNull { title ->
                 visualNovelMatchConfidence(
                     candidate = title,
-                    query = detail.title,
+                    query = listOfNotNull(detail.title, detail.originalTitle).maxByOrNull { q ->
+                        visualNovelMatchConfidence(candidate = title, query = q, yearMatch = false)
+                    } ?: detail.title,
                     yearMatch = yearsMatch(year, candidate.work.year),
                 )
             } ?: 0.0
@@ -484,3 +518,5 @@ private fun estimateMetadataBytes(item: VisualNovelListItem): Long = BASE_METADA
 private const val BASE_METADATA_BYTES = 512L
 private const val BANGUMI_MATCH_THRESHOLD = 0.92
 private const val RELEASE_YEAR_LENGTH = 4
+private const val MAX_MATCH_QUERIES = 3
+private val SUBTITLE_PATTERN = Regex("\\s*[-－~～〜(（\\[【].*$")

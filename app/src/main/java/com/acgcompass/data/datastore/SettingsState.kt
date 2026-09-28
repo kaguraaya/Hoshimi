@@ -33,7 +33,7 @@ enum class ThemeMode {
  * 仅承载布尔开关与主题等本地偏好，**绝不包含**任何凭据 / key / token，
  * 凭据由 `CredentialStore`（EncryptedSharedPreferences + Keystore）单独管理。
  *
- * @property allowAiAnalyzeReviews 是否允许 AI 分析评论。默认关闭，AI 功能未配置时保持关闭。
+ * @property allowAiAnalyzeReviews 是否允许把短评发给 AI。默认关闭，AI 功能未配置时保持关闭。
  * @property recordTimeMachineSnapshots 是否记录本地时光机快照。
  * @property bangumiEnabled 是否启用默认开启的 Bangumi 主来源。
  * @property anilistEnabled 是否启用 AniList 补充来源。

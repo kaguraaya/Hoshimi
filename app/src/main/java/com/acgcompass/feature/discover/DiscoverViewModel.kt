@@ -263,7 +263,9 @@ class DiscoverViewModel @Inject constructor(
         }
         // 进入评分差异页时按需回填第二来源评分（内部自等公共池就绪），使差异榜不再恒空。
         if (tab == DiscoverTab.SCORE_DIFF) {
-            backfillScoreDiffRatings()
+            viewModelScope.launch {
+                if (settingsDataStore.scoreDiffAutoBackfill.first()) backfillScoreDiffRatings()
+            }
         }
         // 每次进入筛选 Tab 重取并洗牌快照；不订阅后续缓存写入。
         if (tab == DiscoverTab.FILTER) {
@@ -492,6 +494,26 @@ class DiscoverViewModel @Inject constructor(
 
     private var scoreDiffBackfilledOnce = false
 
+    /** 已经尝试补过的作品，「再补一批」时跳过。 */
+    private val scoreDiffAttempted = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /** 评分差异页「自动补充其它平台评分」开关。 */
+    val scoreDiffAutoBackfill: StateFlow<Boolean> = settingsDataStore.scoreDiffAutoBackfill
+        .stateIn(viewModelScope, SharingStarted.Lazily, true)
+
+    fun onToggleScoreDiffAutoBackfill(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setScoreDiffAutoBackfill(enabled)
+            if (enabled) backfillScoreDiffRatings()
+        }
+    }
+
+    /** 手动再补一批（跳过已经补过的作品）。 */
+    fun onBackfillMoreScoreDiff() {
+        scoreDiffBackfilledOnce = false
+        backfillScoreDiffRatings()
+    }
+
     private val _scoreDiffBackfilling = MutableStateFlow(false)
 
     /** 评分差异回填进行中（评分差异页可用作页脚指示）。 */
@@ -522,13 +544,14 @@ class DiscoverViewModel @Inject constructor(
                 } ?: worksWithRatings.value
                 if (pool.isEmpty()) return@launch // 池仍未就绪，不 latch，下次进入再试。
                 val targets = pool
-                    .filter { it.validSourceCount() == 1 }
+                    .filter { it.validSourceCount() == 1 && it.work.id !in scoreDiffAttempted }
                     .sortedByDescending { it.topVotes() }
                     .take(SCORE_DIFF_BACKFILL_LIMIT)
                     .map { it.work.id }
                 // 逐部去其它平台查评分（按标题交叉匹配 AniList / MAL 等），查到就落库，差异榜随之出现。
                 // 一次进入最多查 [SCORE_DIFF_BACKFILL_LIMIT] 部、按顺序进行，不和详情页抢限流额度；失败的跳过。
                 for (id in targets) {
+                    scoreDiffAttempted += id
                     runCatching { workRepository.aggregateRatings(id, forceRefresh = false) }
                 }
                 scoreDiffBackfilledOnce = true

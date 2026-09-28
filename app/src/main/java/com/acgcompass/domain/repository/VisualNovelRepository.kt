@@ -26,6 +26,9 @@ interface VisualNovelRepository {
 
     suspend fun cachedDetail(id: String): VisualNovelDetailSnapshot?
 
+    /** 缓存的详情还没关联 Bangumi 时补一次匹配；匹配到返回更新后的详情，否则 null。 */
+    suspend fun linkBangumiIfMissing(detail: VisualNovelDetail): VisualNovelDetail? = null
+
     suspend fun producerWorks(
         producerId: String,
         page: Int = 1,

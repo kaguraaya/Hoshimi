@@ -285,7 +285,10 @@ class DetailViewModel @Inject constructor(
                 )
                 maybeTranslateVndbDescription(cached.detail)
             }
-            if (cached != null && !cached.stale) return@launch
+            if (cached != null && !cached.stale) {
+                linkVndbToBangumi(cached.detail)
+                return@launch
+            }
 
             detailExtras.value = detailExtras.value.copy(vndbLoading = cached == null, vndbError = null)
             when (val result = visualNovelRepository.detail(workId, forceRefresh = true)) {
@@ -307,6 +310,13 @@ class DetailViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** 缓存里的 VNDB 详情还没关联 Bangumi 时补一次匹配，补到后刷新评分区。 */
+    private suspend fun linkVndbToBangumi(detail: com.acgcompass.domain.visualnovel.VisualNovelDetail) {
+        val linked = runCatching { visualNovelRepository.linkBangumiIfMissing(detail) }.getOrNull() ?: return
+        detailExtras.value = detailExtras.value.copy(vndbDetail = linked)
+        ratings.value = runCatching { workRepository.aggregateRatingsCached(workId) }.getOrNull()
     }
 
     /**
@@ -668,72 +678,43 @@ class DetailViewModel @Inject constructor(
             }
             // 解析真实 Bangumi subjectId（主源或交叉验证链接）——让有 Bangumi 词条的非主源作品
             // 也能拉角色/Staff/关联与真实短评；无 Bangumi 词条则跳过（绝不乱用裸数字 id）。
-            val subjectId = resolveBangumiSubjectId(work) ?: return@launch
-
-            detailRepository.observeBangumiExtras(work.id, subjectId, forceRefresh).collect { data ->
-                val charLines = data.characters.take(12).mapNotNull { character ->
-                    val name = character.name.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    buildString {
-                        append("· ").append(name)
-                        character.role?.takeIf { it.isNotBlank() }?.let { append("（$it）") }
-                        character.actor?.takeIf { it.isNotBlank() }?.let { append(" · CV：$it") }
-                    }
-                }
-                val staffLines = data.staff.take(12).mapNotNull { person ->
-                    val name = person.name.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    "· $name" + (person.role?.takeIf { it.isNotBlank() }?.let { "（$it）" } ?: "")
-                }
-                val charactersStaffBody = buildString {
-                    if (charLines.isNotEmpty()) append("角色\n").append(charLines.joinToString("\n"))
-                    if (staffLines.isNotEmpty()) {
-                        if (isNotEmpty()) append("\n\n")
-                        append("Staff\n").append(staffLines.joinToString("\n"))
-                    }
-                }.ifBlank { "暂无数据" }
-
-                val relationsBody = data.relations.take(20).mapNotNull { relation ->
-                    val title = relation.nameCn.takeIf { it.isNotBlank() }
-                        ?: relation.name.takeIf { it.isNotBlank() }
-                        ?: return@mapNotNull null
-                    "· " + (relation.relation?.takeIf { it.isNotBlank() }?.let { "[$it] " } ?: "") + title
-                }.joinToString("\n").ifBlank { "暂无数据" }
-
-                val prequels = data.relations.filter { it.relation?.contains("前") == true }
-                val sequels = data.relations.filter { it.relation?.contains("续") == true }
-                val watchRouteBody = when {
-                    data.relations.isEmpty() -> "暂无数据"
-                    prequels.isEmpty() && sequels.isEmpty() ->
-                        "路线待确认（已有关联作品，但前传/续作关系不明确，建议参考「关联作品」自行判断）"
-                    else -> buildString {
-                        append("根据关联作品推断的大致顺序（仅供参考）：\n")
-                        prequels.forEach { append("· 前作：").append(it.nameCn.ifBlank { it.name }).append("\n") }
-                        append("· 本作\n")
-                        sequels.forEach { append("· 续作：").append(it.nameCn.ifBlank { it.name }).append("\n") }
-                    }.trim()
-                }
-
-                val routeEntries = buildRouteEntries(work, data.relations)
-                seriesSubjectIds = routeEntries.mapNotNull { it.workId.toIntOrNull() }
-                val commentLines = data.comments.take(8).map { comment ->
-                    val rate = if (comment.rate > 0) " · ${comment.rate}分" else ""
-                    "${comment.nickname}$rate：${comment.text.replace("\n", " ").take(80)}"
-                }
-                val tags = data.tags.ifEmpty { work.tags.map { it.name } }
-                    .filter { it.isNotBlank() }
-                    .distinct()
-                    .take(15)
-                detailExtras.value = DetailExtras(
-                    charactersStaffBody = charactersStaffBody,
-                    relationsBody = relationsBody,
-                    watchRouteBody = watchRouteBody,
-                    routeEntries = routeEntries,
-                    comments = commentLines,
-                    tags = tags,
-                    vndbDetail = detailExtras.value.vndbDetail,
-                    vndbLoading = detailExtras.value.vndbLoading,
-                    vndbError = detailExtras.value.vndbError,
-                )
+            val subjectId = resolveBangumiSubjectId(work)
+            if (subjectId == null) {
+                detailExtras.value = detailExtras.value.copy(bangumiLoad = ExtrasLoad.NO_SOURCE)
+                return@launch
             }
+            detailExtras.value = detailExtras.value.copy(bangumiLoad = ExtrasLoad.LOADING)
+            val completed = runCatching { collectBangumiExtras(work, subjectId, forceRefresh) }
+            detailExtras.value = detailExtras.value.copy(
+                bangumiLoad = ExtrasLoad.LOADED,
+                creditsFailed = detailExtras.value.creditsFailed || completed.isFailure,
+                commentsFailed = detailExtras.value.commentsFailed || completed.isFailure,
+            )
+        }
+    }
+
+    private suspend fun collectBangumiExtras(work: Work, subjectId: Int, forceRefresh: Boolean) {
+        detailRepository.observeBangumiExtras(work.id, subjectId, forceRefresh).collect { data ->
+            val routeEntries = buildRouteEntries(work, data.relations)
+            seriesSubjectIds = routeEntries.mapNotNull { it.workId.toIntOrNull() }
+            val tags = data.tags.ifEmpty { work.tags.map { it.name } }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .take(15)
+            detailExtras.value = DetailExtras(
+                charactersStaffBody = charactersStaffText(data),
+                relationsBody = relationsText(data),
+                watchRouteBody = watchRouteText(data),
+                routeEntries = routeEntries,
+                comments = commentLines(data),
+                tags = tags,
+                vndbDetail = detailExtras.value.vndbDetail,
+                vndbLoading = detailExtras.value.vndbLoading,
+                vndbError = detailExtras.value.vndbError,
+                bangumiLoad = ExtrasLoad.LOADING,
+                creditsFailed = data.creditsFailed,
+                commentsFailed = data.commentsFailed,
+            )
         }
     }
 
@@ -866,7 +847,7 @@ class DetailViewModel @Inject constructor(
             // 口味锚点——历史最高分（最喜欢）与最低分（最不喜欢），各取前若干。
             val topRated = allRated.sortedByDescending { it.rating }.take(5)
             val lowRated = allRated.filter { it.rating <= 6 }.sortedBy { it.rating }.take(5)
-            // 隐私开关「允许 AI 分析评论」：关闭（默认）时，发给 AI 的内容里不带任何短评文本。
+            // 隐私开关「允许把短评发给 AI」：关闭（默认）时，发给 AI 的内容里不带任何短评文本。
             val allowComments = detailInteractions.isAiReviewAnalysisAllowed()
             val lineOf: (com.acgcompass.domain.detail.RatedWorkContext) -> String = { context ->
                 buildString {

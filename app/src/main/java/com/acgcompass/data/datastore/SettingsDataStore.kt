@@ -125,9 +125,12 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it.clear() }
     }
 
-    /** 是否允许 AI 分析评论。 */
+    /** 是否允许把短评发给 AI。 */
     val allowAiAnalyzeReviews: Flow<Boolean> =
         dataStore.data.map { it[Keys.ALLOW_AI_ANALYZE_REVIEWS] ?: SettingsState.DEFAULT_ALLOW_AI_ANALYZE_REVIEWS }
+
+    /** 评分差异页：进入时是否自动去其它平台补评分。 */
+    val scoreDiffAutoBackfill: Flow<Boolean> = dataStore.data.map { it[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true }
 
     /** 是否记录本地时光机快照。 */
     val recordTimeMachineSnapshots: Flow<Boolean> = dataStore.data.map {
@@ -409,9 +412,13 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it[Keys.BANGUMI_NONOFFICIAL_TOKEN_CONSENT] = consented }
     }
 
-    /** 设置是否允许 AI 分析评论。 */
+    /** 设置是否允许把短评发给 AI。 */
     suspend fun setAllowAiAnalyzeReviews(enabled: Boolean) {
         dataStore.edit { it[Keys.ALLOW_AI_ANALYZE_REVIEWS] = enabled }
+    }
+
+    suspend fun setScoreDiffAutoBackfill(enabled: Boolean) {
+        dataStore.edit { it[Keys.SCORE_DIFF_AUTO_BACKFILL] = enabled }
     }
 
     /** 设置是否记录本地时光机快照。 */
@@ -540,6 +547,7 @@ class SettingsDataStore @Inject constructor(
     /** Preferences 键集合。仅非敏感开关，键名稳定以兼容升级。 */
     private object Keys {
         val ALLOW_AI_ANALYZE_REVIEWS = booleanPreferencesKey("allow_ai_analyze_reviews")
+        val SCORE_DIFF_AUTO_BACKFILL = booleanPreferencesKey("score_diff_auto_backfill")
         val RECORD_TIME_MACHINE_SNAPSHOTS = booleanPreferencesKey("record_time_machine_snapshots")
         val BANGUMI_ENABLED = booleanPreferencesKey("bangumi_enabled")
         val ANILIST_ENABLED = booleanPreferencesKey("anilist_enabled")
