@@ -30,7 +30,12 @@ internal fun PolicyCard(
 ) {
     val countPresets = listOf(500, 1_000, 2_000, 3_000)
     val spacePresets = listOf(100, 250, 500, 1_000)
-    FlatCard(title = "缓存上限", icon = Icons.Outlined.Storage) {
+    FlatCard(
+        title = "缓存上限",
+        icon = Icons.Outlined.Storage,
+        supporting = "超出上限时先清最久没打开的作品；最近 3 天看过的、待补池和收藏里的不清。" +
+            "AI 生成的评论摘要、翻译和匹配分析不会被清理，避免重复消耗额度。",
+    ) {
         CacheModeControls(state, onEvent)
         val presets = if (state.mode == CacheLimitMode.COUNT) countPresets else spacePresets
         CacheLimitControls(state, presets, onEvent)
@@ -92,8 +97,7 @@ private fun BackgroundFillControl(state: CacheManagementUiState, onEvent: (Cache
 
 @Composable
 private fun FillAction(state: CacheManagementUiState, onEvent: (CachePolicyEvent) -> Unit) {
-    // 不提供「立即填充」按钮：公共缓存受各数据源限流约束，点了也不会立刻填满，容易让人以为没反应。
-    // 这里说明实际行为；只有填充正在进行时，才给出停止入口。
+    // 公共缓存受各数据源限流约束，不提供「立即填充」：只说明实际行为，填充进行中时给出停止入口。
     Text(
         "公共缓存会在你使用应用时自动补充（打开首页、浏览榜单时按各数据源的限速慢慢补），不需要手动触发。",
         style = MaterialTheme.typography.bodySmall,

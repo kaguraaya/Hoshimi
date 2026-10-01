@@ -118,7 +118,9 @@ class CacheRepositoryImpl @Inject constructor(
             }
         }
 
-        val entries = cacheDao.getEntriesOldestFirst()
+        // 最近几天打开过的作品先不清，常看的资料不必反复重新下载。
+        val recentCutoff = System.currentTimeMillis() - RECENT_KEEP_MILLIS
+        val entries = cacheDao.getEntriesOldestFirst().filter { it.lastAccessedAt < recentCutoff }
         for (entry in entries) {
             val overLimit = when (policy.mode) {
                 CacheLimitMode.COUNT -> usage.publicWorkCount > policy.normalizedCountLimit
@@ -309,7 +311,7 @@ class CacheRepositoryImpl @Inject constructor(
         cacheDao.deleteSourceLinks(entry.workId)
         cacheDao.deleteWorkTags(entry.workId)
         cacheDao.deleteWorkFeature(entry.workId)
-        cacheDao.deleteAiResults(entry.workId)
+        // AI 生成的内容不随缓存清理删除：重新生成要消耗额度，文本本身很小。
         cacheDao.deleteRouteNodes(entry.workId)
         cacheDao.deleteRecommendationExposures(entry.workId)
         cacheDao.deleteWork(entry.workId)
@@ -327,3 +329,5 @@ class CacheRepositoryImpl @Inject constructor(
     private fun assetKind(raw: String): CacheAssetKind =
         CacheAssetKind.entries.firstOrNull { it.name == raw } ?: CacheAssetKind.COVER
 }
+
+private const val RECENT_KEEP_MILLIS = 3L * 24L * 60L * 60L * 1_000L
