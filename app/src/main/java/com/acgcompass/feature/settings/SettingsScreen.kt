@@ -31,15 +31,11 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -72,8 +68,10 @@ import com.acgcompass.core.designsystem.FlatSwitch
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.IconWell
 import com.acgcompass.core.designsystem.NavRow
+import com.acgcompass.core.designsystem.OptionList
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.entryIconFor
+import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
@@ -474,6 +472,7 @@ fun SettingsScreenContent(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                expandedHeight = AcgTopBarHeight,
                 title = { Text("设置") },
                 colors = blurredTopBarColors(),
                 modifier = Modifier.topBarBlur(hazeState),
@@ -1145,37 +1144,13 @@ internal fun AiProviderSettingsCard(
         onToggleExpand = actions.onToggleAiExpand,
         modifier = modifier,
     ) {
-        // Provider 选择下拉（OpenAI / Gemini / DeepSeek / OpenRouter / 自定义）。
-        var dropdownExpanded by remember { mutableStateOf(false) }
-        ExposedDropdownMenuBox(
-            expanded = dropdownExpanded,
-            onExpandedChange = { dropdownExpanded = it },
-        ) {
-            FlatTextField(
-                value = card.selectedProvider.displayName,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("AI 提供商") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-            )
-            ExposedDropdownMenu(
-                expanded = dropdownExpanded,
-                onDismissRequest = { dropdownExpanded = false },
-            ) {
-                card.options.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.displayName) },
-                        onClick = {
-                            actions.onAiProviderSelect(option)
-                            dropdownExpanded = false
-                        },
-                    )
-                }
-            }
-        }
+        OptionList(
+            title = "AI 提供商",
+            options = card.options,
+            selected = card.selectedProvider,
+            label = { it.displayName },
+            onSelect = actions.onAiProviderSelect,
+        )
 
         card.lastTestedAtText?.let {
             Text(
@@ -1210,7 +1185,7 @@ internal fun AiProviderSettingsCard(
             onValueChange = { value ->
                 maxTagsText = value.filter(Char::isDigit).take(MAX_TAG_INPUT_DIGITS)
             },
-            label = { Text("单次升维标签上限（100–1000）") },
+            label = { Text("每次最多细分的标签数（100–1000）") },
             supportingText = {
                 Text(
                     if (
@@ -1278,7 +1253,7 @@ private const val MAX_TAG_INPUT_DIGITS = 4
 // region 隐私卡片
 
 /**
- * 隐私控制卡片：是否允许 AI 分析评论、是否记录本地时光机快照两个开关，
+ * 隐私控制卡片：是否允许把短评发给 AI、是否记录本地时光机快照两个开关，
  * 以及本地数据清除 / 缓存清除 / 导入 / 导出导航入口。
  */
 @Composable
@@ -1302,15 +1277,17 @@ internal fun PrivacySettingsCard(card: PrivacyCardState, actions: SettingsAction
 @Composable
 private fun PrivacyToggles(card: PrivacyCardState, actions: SettingsActions) {
     ToggleRow(
-        label = "允许 AI 分析评论",
-        description = "关闭时不会将评论内容发送给 AI 提供商（默认关闭）",
+        label = "允许把短评发给 AI",
+        description = "开启后，详情页的「AI 匹配分析」和「评论摘要」会把你在 Bangumi 写的短评、" +
+            "以及 Bangumi 社区的公开短评发给 AI，用来判断口味、总结口碑。关闭（默认）时只发标题、标签和评分；" +
+            "本机计算的口味画像不受影响。",
         checked = card.allowAiAnalyzeReviews,
         enabled = true,
         onCheckedChange = { actions.onToggleChange(ToggleKeys.ALLOW_AI_ANALYZE_REVIEWS, it) },
     )
     ToggleRow(
         label = "记录本地时光机快照",
-        description = "在本机记录评分、短评与状态变化，用于年度报告",
+        description = "在本机记录评分、短评和观看状态的变化，用于时光机和年度报告",
         checked = card.recordTimeMachineSnapshots,
         enabled = true,
         onCheckedChange = { actions.onToggleChange(ToggleKeys.RECORD_TIME_MACHINE_SNAPSHOTS, it) },
@@ -1420,7 +1397,7 @@ private fun DataManagementActions(actions: SettingsActions) {
 internal fun BangumiApiConfigCard(state: BangumiApiUiState, actions: SettingsActions, modifier: Modifier = Modifier) {
     val officialOption = "官方 API（默认）"
     val customOption = "自定义 API 地址"
-    // 下拉项：官方 + 候选 + 自定义。
+    // 选项：官方 + 候选 + 自定义。
     val options = buildList {
         add(officialOption)
         state.candidates.forEach { (label, _) -> add("$label（社区反代）") }
@@ -1435,7 +1412,6 @@ internal fun BangumiApiConfigCard(state: BangumiApiUiState, actions: SettingsAct
                 ?.let { "${it.first}（社区反代）" } ?: customOption
     }
     var customMode by remember(state.mode) { mutableStateOf(state.mode == BangumiApiMode.CUSTOM) }
-    var expanded by remember { mutableStateOf(false) }
 
     PrismCard(modifier = modifier.fillMaxWidth()) {
         Column(
@@ -1443,13 +1419,12 @@ internal fun BangumiApiConfigCard(state: BangumiApiUiState, actions: SettingsAct
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             BangumiApiHeader(state.baseUrl)
-            BangumiApiModeSelector(
+            OptionList(
+                title = "API 地址",
                 options = options,
-                currentLabel = currentLabel,
-                expanded = expanded,
-                onExpandedChange = { expanded = it },
-                onOptionSelected = { option ->
-                    expanded = false
+                selected = if (customMode) customOption else currentLabel,
+                label = { it },
+                onSelect = { option ->
                     when (option) {
                         officialOption -> {
                             customMode = false
@@ -1489,40 +1464,6 @@ private fun BangumiApiHeader(baseUrl: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BangumiApiModeSelector(
-    options: List<String>,
-    currentLabel: String,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-    onOptionSelected: (String) -> Unit,
-) {
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = onExpandedChange,
-    ) {
-        FlatTextField(
-            value = currentLabel,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("API 地址模式") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = { onOptionSelected(option) },
-                )
-            }
-        }
-    }
 }
 
 @Composable

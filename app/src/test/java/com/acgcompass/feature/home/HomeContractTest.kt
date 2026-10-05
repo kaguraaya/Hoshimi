@@ -87,8 +87,8 @@ class HomeContractTest : StringSpec({
         card.card.ratingText.shouldBeNull()
     }
 
-    "待补状态文案：吃灰博物馆 / 吃灰天数 / 想看" {
-        backlogStatusText(item("a", inDustMuseum = true)) shouldBe "吃灰博物馆"
+    "待补状态文案：吃灰馆 / 吃灰天数 / 想看" {
+        backlogStatusText(item("a", inDustMuseum = true)) shouldBe "吃灰馆"
         backlogStatusText(item("a", dustDays = 7)) shouldBe "吃灰 7 天"
         backlogStatusText(item("a")) shouldBe "想看"
     }

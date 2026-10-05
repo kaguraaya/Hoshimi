@@ -61,15 +61,15 @@ data class HomeMood(
     companion object {
         /** 默认今日状态选项；每项映射到推荐器的预填标签。 */
         val DEFAULTS: List<HomeMood> = listOf(
-            HomeMood("轻松", "relaxed", listOf("日常", "治愈", "搞笑")),
-            HomeMood("胃疼", "gut_punch", listOf("致郁")),
-            HomeMood("热血", "hot_blooded", listOf("热血")),
+            HomeMood("轻松日常", "relaxed", listOf("日常", "治愈", "搞笑")),
+            HomeMood("致郁虐心", "gut_punch", listOf("致郁")),
+            HomeMood("热血燃向", "hot_blooded", listOf("热血")),
             HomeMood("恋爱", "romance", listOf("恋爱")),
-            HomeMood("悬疑", "mystery", listOf("悬疑", "推理")),
-            HomeMood("神作补课", "masterpiece", listOf("神作")),
-            HomeMood("短篇", "short", emptyList()),
-            HomeMood("想被震撼", "mind_blown", listOf("名作之壁", "神作")),
-            HomeMood("电波", "niche", listOf("电波")),
+            HomeMood("悬疑推理", "mystery", listOf("悬疑", "推理")),
+            HomeMood("补经典名作", "masterpiece", listOf("神作")),
+            HomeMood("科幻", "sci_fi", listOf("科幻")),
+            HomeMood("奇幻冒险", "fantasy", listOf("奇幻", "冒险")),
+            HomeMood("小众电波", "niche", listOf("电波")),
         )
     }
 }
@@ -332,7 +332,7 @@ private fun workSubtitle(work: Work): String {
 /** 待补状态文案：吃灰中显示吃灰天数，否则显示「想看」。 */
 @VisibleForTesting
 internal fun backlogStatusText(item: BacklogItem): String = when {
-    item.inDustMuseum -> "吃灰博物馆"
+    item.inDustMuseum -> "吃灰馆"
     item.dustDays > 0 -> "吃灰 ${item.dustDays} 天"
     else -> "想看"
 }
@@ -465,9 +465,9 @@ private val DRAW_SHOULD: List<String> = listOf(
     "翻翻吃灰最久的那部，给它一个机会",
     "挑一部神作补课，认真沉浸一回",
     "重温一部老番，找回当初的心动",
-    "开一部新番，第一话试试电波",
+    "开一部新番，先看第一集合不合口味",
     "清一部追了一半的坑",
-    "按今日心情抽一部，交给缘分",
+    "按今天的心情随手挑一部",
 )
 
 /** 今日忌建议候选池。 */
@@ -477,7 +477,7 @@ private val DRAW_SHOULD_NOT: List<String> = listOf(
     "忌边刷手机边看，错过好镜头",
     "忌挑超长篇硬啃，今晚时间不够",
     "忌剧透围观，保护好惊喜",
-    "可忽略评分，直接开始观看",
+    "忌只看评分挑番，合口味最重要",
     "忌熬夜赶进度，番补完了人也得在",
 )
 

@@ -38,7 +38,7 @@ interface SnapshotRepository {
     suspend fun recordSnapshot(kind: SnapshotKind): AppResult<Snapshot>
 
     /**
-     * 观察变更日志。可按作品过滤，便于「以前的我怎么想 / 评分打脸现场」。
+     * 观察变更日志。可按作品过滤，便于「当时的短评 / 评分变化」。
      *
      * @param workId 仅观察该作品的变更；`null` 表示观察全部变更。
      * @return 变更日志列表流。

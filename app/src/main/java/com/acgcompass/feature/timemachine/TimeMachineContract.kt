@@ -48,7 +48,7 @@ data class TimelinePeriodUi(
  * @property avgNewRatingText 本期新评分均值文案；无评分变化时为「暂无数据」。
  * @property maxNewRatingText 本期最高新评分文案；无评分变化时为「暂无数据」。
  * @property ratingFlipflops 「评分打脸现场」：同一作品评分明显变化。
- * @property pastThoughts 「以前的我怎么想」：历史短评回顾。
+ * @property pastThoughts 「当时的短评」：历史短评回顾。
  */
 data class TimeMachineReportUi(
     val totalChanges: Int,
@@ -304,7 +304,7 @@ data class CollectionTimelineInput(
 )
 
 /**
- * 由历史收藏构建「以前看的番」时间线（按月倒序分组）。每条展示当时状态 / 评分 / 短评 / 进度。
+ * 由历史收藏构建「过去看的番」时间线（按月倒序分组）。每条展示当时状态 / 评分 / 短评 / 进度。
  * 纯函数；缺失字段省略而非伪造。
  */
 fun buildCollectionTimeline(

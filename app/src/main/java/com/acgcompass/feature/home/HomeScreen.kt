@@ -233,9 +233,9 @@ private fun HomeContent(
             // 今日状态——重定义为「今晚看什么」快捷入口：点某心情直接带预填标签跳推荐器。
             item(key = "moods") {
                 FlatCard(
-                    title = "今晚想看哪种？",
+                    title = "今晚想看什么类型？",
                     icon = Icons.Outlined.Mood,
-                    supporting = "选一个状态，对应标签会带入推荐筛选",
+                    supporting = "点一个类型，直接带着对应标签去「今晚看什么」",
                 ) {
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -474,7 +474,7 @@ private fun TonightHeroCard(onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(text = "今晚看什么？", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    text = "按可用时间、偏好与待补池内容生成推荐",
+                    text = "按今晚能看多久和你的口味，从待补池里挑",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

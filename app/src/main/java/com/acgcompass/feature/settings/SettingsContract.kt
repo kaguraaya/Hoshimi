@@ -210,7 +210,7 @@ data class AiProviderCardState(
  * 数据清除 / 缓存清除 / 导入 / 导出为导航级入口（由宿主页面提供回调）；本状态仅承载可折叠与两个开关。
  *
  * @property expanded 卡片是否展开。
- * @property allowAiAnalyzeReviews 是否允许 AI 分析评论（默认关闭）。
+ * @property allowAiAnalyzeReviews 是否允许把短评发给 AI（默认关闭）。
  * @property recordTimeMachineSnapshots 是否记录本地时光机快照。
  */
 data class PrivacyCardState(

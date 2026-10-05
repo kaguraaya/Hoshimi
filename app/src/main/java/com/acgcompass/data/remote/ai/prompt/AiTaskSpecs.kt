@@ -458,7 +458,7 @@ object AiTaskSpecs {
         AiTaskType.RECOMMENDER -> "今晚推荐"
         AiTaskType.ROUTE_MAP -> "路线图"
         AiTaskType.TASTE_MATCH -> "口味匹配"
-        AiTaskType.TAG_CLASSIFY -> "AI 标签升维分类"
+        AiTaskType.TAG_CLASSIFY -> "AI 标签细分"
         AiTaskType.VNDB_TRANSLATION -> "VNDB 简介翻译"
         AiTaskType.UNKNOWN -> "未知任务"
     }

@@ -51,7 +51,7 @@ data class ExploreCardUiModel(
     val synopsisLoading: Boolean = false,
     /** 预计评分一句话（如「预计你会打 7.8 · 社区 7.2」）；模型不可用时为 null。 */
     val predictionText: String? = null,
-    /** 跨界候选：口碑扎实但题材在画像常看范围之外，卡片上以「跨界探索」标识。 */
+    /** 跨界候选：口碑扎实但题材在画像常看范围之外，卡片上以「换个口味」标识。 */
     val discovery: Boolean = false,
 )
 

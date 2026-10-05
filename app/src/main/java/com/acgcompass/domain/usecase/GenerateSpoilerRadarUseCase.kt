@@ -35,7 +35,7 @@ data class RadarRequest(
     val userComments: List<String> = emptyList(),
     val publicReviews: List<String> = emptyList(),
     /**
-     * 是否允许把评论内容（[userComments] / [publicReviews]）发给 AI。对应「隐私与数据 → 允许 AI 分析评论」；
+     * 是否允许把评论内容（[userComments] / [publicReviews]）发给 AI。对应「隐私与数据 → 允许把短评发给 AI」；
      * 为 false 时评论只用于本地规则版雷达，AI 请求里不带任何评论文本。
      */
     val allowReviewsToAi: Boolean = true,

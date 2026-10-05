@@ -98,7 +98,7 @@ fun MineRoute(
 
 /**
  * 无状态「我的」界面（Material 3）。展示账号状态、数据统计，
- * 提供口味画像入口与设置入口。隐私 / 导出 / 关于为 的入口。
+ * 提供口味画像、设置、隐私与关于等入口。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,7 +179,7 @@ private fun SyncCard(
             if (bangumiConfigured) {
                 "从 Bangumi 同步你的收藏 / 评分 / 进度 / 短评，用于统计、详情页「我的记录」、口味画像与时光机。"
             } else {
-                "未配置 Bangumi 账号。前往「更多 → 设置」登录后即可同步个人收藏与评分。"
+                "未配置 Bangumi 账号。在本页下方的「设置 → 数据源」登录后即可同步个人收藏与评分。"
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

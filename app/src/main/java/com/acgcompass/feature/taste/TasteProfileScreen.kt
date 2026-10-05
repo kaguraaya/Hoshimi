@@ -110,7 +110,7 @@ fun TasteProfileRoute(
     )
 }
 
-/** 无状态口味画像界面：评分习惯 / 称号 / 高低分标签 / 口味黑洞；低样本用保守措辞。 */
+/** 无状态口味画像界面：评分习惯 / 称号 / 高低分标签 / 常弃坑类型；低样本用保守措辞。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
@@ -217,7 +217,7 @@ fun TasteProfileScreen(
                                 !featureSnapshotReady -> "正在收集完整标签…"
                                 pendingTagCount == null -> "正在检查待分类标签…"
                                 pendingTagCount == 0 -> "没有待分类的新标签"
-                                else -> "AI 标签升维分类（$pendingTagCount）"
+                                else -> "用 AI 细分标签（$pendingTagCount 个待处理）"
                             },
                         )
                     }
@@ -227,7 +227,7 @@ fun TasteProfileScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "先完成本地画像，再进行 AI 标签升维分类，效果更佳。",
+                        "建议先生成本地画像，再用 AI 细分标签。",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -332,7 +332,7 @@ fun TasteProfileScreen(
                         )
                     }
                 }
-                SectionCard("口味黑洞（常被搁置 / 抛弃）") {
+                SectionCard("常被搁置或弃坑的类型") {
                     if (profile.blackHole.isEmpty()) Text("暂无数据") else FlowRowChips(profile.blackHole)
                 }
 
@@ -515,16 +515,16 @@ private fun TagDimensionUpgradeSection(summary: TagDimensionSummary) {
     val refined = summary.buckets.filter { it.category != TasteCategory.NOISE }
     val noiseCount = summary.buckets.firstOrNull { it.category == TasteCategory.NOISE }?.count ?: 0
     val refinedTotal = refined.sumOf { it.count }
-    SectionCard("AI 升维效果") {
+    SectionCard("AI 标签细分") {
         Text(
-            "原本被笼统归为「题材」的社区标签，经 AI 标签升维分类已细化到更精确的维度，" +
+            "原本被笼统归为「题材」的社区标签，经 AI 细分后归到了更具体的维度，" +
                 "用于提高画像分类与匹配评分的准确度。",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (refinedTotal > 0) {
             Text(
-                "已升维 $refinedTotal 个标签",
+                "已细分 $refinedTotal 个标签",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )

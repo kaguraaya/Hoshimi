@@ -111,12 +111,12 @@ class TasteProfileViewModel @Inject constructor(
                     _message.value = when (result) {
                         TagClassificationResult.COMPLETED -> {
                             val count = tagClassificationController.state.value.classified
-                            if (count > 0) "已完成 $count 个 AI 标签升维分类" else "本次没有新增有效分类"
+                            if (count > 0) "AI 已细分 $count 个标签" else "本次没有新增有效分类"
                         }
                         TagClassificationResult.PARTIAL -> "部分标签请求失败，已保留进度，可稍后继续"
                         TagClassificationResult.NOTHING_TO_DO -> "没有待分类的新标签"
                         TagClassificationResult.NOT_CONFIGURED -> "未配置 AI，已继续使用本地规则"
-                        TagClassificationResult.FAILED -> "AI 标签升维分类未完成，请检查模型或网络后重试"
+                        TagClassificationResult.FAILED -> "AI 标签细分没有完成，请检查模型设置或网络后重试"
                         TagClassificationResult.STOPPED -> "已停止；完成的批次已经保留"
                     }
                     tagClassificationController.acknowledgeLastResult()

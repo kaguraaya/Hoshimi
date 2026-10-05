@@ -170,7 +170,7 @@ class GenerateSpoilerRadarUseCaseTest : StringSpec({
         }
     }
 
-    "关闭「允许 AI 分析评论」：发给 AI 的内容里不含任何评论文本，标签照常发送" {
+    "关闭「允许把短评发给 AI」：发给 AI 的内容里不含任何评论文本，标签照常发送" {
         runTest {
             val payload = SpoilerRadarOutput(overallImpression = "整体偏热血", confidence = 0.8f)
             fun engine() = FakeAiEngine(
