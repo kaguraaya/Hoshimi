@@ -36,9 +36,9 @@ enum class TimeBudget(val availableMinutes: Int?) {
     ;
 
     fun label(): String = when (this) {
-        TWENTY_MIN -> "20分钟"
-        ONE_HOUR -> "1小时"
-        TWO_THREE_HOURS -> "2-3小时"
+        TWENTY_MIN -> "20 分钟"
+        ONE_HOUR -> "1 小时"
+        TWO_THREE_HOURS -> "2-3 小时"
         WEEKEND -> "不限"
     }
 
@@ -70,29 +70,28 @@ private const val TONIGHT_COMPLETION_MINUTES = 120
 private const val WEEKEND_COMPLETION_MINUTES = 600
 
 /**
- * 内容偏好（可多选）。
+ * 能接受的内容（可多选）。
  *
- * - 「慢热也行 / 能接受致郁 / 不介意修罗场」：没勾选时，主打这类气质的作品排序会往后放（不是排除）。
- * - 「长篇也行」：不因集数多而降权。
- * - 「别太烧脑」：排除主打烧脑、上头、意识流的作品。
- * - 「只看已完结」：排除未完结作品。
+ * - 慢热 / 致郁 / 修罗场 / 烧脑：没勾选时，主打这类气质的作品排序往后放（不是排除）。
+ * - 长篇：勾选后不因集数多而降权。
+ * - 已完结：勾选后只推荐已完结的作品。
  */
 enum class AcceptanceOption(val toleratedRiskTag: String?) {
     SLOW_BURN("慢热"),
     DEPRESSING("致郁"),
     SHIPPING_WAR("党争"),
     LONG_FORM(null),
-    NO_TIRING(null),
+    BRAIN_BURN("烧脑"),
     NO_UNFINISHED(null),
     ;
 
     fun label(): String = when (this) {
-        SLOW_BURN -> "慢热也行"
-        DEPRESSING -> "能接受致郁"
-        SHIPPING_WAR -> "不介意修罗场"
-        LONG_FORM -> "长篇也行"
-        NO_TIRING -> "别太烧脑"
-        NO_UNFINISHED -> "只看已完结"
+        SLOW_BURN -> "慢热"
+        DEPRESSING -> "致郁"
+        SHIPPING_WAR -> "修罗场"
+        LONG_FORM -> "长篇"
+        BRAIN_BURN -> "烧脑"
+        NO_UNFINISHED -> "已完结"
     }
 }
 
@@ -199,9 +198,6 @@ internal val ALL_RISK_TAGS: Set<String> = setOf(
     "暗黑",
 )
 
-/** 「不要太累」拒绝的高耗能风险标签（即使展开白名单也不纳入）。 */
-internal val TIRING_RISK_TAGS: Set<String> = setOf("上头", "烧脑")
-
 /** 期末周保护模式额外过滤的高耗能 / 致郁风险标签（长篇 / 未完结由 finalsProtection 处理）。 */
 internal val FINALS_FILTERED_RISK_TAGS: Set<String> = setOf("致郁", "上头", "烧脑")
 
@@ -212,16 +208,13 @@ internal val FINALS_FILTERED_RISK_TAGS: Set<String> = setOf("致郁", "上头", 
  * @param exclude 需额外排除的作品 id（累积已抽中的推荐，保证三推荐互不重复）。
  *
  * 不变式：
- * - 三种类均施加相同的「硬性」约束：时间上限、未完结排除（若选「不要未完结」）、`exclude`。
- * - 风险白名单逐级放宽：稳妥 = 用户「可 X」；探索 = 用户「可 X」+ 温和展开（慢热）；
- *   随机 = 全部风险减去「明确拒绝」的高耗能风险。
- * - 「不要太累」始终从白名单中剔除 [TIRING_RISK_TAGS]，任何种类都不会推荐高耗能作品。
+ * - 三种类均施加相同的「硬性」约束：时间上限、未完结排除（若勾选「已完结」）、`exclude`。
+ * - 风险白名单逐级放宽：稳妥 = 用户勾选的；探索 = 用户勾选的 + 慢热；随机 = 全部风险。
  */
 fun RecommenderInput.toDrawCriteria(kind: RecommendationKind, exclude: Set<String> = emptySet()): DrawCriteria {
-    val refusedTiring = AcceptanceOption.NO_TIRING in acceptances
     val requireFinished = AcceptanceOption.NO_UNFINISHED in acceptances
 
-    // 用户显式接受的风险（可慢热 / 可致郁 / 可党争）。
+    // 用户勾选能接受的风险。
     val userTolerated: Set<String> = acceptances.mapNotNull { it.toleratedRiskTag }.toSet()
 
     val baseTolerance: Set<String> = when (kind) {
@@ -229,8 +222,7 @@ fun RecommenderInput.toDrawCriteria(kind: RecommendationKind, exclude: Set<Strin
         RecommendationKind.GAMBLE -> userTolerated + "慢热"
         RecommendationKind.WILDCARD -> ALL_RISK_TAGS
     }
-    // 「不要太累」的高耗能风险任何种类都不容忍。
-    var riskTolerance = if (refusedTiring) baseTolerance - TIRING_RISK_TAGS else baseTolerance
+    var riskTolerance = baseTolerance
     // 期末周保护：强制剔除致郁 / 高上头 / 烧脑，并要求已完结（排除长篇 / 未完结）。
     if (finalsProtectionMode) {
         riskTolerance = riskTolerance - FINALS_FILTERED_RISK_TAGS
@@ -246,7 +238,7 @@ fun RecommenderInput.toDrawCriteria(kind: RecommendationKind, exclude: Set<Strin
         availableMinutes = time?.availableMinutes,
         moodTags = moodTags,
         riskTolerance = riskTolerance,
-        // 「不要未完结」或期末周保护均要求已完结（仓库侧同时排除长期坑）。
+        // 勾选「已完结」或低负担模式都要求已完结（仓库侧同时排除长期坑）。
         finalsProtection = requireFinished || finalsProtectionMode,
         // 深夜提醒模式：透传给仓库 / 理由文案。
         lateNight = lateNightMode,

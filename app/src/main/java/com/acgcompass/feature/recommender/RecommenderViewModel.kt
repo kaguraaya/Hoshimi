@@ -268,8 +268,6 @@ class RecommenderViewModel @Inject constructor(
             IntentTagDictionary.bundleFor(tag).let { it.requiredTags + it.synonymTags }
         }
 
-        // 接受程度「不要X」→ 硬排除关键词（不要太累→烧脑/上头/意识流/电波）；「不要未完结」单独处理。
-        val hardExcludeKeywords = input.acceptances.flatMap { ACCEPTANCE_EXCLUDE[it].orEmpty() }.toSet()
         val excludeUnfinished = AcceptanceOption.NO_UNFINISHED in input.acceptances
 
         // 第一步：硬过滤（仅裁剪，不打分）——媒介/时间/已看过抛弃/期末保护/未完结/不要X/标签。
@@ -287,11 +285,6 @@ class RecommenderViewModel @Inject constructor(
                 val tagNamesClean = tagNames.map { TagNoise.clean(it) }
                 // 硬排除：未完结（不要未完结）/ 含「不要X」关键词的作品直接淘汰。
                 if (excludeUnfinished && w.status != com.acgcompass.domain.model.ReleaseStatus.FINISHED) {
-                    return@mapNotNull null
-                }
-                if (hardExcludeKeywords.isNotEmpty() &&
-                    tagNames.any { t -> hardExcludeKeywords.any { t.contains(it) } }
-                ) {
                     return@mapNotNull null
                 }
                 // 标签召回：选择标签后至少要沾到一个所选意图（标签本身、包含关系或意图包里的近义标签）。
@@ -675,6 +668,7 @@ class RecommenderViewModel @Inject constructor(
             AcceptanceOption.SLOW_BURN to listOf("慢热"),
             AcceptanceOption.DEPRESSING to listOf("致郁", "致郁系", "虐心", "胃痛", "黑深残"),
             AcceptanceOption.SHIPPING_WAR to listOf("党争", "修罗场"),
+            AcceptanceOption.BRAIN_BURN to listOf("烧脑", "上头", "意识流"),
         )
 
         private const val LATE_NIGHT_TAG_WINDOW = 4
@@ -705,11 +699,6 @@ class RecommenderViewModel @Inject constructor(
 
         /** 重复推荐软惩罚的回看窗口（惩罚随时间衰减，见 [TonightRanker]）。 */
         const val REPEAT_COOLDOWN_MS = 14L * 24 * 3600 * 1000
-
-        /** 接受程度「不要X」→ 硬排除的题材关键词（不要太累→烧脑/上头/意识流/电波）。 */
-        val ACCEPTANCE_EXCLUDE: Map<AcceptanceOption, List<String>> = mapOf(
-            AcceptanceOption.NO_TIRING to listOf("烧脑", "上头", "意识流", "电波"),
-        )
     }
 }
 

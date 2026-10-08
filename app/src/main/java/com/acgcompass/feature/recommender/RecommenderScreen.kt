@@ -355,19 +355,7 @@ private fun InputSection(
     onToggleAcceptance: (AcceptanceOption) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FlatCard(
-            title = "今晚能看多久",
-            icon = Icons.Outlined.Schedule,
-            supporting = input.time?.hint() ?: "按这一次能看的时长挑，不要求整部看完",
-        ) {
-            PillTabs(
-                options = TimeBudget.entries,
-                selected = input.time,
-                onSelect = onSelectTime,
-                label = { it.label() },
-                scrollable = false,
-            )
-        }
+        TimeCard(selected = input.time, onSelect = onSelectTime)
 
         // 标签选项来自候选池作品的真实 Bangumi 社区标签（频次降序）；并入已选标签
         // 以保证预填（如首页「今日状态」）或已选项即使不在当前前 N 也能显示、可取消。
@@ -397,9 +385,9 @@ private fun InputSection(
         }
 
         FlatCard(
-            title = "内容偏好",
+            title = "能接受的内容",
             icon = Icons.Outlined.Shield,
-            supporting = "没勾的气质会排得靠后；「别太烧脑」「只看已完结」会直接排除",
+            supporting = "勾选你能接受的，没勾的会排得靠后；勾选「已完结」则只推荐已完结的作品",
         ) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -412,6 +400,27 @@ private fun InputSection(
                         onClick = { onToggleAcceptance(option) },
                     )
                 }
+            }
+        }
+    }
+}
+
+/** 今晚能看多久：会换行的单选药丸，字体放大时也不截断。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TimeCard(selected: TimeBudget?, onSelect: (TimeBudget) -> Unit) {
+    FlatCard(
+        title = "今晚能看多久",
+        icon = Icons.Outlined.Schedule,
+        supporting = selected?.hint() ?: "按这一次能看的时长挑，不要求整部看完",
+    ) {
+        // 会换行的单选药丸：字体放大时也不截断。
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TimeBudget.entries.forEach { budget ->
+                TonalFilterChip(budget.label(), budget == selected, onClick = { onSelect(budget) })
             }
         }
     }

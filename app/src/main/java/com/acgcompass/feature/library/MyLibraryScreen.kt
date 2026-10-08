@@ -105,7 +105,7 @@ fun MyLibraryScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 8.dp),
+                    .padding(top = 16.dp),
             ) {
                 StatusTabs(
                     selectedTab = selectedTab,
@@ -132,11 +132,11 @@ fun MyLibraryScreen(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        // TabRow 已提供页面层级分隔；列表只保留小段呼吸间距，避免首项下沉。
+                        // 与上方分组药丸拉开一点距离，首张卡片不贴着顶部。
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             start = ScreenContentPadding.Horizontal,
                             end = ScreenContentPadding.Horizontal,
-                            top = 12.dp,
+                            top = 16.dp,
                             bottom = ScreenContentPadding.Bottom,
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp),

@@ -1,6 +1,5 @@
 package com.acgcompass.core.ui
 
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
@@ -28,9 +27,8 @@ fun Modifier.copyOnLongPress(text: String): Modifier = composed {
     val copy = {
         clipboard.setText(AnnotatedString(text))
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-        }
+        // 部分系统（含不少国产 ROM）在 Android 13+ 也不显示剪贴板提示，统一弹一个原生提示。
+        Toast.makeText(context, "已复制「${text.take(TOAST_TITLE_CHARS)}」", Toast.LENGTH_SHORT).show()
     }
     this
         .pointerInput(text) { detectTapGestures(onLongPress = { copy() }) }
@@ -41,3 +39,5 @@ fun Modifier.copyOnLongPress(text: String): Modifier = composed {
             }
         }
 }
+
+private const val TOAST_TITLE_CHARS = 20

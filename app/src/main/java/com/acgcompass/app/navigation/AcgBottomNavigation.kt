@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,6 +64,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.acgcompass.core.designsystem.SurfaceLevel
@@ -96,7 +98,7 @@ fun AcgBottomNavigation(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = DOCK_MARGIN, vertical = 8.dp),
+            .padding(start = DOCK_MARGIN, end = DOCK_MARGIN, top = DOCK_TOP_GAP, bottom = dockBottomGap()),
     ) {
         // 底栏背景单独一层（只画底色和投影，不放内容）：镜片和图标画在它上面、不受它的圆角裁剪，
         // 按住时镜片才能像 FlClash 那样长出底栏之外。
@@ -405,13 +407,29 @@ private fun overdrag(x: Float, slotWidthPx: Float, maxX: Float): Float {
 }
 
 private val DOCK_HEIGHT = 62.dp
+private val DOCK_TOP_GAP = 8.dp
+
+/** 底栏离屏幕底边至少 21dp（与 FlClash 一致），有导航条时至少高出导航条 8dp。 */
+private val DOCK_EDGE = 21.dp
+private val DOCK_MIN_GAP = 8.dp
+
+/** 底栏下方、导航条之上的留白。 */
+@Composable
+internal fun dockBottomGap(): Dp {
+    val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    return maxOf(DOCK_EDGE - navInset, DOCK_MIN_GAP)
+}
+
+/** 可滚动内容需要为底栏让出的高度（不含导航条，导航条由外层让出）。 */
+@Composable
+internal fun dockContentSpace(): Dp = DOCK_HEIGHT + DOCK_TOP_GAP + dockBottomGap()
 
 // 与 FlClash 底栏一致：图标 28dp、标签 10sp、间距 2dp。
 private val DOCK_ICON = 28.dp
 private val DOCK_LABEL_GAP = 2.dp
 private val DOCK_LABEL_SIZE = 10.sp
 private val DOCK_LABEL_LINE = 12.sp
-private val DOCK_MARGIN = 20.dp
+private val DOCK_MARGIN = 21.dp
 private val DOCK_INSET = 4.dp
 private const val DARK_LUMINANCE = 0.5f
 private const val HALF = 0.5f

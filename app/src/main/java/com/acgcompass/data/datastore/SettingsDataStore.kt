@@ -493,6 +493,7 @@ class SettingsDataStore @Inject constructor(
     /** 将原始 [Preferences] 映射为带默认值兜底的 [SettingsState]。 */
     private fun Preferences.toSettingsState(): SettingsState = SettingsState(
         allowAiAnalyzeReviews = this[Keys.ALLOW_AI_ANALYZE_REVIEWS] ?: SettingsState.DEFAULT_ALLOW_AI_ANALYZE_REVIEWS,
+        scoreDiffAutoBackfill = this[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true,
         recordTimeMachineSnapshots =
         this[Keys.RECORD_TIME_MACHINE_SNAPSHOTS]
             ?: SettingsState.DEFAULT_RECORD_TIME_MACHINE_SNAPSHOTS,

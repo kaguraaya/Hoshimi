@@ -48,6 +48,8 @@ enum class ThemeMode {
 data class SettingsState(
     val allowAiAnalyzeReviews: Boolean = DEFAULT_ALLOW_AI_ANALYZE_REVIEWS,
     val recordTimeMachineSnapshots: Boolean = DEFAULT_RECORD_TIME_MACHINE_SNAPSHOTS,
+    /** 评分差异页打开时是否自动去其它平台补评分。 */
+    val scoreDiffAutoBackfill: Boolean = true,
     val bangumiEnabled: Boolean = DEFAULT_BANGUMI_ENABLED,
     val anilistEnabled: Boolean = DEFAULT_ANILIST_ENABLED,
     val jikanEnabled: Boolean = DEFAULT_JIKAN_ENABLED,

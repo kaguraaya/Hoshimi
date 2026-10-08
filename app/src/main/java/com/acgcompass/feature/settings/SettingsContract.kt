@@ -223,6 +223,8 @@ data class PrivacyCardState(
     val recommendMinCommunityScore: Float = 6.0f,
     /** 口味匹配度阈值（0~1，0=关闭过滤）。 */
     val tasteMatchThreshold: Float = 0.0f,
+    /** 评分差异页打开时自动去其它平台补评分。 */
+    val scoreDiffAutoBackfill: Boolean = true,
 )
 
 /**

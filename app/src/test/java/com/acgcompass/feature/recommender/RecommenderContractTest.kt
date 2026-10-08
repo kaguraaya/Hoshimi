@@ -97,16 +97,11 @@ class RecommenderContractTest : StringSpec({
         tolerance shouldContainAll ALL_RISK_TAGS
     }
 
-    "不要太累在任何档都剔除高耗能风险（上头/烧脑）" {
-        val input = RecommenderInput(
-            time = TimeBudget.WEEKEND,
-            acceptances = setOf(AcceptanceOption.NO_TIRING),
-        )
-        RecommendationKind.entries.forEach { kind ->
-            val tolerance = input.toDrawCriteria(kind).riskTolerance
-            tolerance shouldNotContain "上头"
-            tolerance shouldNotContain "烧脑"
-        }
+    "勾选烧脑后稳妥档才容忍烧脑" {
+        RecommenderInput(time = TimeBudget.WEEKEND).toDrawCriteria(RecommendationKind.SAFE)
+            .riskTolerance shouldNotContain "烧脑"
+        RecommenderInput(time = TimeBudget.WEEKEND, acceptances = setOf(AcceptanceOption.BRAIN_BURN))
+            .toDrawCriteria(RecommendationKind.SAFE).riskTolerance shouldContainAll setOf("烧脑")
     }
 
     // endregion
@@ -122,7 +117,7 @@ class RecommenderContractTest : StringSpec({
         input.toDrawCriteria(RecommendationKind.WILDCARD).moodTags shouldBe emptySet()
     }
 
-    "不要未完结开启期末保护（要求已完结）" {
+    "勾选已完结开启期末保护（要求已完结）" {
         val input = RecommenderInput(
             time = TimeBudget.WEEKEND,
             acceptances = setOf(AcceptanceOption.NO_UNFINISHED),

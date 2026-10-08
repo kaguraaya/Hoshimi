@@ -150,6 +150,7 @@ class SettingsViewModel @Inject constructor(
                         autoSyncIntervalMinutes = settings.autoSyncIntervalMinutes,
                         recommendMinCommunityScore = settings.recommendMinCommunityScore,
                         tasteMatchThreshold = settings.tasteMatchThreshold,
+                        scoreDiffAutoBackfill = settings.scoreDiffAutoBackfill,
                     ),
                     saveNoticeVisible = notice,
                     bangumiApi = buildBangumiApiState(settings, local),
@@ -271,6 +272,7 @@ class SettingsViewModel @Inject constructor(
                     settingsDataStore.setAutoTranslateVndbDescription(checked)
                 ToggleKeys.ALLOW_AI_ANALYZE_REVIEWS -> settingsDataStore.setAllowAiAnalyzeReviews(checked)
                 ToggleKeys.RECORD_TIME_MACHINE_SNAPSHOTS -> settingsDataStore.setRecordTimeMachineSnapshots(checked)
+                ToggleKeys.SCORE_DIFF_AUTO_BACKFILL -> settingsDataStore.setScoreDiffAutoBackfill(checked)
                 ToggleKeys.AI_THINKING_ENABLED -> settingsDataStore.setAiThinkingEnabled(
                     localUi.value.ai.selectedProvider.toProviderStorageId(),
                     checked,
@@ -610,6 +612,7 @@ internal object ToggleKeys {
     const val AUTO_TRANSLATE_VNDB_DESCRIPTION = "auto_translate_vndb_description"
     const val ALLOW_AI_ANALYZE_REVIEWS = "allow_ai_analyze_reviews"
     const val RECORD_TIME_MACHINE_SNAPSHOTS = "record_time_machine_snapshots"
+    const val SCORE_DIFF_AUTO_BACKFILL = "score_diff_auto_backfill"
     const val AI_THINKING_ENABLED = "ai_thinking_enabled"
 }
 
