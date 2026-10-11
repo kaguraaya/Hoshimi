@@ -852,13 +852,16 @@ class WorkRepositoryImpl @Inject constructor(
      * 任何失败都被吞掉以保持韧性（绝不崩溃，缺失即「暂无数据」）。
      */
     /**
-     * 收藏同步、放送表等列表接口不带完整简介；本地作品没有简介时补拉一次完整条目。
+     * 收藏同步、放送表等列表接口不带完整资料；本地作品缺简介、缺年份或只有小封面时补拉一次完整条目。
      * 同一作品 6 小时内只补一次，避免真没简介的条目反复请求。
      */
     private suspend fun needsFullProfile(workId: String, now: Long): Boolean {
-        val missingSummary = workDao.getById(workId)?.let { it.summary.isNullOrBlank() } ?: false
+        val incomplete = workDao.getById(workId)?.let { entity ->
+            entity.summary.isNullOrBlank() || entity.year == null ||
+                entity.coverUrl?.let(::isLowResBangumiCover) == true
+        } ?: false
         val recentlyTried = profileAttempts[workId]?.let { now - it < DetailCacheTtl.COMMENTS_MILLIS } ?: false
-        val needed = missingSummary && !recentlyTried
+        val needed = incomplete && !recentlyTried
         if (needed) profileAttempts[workId] = now
         return needed
     }

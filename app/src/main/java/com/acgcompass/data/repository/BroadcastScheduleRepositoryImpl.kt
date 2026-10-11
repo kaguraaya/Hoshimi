@@ -315,7 +315,7 @@ class BroadcastScheduleRepositoryImpl @Inject constructor(
                         title = item.nameCn.ifBlank { item.name }.ifBlank { item.id.toString() },
                         titleCn = item.nameCn.takeIf { it.isNotBlank() },
                         titleVariants = listOf(item.name, item.nameCn).filter(String::isNotBlank).distinct(),
-                        coverUrl = secureImageUrl(item.images?.medium ?: item.images?.common ?: item.images?.large),
+                        coverUrl = calendarCover(item.images?.large, item.images?.common ?: item.images?.medium),
                         airingAtUtcMillis = time.takeIf { it in fromMillis..toMillis },
                         dayOfWeek = weekday,
                         episode = null,
@@ -358,16 +358,16 @@ class BroadcastScheduleRepositoryImpl @Inject constructor(
                 coverUrl = entry.coverUrl,
                 primarySource = if (entry.source == SourceId.BANGUMI.name) SourceId.BANGUMI else SourceId.ANILIST,
             )
+            val fullCover = bangumiFullCover(entry.coverUrl)
+            // 放送表只有标题和小封面：已有作品只补空缺，不能用它覆盖年份、原名、集数和高清封面。
             workDao.upsert(
-                work.toEntity(createdAt = old?.createdAt ?: now, updatedAt = now).let { entity ->
-                    if (old == null) {
-                        entity
-                    } else {
-                        entity.copy(
-                            titleCn = old.titleCn ?: entity.titleCn,
-                            summary = old.summary ?: entity.summary,
-                        )
-                    }
+                if (old == null) {
+                    work.copy(coverUrl = fullCover).toEntity(createdAt = now, updatedAt = now)
+                } else {
+                    old.copy(
+                        titleCn = old.titleCn ?: work.titles.cn,
+                        coverUrl = old.coverUrl?.takeUnless(::isLowResBangumiCover) ?: fullCover,
+                    )
                 },
             )
             sourceLinkDao.upsert(
@@ -449,6 +449,11 @@ class BroadcastScheduleRepositoryImpl @Inject constructor(
 
     private fun secureImageUrl(url: String?): String? = url?.replaceFirst("http://", "https://")
 
+    /** 放送表接口（Bangumi 旧版 API）的 medium / common 只有 100–150px，列表用 Bangumi 的 400px 缩放图。 */
+    private fun calendarCover(large: String?, fallback: String?): String? =
+        secureImageUrl(large)?.replace(BANGUMI_PIC_PREFIX, "$BANGUMI_RESIZE_PREFIX/400/pic/")
+            ?: secureImageUrl(fallback)
+
     private companion object {
         const val SCOPE_HOME = "HOME_UPCOMING"
         const val SCOPE_WEEK = "CURRENT_WEEK"
@@ -486,3 +491,18 @@ internal fun needsTenraiScheduleSupplement(
 }
 
 private const val MIN_NORMALIZED_TITLE_LENGTH = 3
+
+private const val BANGUMI_PIC_PREFIX = "lain.bgm.tv/pic/"
+private const val BANGUMI_RESIZE_PREFIX = "lain.bgm.tv/r"
+private val BANGUMI_RESIZE_SEGMENT = Regex("lain\\.bgm\\.tv/r/\\d+/pic/")
+private val BANGUMI_SMALL_COVER = Regex("/pic/cover/[mcsg]/")
+
+/** Bangumi 封面换成原图地址（去掉缩放参数，小图目录换成 l）。 */
+internal fun bangumiFullCover(url: String?): String? = url
+    ?.replaceFirst("http://", "https://")
+    ?.replace(BANGUMI_RESIZE_SEGMENT, BANGUMI_PIC_PREFIX)
+    ?.replace(BANGUMI_SMALL_COVER, "/pic/cover/l/")
+
+/** 是否是 Bangumi 的小图（100–400px），用作作品封面会发糊。 */
+internal fun isLowResBangumiCover(url: String): Boolean =
+    BANGUMI_SMALL_COVER.containsMatchIn(url) || Regex("lain\\.bgm\\.tv/r/[1-4]\\d{2}/").containsMatchIn(url)

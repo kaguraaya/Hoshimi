@@ -331,19 +331,33 @@ class TasteEngine @Inject constructor(
                     }
                 }
         }
-        var feature = runCatching { workFeatureRepository.getFeature(subjectId, allowNetwork) }.getOrNull()
+        val usableFallback = fallback?.takeIf { it.tagCounts.isNotEmpty() }
+        var feature = loadFeatureOrFallback(subjectId, allowNetwork) {
+            usableFallback?.let { send(scoreWith(it, userRating)) }
+        }
         if (feature == null) {
-            val usableFallback = fallback?.takeIf { it.tagCounts.isNotEmpty() }
-            // 有临时特征就先用它出分，不让界面空等；真正的特征到了会由上面的收集自动替换。
-            send(usableFallback?.let { scoreWith(it, userRating) })
+            if (usableFallback == null) send(null)
             if (allowNetwork) feature = retryFeature(subjectId)
         }
-        if (allowNetwork && feature != null &&
-            feature.completeness != com.acgcompass.domain.taste.WorkFeatureCompleteness.EXTENDED
-        ) {
+        if (allowNetwork && feature?.needsExtendedRefresh() == true) {
             launch { runCatching { workFeatureRepository.refresh(subjectId) } }
         }
     }.distinctUntilChanged()
+
+    /**
+     * 本地没有特征时先用作品自己的标签出分，不等联网（限流排队时可能要等十几秒）；
+     * 真正的特征到了会由 [observeScore] 里的收集自动替换。
+     */
+    private suspend fun loadFeatureOrFallback(
+        subjectId: String,
+        allowNetwork: Boolean,
+        emitFallback: suspend () -> Unit,
+    ): WorkFeature? {
+        val cached = runCatching { workFeatureRepository.getFeature(subjectId, false) }.getOrNull()
+        if (cached != null) return cached
+        emitFallback()
+        return if (allowNetwork) runCatching { workFeatureRepository.getFeature(subjectId, true) }.getOrNull() else null
+    }
 
     /**
      * 批量评分（今晚看什么召回、探索队列组批用）：对 [subjectIds] 在 [networkBudget] 限额内补齐特征后逐一打分。
@@ -460,3 +474,6 @@ class TasteEngine @Inject constructor(
         const val IMPLICIT_WINDOW_MS = 180L * 24 * 60 * 60 * 1000
     }
 }
+
+private fun WorkFeature.needsExtendedRefresh(): Boolean =
+    completeness != com.acgcompass.domain.taste.WorkFeatureCompleteness.EXTENDED

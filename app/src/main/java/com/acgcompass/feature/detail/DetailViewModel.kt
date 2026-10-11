@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -198,25 +199,29 @@ class DetailViewModel @Inject constructor(
             val work = (workState as? UiState.Success)?.data
                 ?: (workState as? UiState.PartialMissing)?.data
             TasteInputs(work, collection?.rating, profile, ratingAggregate)
-        }.flatMapLatest { inputs ->
-            val work = inputs.work
-            val profile = inputs.profile
-            if (work == null) return@flatMapLatest flowOf(null to profile)
-            val bangumiId = runCatching { resolveBangumiSubjectId(work) }.getOrNull()
-            val featureId = bangumiId?.toString() ?: work.id
-            // 没有 Bangumi 条目（或一直取不到它的特征）时，用作品自己的标签与评分临时出分。
-            tasteAnalysis.observeScore(
-                featureId,
-                inputs.rating,
-                allowNetwork = bangumiId != null,
-                fallback = work.toFallbackFeature(inputs.ratings),
+        }
+            // 评分区陆续刷新、作品资料补全都会触发上游；只在会影响出分的输入变化时才重新计算，
+            // 否则联网取特征和重试会被反复打断、迟迟出不了分。
+            .distinctUntilChangedBy { Triple(it.work?.id to it.work?.tags?.map { t -> t.name }, it.rating, it.profile) }
+            .flatMapLatest { inputs ->
+                val work = inputs.work
+                val profile = inputs.profile
+                if (work == null) return@flatMapLatest flowOf(null to profile)
+                val bangumiId = runCatching { resolveBangumiSubjectId(work) }.getOrNull()
+                val featureId = bangumiId?.toString() ?: work.id
+                // 没有 Bangumi 条目（或一直取不到它的特征）时，用作品自己的标签与评分临时出分。
+                tasteAnalysis.observeScore(
+                    featureId,
+                    inputs.rating,
+                    allowNetwork = bangumiId != null,
+                    fallback = work.toFallbackFeature(inputs.ratings ?: ratings.value),
+                )
+                    .map { match -> match to profile }
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+                initialValue = null to null,
             )
-                .map { match -> match to profile }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
-            initialValue = null to null,
-        )
 
     /** 最近一次就绪的作品，供 [onToggleBacklog] 加入待补池时使用（addAll 需要 [Work]）。 */
     @Volatile
