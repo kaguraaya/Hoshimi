@@ -16,7 +16,9 @@ import com.acgcompass.domain.model.ImportBatch
 import com.acgcompass.domain.model.ImportItem
 import com.acgcompass.domain.model.ImportItemStatus
 import com.acgcompass.domain.model.ImportSource
+import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.model.WorkMatch
 import com.acgcompass.domain.repository.AddResult
 import com.acgcompass.domain.repository.BacklogRepository
 import com.acgcompass.domain.repository.ImportRepository
@@ -25,9 +27,16 @@ import com.acgcompass.domain.usecase.ParsedCandidate
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /**
@@ -72,8 +81,12 @@ class ImportRepositoryImpl @Inject constructor(
             val now = System.currentTimeMillis()
             val batchId = newId()
 
-            val items = candidates.map { candidate ->
-                resolveCandidate(batchId, candidate, now)
+            // 几个作品名同时匹配（各数据源自己的限流仍然生效），结果保持原来的顺序。
+            val gate = Semaphore(MATCH_CONCURRENCY)
+            val items = coroutineScope {
+                candidates.map { candidate ->
+                    async { gate.withPermit { resolveCandidate(batchId, candidate, now) } }
+                }.awaitAll()
             }
             importDao.upsertItems(items)
 
@@ -96,8 +109,7 @@ class ImportRepositoryImpl @Inject constructor(
         // 搜索失败（网络 / 源不可用）按「无候选」处理，绝不让整批崩溃。
         // 补番 App 默认优先动画——同名多类型时，在同置信度内按 动画 > 游戏/VN > 漫画/小说 排序，
         // 避免静默把番剧匹配成漫画版本。decideMatch 内部按置信度稳定排序，故此处的同分类型次序得以保留。
-        val matches = workRepository.search(candidate.title).getOrNull().orEmpty()
-            .let { com.acgcompass.domain.matching.sortMatchesByTypePriority(it) }
+        val matches = progressiveMatches(workRepository, candidate.title)
         return when (val decision = decideMatch(matches)) {
             is MatchDecision.AutoMerge -> {
                 persistWork(decision.best.work, now)
@@ -219,4 +231,22 @@ class ImportRepositoryImpl @Inject constructor(
     }
 
     private fun newId(): String = UUID.randomUUID().toString()
+}
+
+private const val MATCH_CONCURRENCY = 3
+
+/**
+ * 与发现页共用渐进搜索：各源哪个先回来先用哪个；一旦出现可以直接采用的 Bangumi 条目就停，
+ * 不等较慢的源和补充匹配。否则用全部源回来后的最终结果。
+ */
+private suspend fun progressiveMatches(workRepository: WorkRepository, title: String): List<WorkMatch> {
+    var latest: List<WorkMatch> = emptyList()
+    workRepository.searchProgressive(title)
+        .takeWhile { result ->
+            result.getOrNull()?.let { latest = com.acgcompass.domain.matching.sortMatchesByTypePriority(it) }
+            val decision = decideMatch(latest)
+            !(decision is MatchDecision.AutoMerge && decision.best.sourceTag == SourceId.BANGUMI)
+        }
+        .collect()
+    return latest
 }
