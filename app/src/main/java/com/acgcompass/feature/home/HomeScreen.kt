@@ -235,7 +235,11 @@ private fun HomeContent(
                 FlatCard(
                     title = "今晚想看什么类型？",
                     icon = Icons.Outlined.Mood,
-                    supporting = "点一个类型，直接带着对应标签去「今晚看什么」",
+                    supporting = if (data.moods.any { it.action.startsWith("tag:") }) {
+                        "按你最近看的作品推荐，点一个直接带着标签去「今晚看什么」"
+                    } else {
+                        "点一个类型，直接带着对应标签去「今晚看什么」"
+                    },
                 ) {
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),

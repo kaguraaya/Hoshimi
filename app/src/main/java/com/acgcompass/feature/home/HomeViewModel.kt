@@ -52,6 +52,9 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val scheduleRefreshState = MutableStateFlow(HomeScheduleRefreshState(refreshing = true))
+
+    /** 「今晚想看什么类型」的随机种子：同一次浏览里不跳动，重新进入首页会换一批。 */
+    private val moodSeed = kotlin.random.Random.nextLong()
     private var lastScheduleRefreshAttemptAt = 0L
 
     init {
@@ -100,6 +103,11 @@ class HomeViewModel @Inject constructor(
                     backlogSummary = buildBacklogSummary(entries),
                     syncReminder = buildSyncReminder(statuses, System.currentTimeMillis(), syncStatus),
                     dailyDraw = buildDailyDraw(backlogSize = entries.size),
+                    moods = buildMoodSuggestions(
+                        collections.map { MoodSignal(it.localWorkId, it.status, it.rating, it.updatedAt) },
+                        worksById,
+                        kotlin.random.Random(moodSeed),
+                    ),
                     enabledModules = enabledModules,
                     seasonalHot = buildSeasonalHot(works),
                     seasonalNew = buildSeasonalNew(works),

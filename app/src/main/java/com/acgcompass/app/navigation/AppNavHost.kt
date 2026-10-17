@@ -1,8 +1,6 @@
 package com.acgcompass.app.navigation
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -115,11 +113,11 @@ fun AcgApp(
         // 底栏不放进 bottomBar 槽：那样 Scaffold 会给它留出一整条矩形空带，圆角外面看不到下面的内容。
         // 底栏叠在内容之上，按圆角轮廓遮挡；可滚动内容通过 LocalFloatingBarInset 加大底部内边距让出位置。
         snackbarHost = {
-            SnackbarHost(snackbarHostState, Modifier.padding(bottom = if (showDock) DOCK_SPACE else 0.dp))
+            SnackbarHost(snackbarHostState, Modifier.padding(bottom = if (showDock) dockContentSpace() else 0.dp))
         },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize()) {
-            CompositionLocalProvider(LocalFloatingBarInset provides if (showDock) DOCK_SPACE else 0.dp) {
+            CompositionLocalProvider(LocalFloatingBarInset provides if (showDock) dockContentSpace() else 0.dp) {
                 AppNavHost(
                     navController = navController,
                     predictiveBackEnabled = predictiveBackEnabled,
@@ -141,9 +139,6 @@ fun AcgApp(
     }
 }
 
-/** 底栏高度 64 + 上下各 8 的留白。 */
-private val DOCK_SPACE = 80.dp
-
 /**
  * 应用 [NavHost]：声明五栏占位屏与嵌套路由（详情 / 设置 / 导入 / 推荐器 / 引导）。
  *
@@ -160,35 +155,30 @@ fun AppNavHost(
         navController = navController,
         startDestination = AppDestination.Home.route,
         modifier = modifier,
-        // 顶层栏目之间无方向语义，直接切换；只要一端是嵌套页，就使用对称的 push/pop 转场：
-        // Material「共享轴 X」风格——短距离位移 + 淡入淡出（整屏平移在大屏上显得拖沓，且两页会并排露出）。
-        // 四个 transition 必须使用相同的双端判断，确保进入和返回动画成对且页面不会重叠。
+        // 底栏页面之间照 FlClash 整屏左右平移（按栏目顺序决定方向）；只要一端是嵌套页，就用对称的
+        // push/pop 转场：短距离位移 + 淡入淡出。四个 transition 使用相同的双端判断，进入和返回成对。
         enterTransition = {
-            if (initialState.isTopLevel() && targetState.isTopLevel()) {
-                EnterTransition.None
-            } else {
-                slideInHorizontally(navSpec()) { it / NAV_SLIDE_FRACTION } + fadeIn(navSpec())
+            when (val dir = tabDirection(initialState, targetState)) {
+                null -> slideInHorizontally(navSpec()) { it / NAV_SLIDE_FRACTION } + fadeIn(navSpec())
+                else -> slideInHorizontally(tabSpec()) { it * dir }
             }
         },
         exitTransition = {
-            if (initialState.isTopLevel() && targetState.isTopLevel()) {
-                ExitTransition.None
-            } else {
-                slideOutHorizontally(navSpec()) { -it / NAV_SLIDE_FRACTION } + fadeOut(navSpec())
+            when (val dir = tabDirection(initialState, targetState)) {
+                null -> slideOutHorizontally(navSpec()) { -it / NAV_SLIDE_FRACTION } + fadeOut(navSpec())
+                else -> slideOutHorizontally(tabSpec()) { -it * dir }
             }
         },
         popEnterTransition = {
-            if (initialState.isTopLevel() && targetState.isTopLevel()) {
-                EnterTransition.None
-            } else {
-                slideInHorizontally(navSpec()) { -it / NAV_SLIDE_FRACTION } + fadeIn(navSpec())
+            when (val dir = tabDirection(initialState, targetState)) {
+                null -> slideInHorizontally(navSpec()) { -it / NAV_SLIDE_FRACTION } + fadeIn(navSpec())
+                else -> slideInHorizontally(tabSpec()) { it * dir }
             }
         },
         popExitTransition = {
-            if (initialState.isTopLevel() && targetState.isTopLevel()) {
-                ExitTransition.None
-            } else {
-                slideOutHorizontally(navSpec()) { it / NAV_SLIDE_FRACTION } + fadeOut(navSpec())
+            when (val dir = tabDirection(initialState, targetState)) {
+                null -> slideOutHorizontally(navSpec()) { it / NAV_SLIDE_FRACTION } + fadeOut(navSpec())
+                else -> slideOutHorizontally(tabSpec()) { -it * dir }
             }
         },
     ) {
@@ -544,5 +534,15 @@ private const val NAV_SLIDE_FRACTION = 6
 
 private fun <T> navSpec() = tween<T>(NAV_SLIDE_MS, easing = androidx.compose.animation.core.FastOutSlowInEasing)
 
-/** 该目的地是否为底部五栏之一（顶层）。用于区分「同级切换（瞬切）」与「下钻（滑入）」动画。 */
-private fun NavBackStackEntry.isTopLevel(): Boolean = TopLevelDestination.isTopLevelRoute(destination.route)
+/** 底栏页面切换：与 FlClash 一致，300ms、先快后慢。 */
+private fun <T> tabSpec() = tween<T>(TAB_SLIDE_MS, easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+
+private const val TAB_SLIDE_MS = 300
+
+/** 两端都是底栏页面时返回平移方向（往右边的栏目为 1，往左为 -1）；否则 null。 */
+private fun tabDirection(from: NavBackStackEntry, to: NavBackStackEntry): Int? {
+    val routes = TopLevelDestination.ENTRIES.map { it.destination.route }
+    val fromIndex = routes.indexOf(from.destination.route)
+    val toIndex = routes.indexOf(to.destination.route)
+    return if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) null else if (toIndex > fromIndex) 1 else -1
+}
