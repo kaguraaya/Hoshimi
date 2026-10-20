@@ -144,6 +144,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         val likeability = likeabilityOf(profile.divergence, rating, prediction)
         val satisfaction = likeability
             ?: fallbackSatisfaction(isRated, score, feature, profile, rawZ, evidence, prediction)
+        val basisRating = rating?.toDouble() ?: prediction?.rating
         return TasteMatchResult(
             profileScore = finalScore(p),
             tasteSimilarity = score,
@@ -151,7 +152,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             satisfaction = satisfaction,
             prediction = prediction,
             similarRated = neighborsOf(profile, feature, withNeighbors),
-            score = likeability ?: score,
+            score = if (likeability != null && basisRating != null) headlineScore(basisRating, score) else score,
             confidence = confidence,
             rawZ = rawZ,
             probability = p,
@@ -169,10 +170,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
      * 预计评分等于你的均分 → 50，高一个标准差 → 约 77。没有模型（样本太少）时退回
      * 「社区 + 画像」的 [TasteScoringParams.satisfactionScore]。
      */
-    /**
-     * 主分数跟着评分走：已评分用你打的分，未评分用预计评分，都换算成它在你打分历史里的位置。
-     * 这样主分数和「预计你会打几分」永远同向；旧的画像匹配分保留在 tasteSimilarity 里作补充说明。
-     */
+    /** 预计评分（已评分用你打的分）在你自己打分历史里的位置；推荐排序用它。 */
     private fun likeabilityOf(model: PersonalDivergenceModel?, rating: Int?, prediction: RatingPrediction?): Int? {
         val basis = rating?.toDouble() ?: prediction?.rating
         return if (model == null || basis == null) null else model.likeability(basis)
@@ -298,16 +296,31 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         return reasons.sortedByDescending { it.contribution }.take(MAX_REASONS)
     }
 
-    private companion object {
-        const val REASON_MIN: Double = 1e-3
-        const val MAX_REASONS: Int = 4
-        const val SIMILAR_RATED_LIMIT: Int = 6
+    companion object {
+        /** 主分数里评分的占比，其余来自题材相似度（12 维画像匹配分）。 */
+        const val HEADLINE_RATING_SHARE: Double = 0.65
+        private const val HEADLINE_MIN = 5
+        private const val HEADLINE_MAX = 97
+        private const val RATING_TO_PERCENT = 10.0
+
+        /**
+         * 口味匹配度（主分数）：以「预计评分 × 10」为主（7.7 分 ≈ 77%），叠加题材相似度，
+         * 让「这类我一向喜欢」也体现在分数里。两者都高才会接近上限。
+         */
+        fun headlineScore(basisRating: Double, similarity: Int): Int =
+            (HEADLINE_RATING_SHARE * basisRating * RATING_TO_PERCENT + (1.0 - HEADLINE_RATING_SHARE) * similarity)
+                .roundToInt()
+                .coerceIn(HEADLINE_MIN, HEADLINE_MAX)
+
+        private const val REASON_MIN: Double = 1e-3
+        private const val MAX_REASONS: Int = 4
+        private const val SIMILAR_RATED_LIMIT: Int = 6
 
         /** 证据量为 0 时置信度保留的比例（不直接归零：画像本身的可信度仍在）。 */
-        const val CONFIDENCE_EVIDENCE_FLOOR: Double = 0.5
+        private const val CONFIDENCE_EVIDENCE_FLOOR: Double = 0.5
 
         /** 计入「候选证据量 / 画像熟悉度」的内容维度。 */
-        val CONTENT_EVIDENCE_CATEGORIES: List<TasteCategory> = listOf(
+        private val CONTENT_EVIDENCE_CATEGORIES: List<TasteCategory> = listOf(
             TasteCategory.TOPIC,
             TasteCategory.DEVICE,
             TasteCategory.XP,

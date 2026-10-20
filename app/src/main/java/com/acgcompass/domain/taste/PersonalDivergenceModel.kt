@@ -120,7 +120,7 @@ class PersonalDivergenceModel private constructor(
     }
 
     /**
-     * 喜欢度：[rating] 落在你自己打分历史里的位置，0–100（超过你看过的百分之多少）。
+     * 喜欢度：[rating] 落在你自己打分历史里的位置，0–100（高于你看过的百分之多少）。推荐排序用它。
      *
      * 评分是整数，直接数「低于它的占比」会在整数点上跳变；这里把每个历史评分当成铺在
      * [r − 0.5, r + 0.5] 上，得到一条平滑、单调的曲线——预计 7.4 和 7.6 不会差出一大截。
@@ -143,11 +143,11 @@ class PersonalDivergenceModel private constructor(
     fun predict(feature: WorkFeature): RatingPrediction {
         val base = baseline(feature.bangumiScore?.toDouble())
         val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
-        val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to it * x } }
+        val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to PERSONAL_GAIN * it * x } }
         val tagPart = perTag.sumOf { it.second }
-        val franchisePart = FRANCHISE_WEIGHT * franchiseResidual(feature)
+        val franchisePart = PERSONAL_GAIN * FRANCHISE_WEIGHT * franchiseResidual(feature)
         val axes = axes(feature)
-        val axisParts = AXIS_LABELS.indices.map { AXIS_WEIGHT * axisWeights[it] * axes[it] }
+        val axisParts = AXIS_LABELS.indices.map { PERSONAL_GAIN * AXIS_WEIGHT * axisWeights[it] * axes[it] }
         val divergence = tagPart + franchisePart + axisParts.sum()
 
         val factors = ArrayList<DivergenceFactor>()
@@ -231,6 +231,11 @@ class PersonalDivergenceModel private constructor(
         const val TAG_RIDGE_LAMBDA: Double = 1.0
 
         /** 系列残差 / 取向维度并入预测时的系数（在一半用户上最小二乘拟合得到 0.32 / 0.33）。 */
+        /**
+         * 个人分歧放大系数。按均方误差最优约为 1.0，但那样预测会紧贴社区分；
+         * Bangumi15M 盲测里 1.3 让「与大众相差 1.5 分以上」的评分误差多降 25%，整体误差只增加 0.002。
+         */
+        const val PERSONAL_GAIN: Double = 1.3
         const val FRANCHISE_WEIGHT: Double = 0.32
         const val AXIS_WEIGHT: Double = 0.33
         const val FRANCHISE_SHRINK: Double = 0.5

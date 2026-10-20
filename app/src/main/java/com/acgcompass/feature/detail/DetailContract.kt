@@ -908,11 +908,12 @@ private fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         .sortedByDescending { kotlin.math.abs(it.contribution) }
         .take(4)
         .map { TasteMatchReasonUi(text = it.label, positive = it.contribution >= 0.0) }
-    // 主分数来自预计评分；题材相似度只用一句话补充，不给第二个百分数。
+    // 主分数以预计评分为主、计入题材相似度；只给一个百分数，题材倾向用一句话说明。
     val reasonCore = if (predicted != null) {
-        // 把百分数的含义说出来：它是预计评分在你自己打分历史里的位置。
-        val basis = if (isRated) "按你的评分" else "按预计评分"
-        "$basis，比你看过的 $score% 作品更合口味。" + TasteVerdict.familiarityNote(tasteSimilarity) + "（下方是题材依据）"
+        // 把百分数的含义说出来：以评分为主、计入题材相似度；另给出它在你看过的作品里的位置。
+        val basis = if (isRated) "你的评分" else "预计评分"
+        "主要看$basis，也计入题材相似度；这个评分高于你看过的 $satisfaction% 作品。" +
+            TasteVerdict.familiarityNote(tasteSimilarity) + "（下方是题材依据）"
     } else {
         when {
             reasonUis.any { it.positive } -> "综合你的长期口味给出（下方为主要依据）"

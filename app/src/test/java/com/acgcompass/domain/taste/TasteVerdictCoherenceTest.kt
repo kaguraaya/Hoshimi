@@ -9,7 +9,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlin.random.Random
 
-/** 主分数与预计评分必须同向：主分数是预计评分在用户自己打分历史里的位置。 */
+/** 主分数与预计评分必须同向：主分数以预计评分为主、计入题材相似度。 */
 class TasteVerdictCoherenceTest : StringSpec({
 
     val neutral = listOf("日常", "校园", "冒险", "奇幻", "科幻", "音乐", "运动", "历史")
@@ -51,14 +51,15 @@ class TasteVerdictCoherenceTest : StringSpec({
         model.likeability(model.meanRating - 2.5) shouldBeLessThan 20
     }
 
-    "the headline score follows the predicted rating, not tag similarity" {
-        // 题材陌生（全是画像里没有的标签）但口碑很好：旧算法给低分，现在主分数跟预计评分走。
+    "the headline score is led by the predicted rating" {
+        // 题材陌生（全是画像里没有的标签）但口碑很好：主分数以预计评分为主，题材只占一小部分。
         val unfamiliarButGood = compute(feature("a", listOf("性喜剧", "学生会", "下品"), 8.4f), profile)
         val prediction = unfamiliarButGood.prediction
         prediction shouldNotBe null
         unfamiliarButGood.fromRatingModel shouldBe true
-        unfamiliarButGood.score shouldBe model.likeability(prediction!!.rating)
-        unfamiliarButGood.satisfaction shouldBe unfamiliarButGood.score
+        unfamiliarButGood.score shouldBe
+            ComputeTasteMatchUseCase.headlineScore(prediction!!.rating, unfamiliarButGood.tasteSimilarity)
+        unfamiliarButGood.satisfaction shouldBe model.likeability(prediction.rating)
 
         // 预计评分更高的作品，主分数不会更低。
         val better = compute(feature("b", listOf("搞笑", "日常"), 8.6f), profile)
@@ -78,8 +79,13 @@ class TasteVerdictCoherenceTest : StringSpec({
     "below the pass line the verdict says so regardless of percentile" {
         TasteVerdict.of(60, 5.4) shouldBe "可能不太合你口味"
         TasteVerdict.of(80, 8.2) shouldBe "很可能喜欢"
-        TasteVerdict.of(55, 7.5) shouldBe "应该不错"
+        TasteVerdict.of(70, 7.5) shouldBe "应该不错"
         // 评分太少、没有预计评分时，沿用画像匹配分的措辞，且不说「不太喜欢」。
         TasteVerdict.of(30, null) shouldBe "题材上不太对口"
+    }
+
+    "a 7.5 prediction on a familiar, liked genre lands around 75–80" {
+        ComputeTasteMatchUseCase.headlineScore(7.5, 80) shouldBeInRange 75..80
+        ComputeTasteMatchUseCase.headlineScore(9.8, 95) shouldBe 97
     }
 })
