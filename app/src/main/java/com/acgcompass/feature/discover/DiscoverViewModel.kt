@@ -494,25 +494,8 @@ class DiscoverViewModel @Inject constructor(
 
     private var scoreDiffBackfilledOnce = false
 
-    /** 已经尝试补过的作品，「再补一批」时跳过。 */
+    /** 已经补过的作品，再次进入评分差异页时跳过。 */
     private val scoreDiffAttempted = java.util.Collections.synchronizedSet(mutableSetOf<String>())
-
-    /** 评分差异页「自动补充其它平台评分」开关。 */
-    val scoreDiffAutoBackfill: StateFlow<Boolean> = settingsDataStore.scoreDiffAutoBackfill
-        .stateIn(viewModelScope, SharingStarted.Lazily, true)
-
-    fun onToggleScoreDiffAutoBackfill(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsDataStore.setScoreDiffAutoBackfill(enabled)
-            if (enabled) backfillScoreDiffRatings()
-        }
-    }
-
-    /** 手动再补一批（跳过已经补过的作品）。 */
-    fun onBackfillMoreScoreDiff() {
-        scoreDiffBackfilledOnce = false
-        backfillScoreDiffRatings()
-    }
 
     private val _scoreDiffBackfilling = MutableStateFlow(false)
 

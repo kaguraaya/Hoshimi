@@ -105,7 +105,7 @@ fun MyLibraryScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 16.dp),
+                    .padding(top = LIBRARY_TOP_GAP),
             ) {
                 StatusTabs(
                     selectedTab = selectedTab,
@@ -136,7 +136,7 @@ fun MyLibraryScreen(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(
                             start = ScreenContentPadding.Horizontal,
                             end = ScreenContentPadding.Horizontal,
-                            top = 16.dp,
+                            top = LIBRARY_LIST_GAP,
                             bottom = ScreenContentPadding.Bottom,
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -279,3 +279,7 @@ private fun MyLibraryScreenPreview() {
         )
     }
 }
+
+/** 我的库自己的间距：顶栏到分组药丸、药丸到第一张卡片。 */
+private val LIBRARY_TOP_GAP = 28.dp
+private val LIBRARY_LIST_GAP = 20.dp

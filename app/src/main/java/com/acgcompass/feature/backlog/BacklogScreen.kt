@@ -532,7 +532,8 @@ private fun BacklogEmptyState(onGoImport: () -> Unit, onGoSearch: () -> Unit) {
 private fun backlogListPadding(): PaddingValues = PaddingValues(
     start = 16.dp,
     end = 16.dp,
-    top = 4.dp + LocalHeaderInset.current,
+    // 顶栏加高到 72dp 后仍保持原来离屏幕顶端的距离（待补池自己的间距，不跟其它页面联动）。
+    top = LocalHeaderInset.current - 4.dp,
     bottom = 96.dp + LocalFloatingBarInset.current,
 )
 

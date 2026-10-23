@@ -1,13 +1,14 @@
 package com.acgcompass.app.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
+import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.HourglassFull
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -190,14 +191,16 @@ enum class TopLevelDestination(
     BACKLOG(
         destination = AppDestination.Backlog,
         label = "待补池",
-        selectedIcon = Icons.AutoMirrored.Outlined.LibraryBooks,
-        unselectedIcon = Icons.AutoMirrored.Outlined.LibraryBooks,
+        // 书签组：「先存着，之后补」；选中实心、未选空心。
+        selectedIcon = Icons.Filled.Bookmarks,
+        unselectedIcon = Icons.Outlined.Bookmarks,
     ),
     TIME_MACHINE(
         destination = AppDestination.TimeMachine,
         label = "时光机",
-        selectedIcon = Icons.Filled.History,
-        unselectedIcon = Icons.Outlined.History,
+        // 沙漏：时光流转；选中是装满的沙漏、未选是空沙漏。
+        selectedIcon = Icons.Filled.HourglassFull,
+        unselectedIcon = Icons.Filled.HourglassEmpty,
     ),
     MINE(
         destination = AppDestination.Mine,

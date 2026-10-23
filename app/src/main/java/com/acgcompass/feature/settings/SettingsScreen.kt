@@ -1352,8 +1352,8 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
     }
     ToggleRow(
         label = "自动补充其它平台评分",
-        description = "打开「发现 → 评分差异」时，为只有一个平台评分的热门作品去 AniList、MAL 等查评分，" +
-            "每次最多 20 部（该页顶部也有同一个开关）",
+        description = "联网且电量不低时，约每 6 小时在后台为只有一个平台评分的作品去 AniList、MAL 等补查评分，" +
+            "每次最多 20 部，按各平台的速率上限排队；打开「发现 → 评分差异」时也会补一批",
         checked = card.scoreDiffAutoBackfill,
         enabled = true,
         onCheckedChange = { actions.onToggleChange(ToggleKeys.SCORE_DIFF_AUTO_BACKFILL, it) },

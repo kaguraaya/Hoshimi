@@ -1,6 +1,6 @@
 package com.acgcompass.core.network
 
-/** Conservative client-side request budget for one remote source. */
+/** Conservative client-side request budget for one remote source; official limits are listed in docs/rate-limits.md. */
 data class RateLimitPolicy(
     val source: NetworkSource,
     val rules: List<RateLimiter.Rule>,

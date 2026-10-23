@@ -16,6 +16,7 @@ import com.acgcompass.core.network.HttpTimeouts
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.remote.bangumi.BangumiTokenRefresher
 import com.acgcompass.data.sync.CacheFillScheduler
+import com.acgcompass.data.sync.RatingBackfillScheduler
 import com.acgcompass.data.sync.SyncScheduler
 import com.acgcompass.data.sync.TasteProfileAutoUpdater
 import com.acgcompass.data.sync.TasteProfileValidationScheduler
@@ -60,6 +61,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
     @Inject lateinit var syncScheduler: Lazy<SyncScheduler>
 
     @Inject lateinit var cacheFillScheduler: Lazy<CacheFillScheduler>
+
+    @Inject lateinit var ratingBackfillScheduler: Lazy<RatingBackfillScheduler>
 
     @Inject lateinit var cacheRepository: Lazy<CacheRepository>
 
@@ -140,6 +143,10 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             settingsDataStore.cacheBackgroundFillEnabled
                 .distinctUntilChanged()
                 .onEach { enabled -> cacheFillScheduler.get().apply(enabled) }
+                .launchIn(appScope)
+            settingsDataStore.scoreDiffAutoBackfill
+                .distinctUntilChanged()
+                .onEach { enabled -> ratingBackfillScheduler.get().apply(enabled) }
                 .launchIn(appScope)
             // 个人收藏变化（同步入库 / 详情页改状态 / 加待补池）→ 防抖后自动重算口味画像。
             tasteProfileAutoUpdater.get().start(appScope)
