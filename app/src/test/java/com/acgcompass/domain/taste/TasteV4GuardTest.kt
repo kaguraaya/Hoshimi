@@ -89,7 +89,9 @@ class TasteV4GuardTest : StringSpec({
         (acclaimed.satisfaction - mediocre.satisfaction) shouldBeGreaterThan 10
         (acclaimed.prediction!!.rating > mediocre.prediction!!.rating + 0.8) shouldBe true
         val rated = compute(feature("s0", listOf("奇幻" to 30), 6.0f), profile, userRating = 10)
-        rated.satisfaction shouldBe rated.score
+        // 已评分作品：满意度锚在你打的分上（10 分接近上限），匹配度同样偏高。
+        rated.satisfaction shouldBeGreaterThan 90
+        rated.score shouldBeGreaterThan 70
     }
 
     "证据量收缩：没有标签的作品回到中性附近，而不是被判成反口味" {

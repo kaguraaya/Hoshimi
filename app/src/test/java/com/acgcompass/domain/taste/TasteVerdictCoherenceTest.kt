@@ -9,7 +9,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlin.random.Random
 
-/** 主分数与预计评分必须同向：主分数以预计评分为主、计入题材相似度。 */
+/** 口味匹配度以相似作品类比为主，并与预计评分保持同向。 */
 class TasteVerdictCoherenceTest : StringSpec({
 
     val neutral = listOf("日常", "校园", "冒险", "奇幻", "科幻", "音乐", "运动", "历史")
@@ -51,21 +51,32 @@ class TasteVerdictCoherenceTest : StringSpec({
         model.likeability(model.meanRating - 2.5) shouldBeLessThan 20
     }
 
-    "the headline score is led by the predicted rating" {
-        // 题材陌生（全是画像里没有的标签）但口碑很好：主分数以预计评分为主，题材只占一小部分。
+    "the headline score combines analogy, predicted rating and similarity" {
         val unfamiliarButGood = compute(feature("a", listOf("性喜剧", "学生会", "下品"), 8.4f), profile)
         val prediction = unfamiliarButGood.prediction
         prediction shouldNotBe null
         unfamiliarButGood.fromRatingModel shouldBe true
-        unfamiliarButGood.score shouldBe
-            ComputeTasteMatchUseCase.headlineScore(prediction!!.rating, unfamiliarButGood.tasteSimilarity)
+        val ratingZ = (prediction!!.rating - model.meanRating) / model.ratingStd.coerceAtLeast(0.6)
+        unfamiliarButGood.score shouldBe ComputeTasteMatchUseCase.headlineScore(
+            ratingZ,
+            unfamiliarButGood.analogy?.z,
+            unfamiliarButGood.tasteSimilarity,
+        )
         unfamiliarButGood.satisfaction shouldBe model.likeability(prediction.rating)
 
-        // 预计评分更高的作品，主分数不会更低。
+        // 同样的题材，预计评分更高的作品主分数不会更低。
         val better = compute(feature("b", listOf("搞笑", "日常"), 8.6f), profile)
         val worse = compute(feature("c", listOf("搞笑", "日常"), 6.4f), profile)
         (better.prediction!!.rating > worse.prediction!!.rating) shouldBe true
         better.score shouldBeGreaterThan worse.score
+    }
+
+    "works like the ones you rated higher get a higher match" {
+        // 这位用户给「搞笑」作品多打 1 分：同样口碑下，搞笑作品的类比分与匹配度更高。
+        val comedy = compute(feature("e", listOf("搞笑", "日常", "校园"), 7.4f), profile)
+        val other = compute(feature("f", listOf("历史", "音乐", "运动"), 7.4f), profile)
+        (comedy.analogy!!.z > other.analogy!!.z) shouldBe true
+        comedy.score shouldBeGreaterThan other.score
     }
 
     "a work predicted at or above the user's average is never called a poor match" {
@@ -84,8 +95,9 @@ class TasteVerdictCoherenceTest : StringSpec({
         TasteVerdict.of(30, null) shouldBe "题材上不太对口"
     }
 
-    "a 7.5 prediction on a familiar, liked genre lands around 75–80" {
-        ComputeTasteMatchUseCase.headlineScore(7.5, 80) shouldBeInRange 75..80
-        ComputeTasteMatchUseCase.headlineScore(9.8, 95) shouldBe 97
+    "headline mapping is centred and bounded" {
+        ComputeTasteMatchUseCase.headlineScore(0.0, 0.0, 50) shouldBe 68
+        ComputeTasteMatchUseCase.headlineScore(0.4, 0.5, 80) shouldBeInRange 80..88
+        ComputeTasteMatchUseCase.headlineScore(3.0, 3.0, 95) shouldBe 97
     }
 })

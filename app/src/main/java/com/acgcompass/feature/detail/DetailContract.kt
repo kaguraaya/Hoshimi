@@ -272,6 +272,8 @@ sealed interface TasteMatchUiModel {
         val confidenceText: String? = null,
         /** 评分预测与分歧归因；画像样本不足以建模时为 null（不展示，绝不伪造）。 */
         val prediction: RatingPredictionUi? = null,
+        /** 预计评分（已评分为你的评分）高于你看过的百分之多少；没有评分模型时为 null。 */
+        val rankPercent: Int? = null,
     ) : TasteMatchUiModel
 
     /** 尚未生成口味画像，或样本/标签不足以计算匹配度（[message] 说明具体原因，不伪造）。 */
@@ -786,7 +788,8 @@ private fun Work.toDecisionUiModel(
 }
 
 /**
- * 补番优先级模型（可解释）。综合口味匹配 + 社区共识优先级 + 补完成本 + 情绪风险标签，
+ * 补番优先级模型（可解释）。以「预计评分在你自己看过的作品里的位置」为主，再看口味匹配、社区共识、
+ * 补完成本与情绪风险标签，
  * 输出 低/中/高 + 理由。无任何有效信号（无口味、无社区共识）时返回 (null, null)，不伪造。
  */
 private fun computeBacklogPriority(
@@ -799,14 +802,23 @@ private fun computeBacklogPriority(
     var weight = 0f
     val reasons = mutableListOf<String>()
 
+    // 口味：主分数 50% 以下视为不加分，90% 视为满分（主分数本身挤在 55–85 之间，直接用会让优先级普遍偏高）。
     if (tasteMatch is TasteMatchUiModel.Available) {
-        weighted += tasteMatch.fraction * 0.4f
-        weight += 0.4f
-        if (tasteMatch.fraction >= 0.6f) reasons += "口味匹配较高"
+        val taste = ((tasteMatch.fraction - TASTE_FLOOR) / TASTE_SPAN).coerceIn(0f, 1f)
+        weighted += taste * W_TASTE
+        weight += W_TASTE
+        if (taste >= 0.6f) reasons += "口味匹配较高"
+        // 预计评分在你自己看过的作品里排在哪：最能区分「值得先补」的一项。
+        tasteMatch.rankPercent?.let { rank ->
+            weighted += rank / 100f * W_RANK
+            weight += W_RANK
+            if (rank >= HIGH_RANK) reasons += "预计评分在你看过的作品里偏高"
+            if (rank < LOW_RANK) reasons += "预计评分在你看过的作品里偏低"
+        }
     }
     if (consensus is ConsensusUiModel.Available) {
-        weighted += consensus.priority.fraction * 0.4f
-        weight += 0.4f
+        weighted += consensus.priority.fraction * W_COMMUNITY
+        weight += W_COMMUNITY
         if (consensus.priority.fraction >= 0.6f) reasons += "社区评价较高"
     }
     if (completionCost.available) {
@@ -815,8 +827,8 @@ private fun computeBacklogPriority(
             "周末补完" -> 0.6f
             else -> 0.25f
         }
-        weighted += costScore * 0.2f
-        weight += 0.2f
+        weighted += costScore * W_COST
+        weight += W_COST
         if (completionCost.bucketLabel == "今晚可看完") reasons += "篇幅短易补完"
         if (completionCost.bucketLabel == "长期坑") reasons += "体量较大需长期投入"
     }
@@ -831,13 +843,24 @@ private fun computeBacklogPriority(
     }
 
     val level = when {
-        score >= 0.66f -> "高"
-        score >= 0.4f -> "中"
+        score >= HIGH_PRIORITY -> "高"
+        score >= MID_PRIORITY -> "中"
         else -> "低"
     }
     val reason = if (reasons.isEmpty()) "综合口味与社区信号的初步估计，仅供参考" else reasons.joinToString(" · ")
     return level to reason
 }
+
+private const val TASTE_FLOOR = 0.5f
+private const val TASTE_SPAN = 0.4f
+private const val W_RANK = 0.4f
+private const val W_TASTE = 0.25f
+private const val W_COMMUNITY = 0.2f
+private const val W_COST = 0.15f
+private const val HIGH_PRIORITY = 0.7f
+private const val HIGH_RANK = 70
+private const val LOW_RANK = 35
+private const val MID_PRIORITY = 0.45f
 
 /**
  * 从作品内容标签按关键词推断「适合心情」。匹配不到任何关键词时返回空（不伪造）。
@@ -908,11 +931,14 @@ private fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         .sortedByDescending { kotlin.math.abs(it.contribution) }
         .take(4)
         .map { TasteMatchReasonUi(text = it.label, positive = it.contribution >= 0.0) }
-    // 主分数以预计评分为主、计入题材相似度；只给一个百分数，题材倾向用一句话说明。
+    // 主分数以相似作品类比为主；只给一个百分数，题材倾向用一句话说明。
     val reasonCore = if (predicted != null) {
-        // 把百分数的含义说出来：以评分为主、计入题材相似度；另给出它在你看过的作品里的位置。
+        // 把百分数的含义说出来：以相似作品类比为主，再参考评分和题材相似度。
         val basis = if (isRated) "你的评分" else "预计评分"
-        "主要看$basis，也计入题材相似度；这个评分高于你看过的 $satisfaction% 作品。" +
+        val analogyText = analogy?.let {
+            "你给题材相近的 ${it.count} 部作品平均打 ${"%.1f".format(it.meanRating)} 分；"
+        }.orEmpty()
+        analogyText + "主要看相近作品你打了几分，也参考$basis（高于你看过的 $satisfaction% 作品）和题材相似度。" +
             TasteVerdict.familiarityNote(tasteSimilarity) + "（下方是题材依据）"
     } else {
         when {
@@ -937,6 +963,7 @@ private fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         confidenceText = confidenceText,
         // 已评分作品不展示预测（你已经给出了答案）。
         prediction = prediction?.takeIf { !isRated }?.toUi(),
+        rankPercent = satisfaction.takeIf { fromRatingModel },
     )
 }
 

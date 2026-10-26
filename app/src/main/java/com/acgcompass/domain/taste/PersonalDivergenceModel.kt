@@ -93,7 +93,7 @@ class PersonalDivergenceModel private constructor(
     /** 你打过的全部分数（升序）：把预计评分换算成「超过你看过的百分之多少」时用。 */
     private val sortedRatings: DoubleArray,
     val sampleCount: Int,
-    private val examples: List<Pair<RatedExample, Map<String, Double>>>,
+    internal val examples: List<Pair<RatedExample, Map<String, Double>>>,
 ) {
 
     /**
@@ -101,7 +101,7 @@ class PersonalDivergenceModel private constructor(
      * 「相似的作品你当时怎么评的」是最直观的类比证据，供 AI 分析与解释使用。
      */
     fun nearestRated(feature: WorkFeature, limit: Int): List<RatedExample> {
-        val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
+        val vector = vectorOf(feature)
         if (vector.isEmpty()) return emptyList()
         return examples.asSequence()
             .filter { it.first.subjectId != feature.subjectId }
@@ -111,6 +111,9 @@ class PersonalDivergenceModel private constructor(
             .take(limit)
             .toList()
     }
+
+    /** [feature] 在本模型标签空间里的归一化向量（与拟合时同一套 IDF 和标签归类）。 */
+    internal fun vectorOf(feature: WorkFeature): Map<String, Double> = tagVector(feature, idf, defaultIdf, tagOverrides)
 
     /** 你与大众分歧最大的评分：高于基线最多的 [limit] 部与低于基线最多的 [limit] 部。 */
     fun strongestDivergences(limit: Int): Pair<List<RatedExample>, List<RatedExample>> {

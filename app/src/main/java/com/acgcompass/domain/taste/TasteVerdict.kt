@@ -3,17 +3,17 @@ package com.acgcompass.domain.taste
 /**
  * 把分数翻译成一句话。详情页、探索队列、推荐共用同一套措辞，避免各说各话。
  *
- * 主结论跟着「预计你会打几分」走：主分数以「预计评分 × 10」为主、叠加题材相似度
- * （[ComputeTasteMatchUseCase.headlineScore]），低于及格线的预计分一律按「不太合口味」说。
+ * 主结论跟着口味匹配度走（[ComputeTasteMatchUseCase.headlineScore]：以相似作品类比为主），
+ * 但预计分低于及格线时一律按「不太合口味」说。
  * 题材相似度（[familiarityNote]）只作为补充说明，用文字不用数字。
  */
 object TasteVerdict {
     /** 及格线：预计分低于它，无论排在你历史里的什么位置，都按「不太合口味」说。 */
     const val PASS_LINE = 6.0
 
-    private const val LIKELY_LOVE = 78
-    private const val LIKELY_GOOD = 68
-    private const val AVERAGE = 58
+    private const val LIKELY_LOVE = 80
+    private const val LIKELY_GOOD = 70
+    private const val AVERAGE = 60
 
     private const val LEGACY_HIGH = 80
     private const val LEGACY_GOOD = 65
