@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -684,9 +685,18 @@ private fun FilterSortBar(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // 排序与优先级一样用药丸单选。
+        // 标题行保持和「优先级」「类型」一样矮：「清除筛选」用文字链接，不用 48dp 高的按钮。
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("排序", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-            TextButton(onClick = onClearFilters) { Text("清除筛选") }
+            Text(
+                text = "清除筛选",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable(onClick = onClearFilters)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BacklogSort.entries.forEach { option ->

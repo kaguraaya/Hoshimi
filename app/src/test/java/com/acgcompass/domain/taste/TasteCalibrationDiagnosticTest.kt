@@ -62,7 +62,7 @@ class TasteCalibrationDiagnosticTest : StringSpec({
     val profile = build(training, now, pool)
 
     "候选池校准 + combo 归一化：未评分作品按契合度单调拉开、区分度回归" {
-        // 这里验证的是 12 维画像的题材相似度（主分数现在来自预计评分，另有测试覆盖）。
+        // 这里验证的是 12 维画像的题材相似度（主分数另有测试覆盖）。
         fun sc(vararg t: Pair<String, Int>) = compute(feature("d", t.toList()), profile).tasteSimilarity
         val perfect = sc("奇幻" to 60, "异世界" to 50, "战斗" to 40, "智斗" to 30)
         val good = sc("奇幻" to 40, "冒险" to 30, "热血" to 20)

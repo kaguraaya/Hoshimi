@@ -644,7 +644,7 @@ private fun ThemeColorPicker(data: SettingsUiState, actions: SettingsActions) {
     )
 }
 
-/** 主题色：一排色块（照 FlClash），选中的一块里打勾；颜色就是选项本身，不用文字药丸。 */
+/** 主题色：一排色块（照 FlClash），选中的一块里打勾；颜色就是选项本身。 */
 @Composable
 private fun ThemePresetRow(selected: ThemePreset, onSelect: (ThemePreset) -> Unit) {
     Row(

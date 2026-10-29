@@ -447,7 +447,7 @@ private fun LazyListScope.searchResultItems(
         }
         return
     }
-    // 低置信提示只在顶部统一展示一处，不在每条结果上放一张大横幅。
+    // 低置信提示只在顶部统一展示一处。
     if (results.any { it.isLowConfidence }) {
         item(key = "low_conf_hint") {
             PrismCard(modifier = Modifier.fillMaxWidth()) {

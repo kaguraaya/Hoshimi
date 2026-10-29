@@ -177,8 +177,8 @@ class ExploreQueueViewModel @Inject constructor(
 
     /**
      * 发布状态；若为 [ExploreQueueUiState.Ready]，把**当前这张**卡片记为已曝光。
-     * 曝光只在卡片真正出现在用户眼前时记录：如果组批时就把整批写入冷却，
-     * 用户看了三张就退出，剩下七张没见过的也要被藏两周。
+     * 曝光只在卡片真正出现在用户眼前时记录：如果组批时就整批写入冷却，
+     * 看了三张就退出，剩下七张没见过的也会被藏两周。
      */
     private fun publish(newState: ExploreQueueUiState) {
         _state.value = newState
@@ -201,7 +201,7 @@ class ExploreQueueViewModel @Inject constructor(
     private suspend fun enrichMissingMatches(expectedGeneration: Int) {
         val candidates = unscoredCandidates.take(BACKGROUND_ENRICH_LIMIT)
         val preparingCards = mutableListOf<ExploreCardUiModel>()
-        // 现在每次取一小组（仓库内部两路并发），凑够几张就先展示。
+        // 每次取一小组（仓库内部两路并发），凑够几张就先展示。
         var position = 0
         for (group in candidates.chunked(ENRICH_GROUP)) {
             if (generation != expectedGeneration) return

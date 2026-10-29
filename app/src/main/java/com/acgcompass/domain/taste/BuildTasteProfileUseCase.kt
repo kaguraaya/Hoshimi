@@ -49,7 +49,7 @@ data class ImplicitSignal(val feature: WorkFeature, val kind: Kind) {
  */
 class BuildTasteProfileUseCase @Inject constructor() {
 
-    // 画像构建的主流程；原有的长度 / 复杂度告警登记在 detekt baseline 里（按旧签名匹配），新增参数后在此显式说明。
+    // 画像构建的主流程集中在一处，便于对照算法文档阅读。
     @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
     operator fun invoke(
         samples: List<TasteSample>,

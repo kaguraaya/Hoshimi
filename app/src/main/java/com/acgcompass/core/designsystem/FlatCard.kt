@@ -81,7 +81,7 @@ object PrismMetrics {
     val Hairline = 0.6.dp
 }
 
-/** 旧名保留：现在都从当前表面层级取色（见 [Surfaces]）。 */
+/** 从当前表面层级取色（见 [Surfaces]）。 */
 object FlatDefaults {
     /** 放在当前表面上的卡片 / 色块的填充色。 */
     val cardColor: Color

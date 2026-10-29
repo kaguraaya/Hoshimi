@@ -71,8 +71,10 @@ class AggregateRatingsUseCase {
         val stability = (0.40f * agreement + 0.35f * voteFactor + 0.25f * sourceFactor).coerceIn(0f, 1f)
         // 争议度 = 跨源极差 + 标准差离散度（与稳定度不构成 1-x 关系）。
         val controversy = ((spread / SPREAD_FULL) * 0.6f + (stdDev / MAX_STD_DEV) * 0.4f).coerceIn(0f, 1f)
-        // 补番优先级（社区维度）：平均分为主，叠加评分人数充足度与稳定度。
-        val priority = ((avg / TEN_SCALE_MAX) * 0.6f + voteFactor * 0.25f + stability * 0.15f).coerceIn(0f, 1f)
+        // 补番优先级（社区维度）：均分在动画评分分布里的位置（7.4 分约排前 25%），
+        // 再按评分人数和多源一致性打折。直接用「均分 / 10」会让几乎所有作品都在 70% 以上。
+        val confidence = (voteFactor + agreement) / 2f
+        val priority = (scorePercentile(avg) * (PRIORITY_FLOOR + (1f - PRIORITY_FLOOR) * confidence)).coerceIn(0f, 1f)
 
         return Consensus(
             stability = stability,
@@ -81,7 +83,26 @@ class AggregateRatingsUseCase {
         )
     }
 
+    /** 10 分制均分 → 在动画评分分布里大约超过多少作品（按 Bangumi 动画评分分布取的分段点，线性插值）。 */
+    private fun scorePercentile(score: Float): Float {
+        val points = SCORE_PERCENTILES
+        val clamped = score.coerceIn(points.first().first, points.last().first)
+        val upper = points.indexOfFirst { it.first >= clamped }.coerceAtLeast(1)
+        val (x0, y0) = points[upper - 1]
+        val (x1, y1) = points[upper]
+        return y0 + (y1 - y0) * (clamped - x0) / (x1 - x0)
+    }
+
     companion object {
+        /** 均分分段点：(分数, 大约超过的作品比例)。 */
+        private val SCORE_PERCENTILES: List<Pair<Float, Float>> = listOf(
+            4.5f to 0.02f, 5.5f to 0.1f, 6.0f to 0.2f, 6.5f to 0.4f, 7.0f to 0.6f,
+            7.5f to 0.78f, 8.0f to 0.9f, 8.5f to 0.96f, 9.0f to 0.99f,
+        )
+
+        /** 评分人数少、各源分歧大时，优先级最多打到这个折扣。 */
+        private const val PRIORITY_FLOOR: Float = 0.7f
+
         /** 计算共识所需的最小有效样本数；低于此值不下结论。 */
         const val MIN_VALID_SAMPLES: Int = 2
 

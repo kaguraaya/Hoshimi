@@ -1,6 +1,6 @@
 # 界面设计规范
 
-Hoshimi 的界面规则照搬自 FlClash（`chen08209/FlClash` 的 `.agents/surfaces.md` 与它的组件库 `chen08209/prism_ui`）。
+Hoshimi 的界面规则参考 FlClash（`chen08209/FlClash` 与它的组件库 `chen08209/prism_ui`）。
 实现都在 `app/src/main/java/com/acgcompass/core/designsystem/`。新写页面时按这里的规则来，不要在调用处自己挑颜色。
 
 ## 1. 用明度的台阶表达结构，不用描边

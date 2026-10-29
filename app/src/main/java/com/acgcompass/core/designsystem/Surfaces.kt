@@ -14,7 +14,7 @@ import kotlin.math.min
 /**
  * 表面层级：用明度的台阶表达结构，而不是描边。
  *
- * 做法照搬 FlClash 的设计规范（`.agents/surfaces.md` 与 `prism_ui/lib/surface.dart`）：
+ * 做法参考 FlClash 的设计规范（prism_ui 的 surface.dart）：
  *
  * | 层级 | 浅色 | 深色 | 放什么 |
  * |---|---|---|---|

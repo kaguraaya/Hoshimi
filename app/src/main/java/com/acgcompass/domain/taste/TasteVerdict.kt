@@ -23,7 +23,7 @@ object TasteVerdict {
     private const val NEUTRAL = 40
 
     /**
-     * @param likeability 主分数（0–100）。有预计评分时见 [ComputeTasteMatchUseCase.headlineScore]；没有时是旧的画像匹配分。
+     * @param likeability 主分数（0–100）。有预计评分时见 [ComputeTasteMatchUseCase.headlineScore]；没有时是 12 维画像匹配分。
      * @param predictedRating 预计评分；评分太少建不了模型时为 null。
      */
     fun of(likeability: Int, predictedRating: Double?): String {

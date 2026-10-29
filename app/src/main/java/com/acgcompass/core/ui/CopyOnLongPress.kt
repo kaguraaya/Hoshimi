@@ -16,7 +16,7 @@ import androidx.compose.ui.text.AnnotatedString
 /**
  * 长按把 [text] 复制到剪贴板（标题、别名、原名这类用户常想拿去搜索的文字）。
  *
- * 有触感反馈；Android 13 起系统自己会弹出「已复制」的浮层，更早的版本补一个 Toast。
+ * 有触感反馈，并弹出「已复制」提示（不少系统在 Android 13 以上也不显示剪贴板浮层）。
  * 读屏下作为「长按：复制」的自定义操作暴露。
  */
 fun Modifier.copyOnLongPress(text: String): Modifier = composed {
