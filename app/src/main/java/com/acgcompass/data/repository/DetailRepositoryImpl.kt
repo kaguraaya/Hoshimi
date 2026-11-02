@@ -70,10 +70,13 @@ class DetailRepositoryImpl @Inject constructor(
     }
 
     /** 三个接口分别重试一次；失败的部分沿用缓存，不用空列表覆盖。 */
-    private suspend fun refreshCredits(subjectId: Int, cached: DetailExtrasData): CreditsFetch {
-        val characters = retryOnce { bangumi.getSubjectCharacters(subjectId) }
-        val staff = retryOnce { bangumi.getSubjectPersons(subjectId) }
-        val relations = retryOnce { bangumi.getSubjectRelations(subjectId) }
+    private suspend fun refreshCredits(subjectId: Int, cached: DetailExtrasData): CreditsFetch = coroutineScope {
+        val charactersAsync = async { retryOnce { bangumi.getSubjectCharacters(subjectId) } }
+        val staffAsync = async { retryOnce { bangumi.getSubjectPersons(subjectId) } }
+        val relationsAsync = async { retryOnce { bangumi.getSubjectRelations(subjectId) } }
+        val characters = charactersAsync.await()
+        val staff = staffAsync.await()
+        val relations = relationsAsync.await()
         val data = DetailExtrasData(
             characters = characters?.map { item ->
                 DetailCharacter(item.name, item.relation, item.actors.firstOrNull()?.name)
@@ -86,7 +89,7 @@ class DetailRepositoryImpl @Inject constructor(
         )
         val complete = characters != null && staff != null && relations != null
         val anySuccess = characters != null || staff != null || relations != null
-        return CreditsFetch(data.takeIf { anySuccess }, complete)
+        CreditsFetch(data.takeIf { anySuccess }, complete)
     }
 
     private suspend fun refreshComments(subjectId: Int): DetailExtrasData? =

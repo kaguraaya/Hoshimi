@@ -53,14 +53,15 @@ object NetworkModule {
         timeoutInterceptor: TimeoutInterceptor,
     ): OkHttpClient = HttpClientFactory.build(
         timeouts = HttpTimeouts.REST,
-        // 顺序：UserAgent → Auth → BangumiBaseUrl → RateLimit → Timeout。
+        // 顺序：UserAgent → Auth → BangumiBaseUrl → Timeout；限流放在网络层（HTTP 缓存之后），
+        // 命中本地缓存的响应不占各数据源的请求额度，也不用排队。
         interceptors = listOf(
             userAgentInterceptor,
             authInterceptor,
             bangumiBaseUrlInterceptor,
-            rateLimitInterceptor,
             timeoutInterceptor,
         ),
+        networkInterceptors = listOf(rateLimitInterceptor),
         // 20MB HTTP 响应磁盘缓存，复用条目/评分/评论等 GET 响应（缓存利用）。
         cache = okhttp3.Cache(
             directory = context.cacheDir.resolve("http_cache"),

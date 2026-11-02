@@ -13,11 +13,8 @@ import com.acgcompass.core.network.interceptor.withPriority
 import com.acgcompass.domain.model.RatingEntry
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.WorkMatch
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import retrofit2.Response
 
 /**
@@ -53,8 +50,10 @@ class BangumiRemoteDataSource @Inject constructor(
 ) {
 
     private val auth: SourceAuth = SourceAuths.bangumi
-    private val subjectLocks = ConcurrentHashMap<Int, Mutex>()
-    private val recentSubjects = ConcurrentHashMap<Int, CachedSubject>()
+    private val subjectCoalescer = RequestCoalescer<BangumiSubjectDto>(SHARED_RESULT_MILLIS)
+    private val personsCoalescer = RequestCoalescer<List<BangumiRelatedPersonDto>>(SHARED_RESULT_MILLIS)
+    private val charactersCoalescer = RequestCoalescer<List<BangumiRelatedCharacterDto>>(SHARED_RESULT_MILLIS)
+    private val relationsCoalescer = RequestCoalescer<List<BangumiSubjectRelationDto>>(SHARED_RESULT_MILLIS)
 
     /** 条目详情 → 规范化 [Work]。 */
     suspend fun getSubject(subjectId: Int): AppResult<Work> = runCatchingApp {
@@ -114,24 +113,12 @@ class BangumiRemoteDataSource @Inject constructor(
     }
 
     private suspend fun fetchSubjectDto(subjectId: Int, priority: RequestPriority): BangumiSubjectDto {
-        val now = System.currentTimeMillis()
-        recentSubjects[subjectId]?.takeIf { now - it.fetchedAt <= SUBJECT_COALESCE_WINDOW_MILLIS }
-            ?.let { return it.subject }
-        val lock = subjectLocks.getOrPut(subjectId) { Mutex() }
-        return lock.withLock {
-            val lockedNow = System.currentTimeMillis()
-            recentSubjects[subjectId]
-                ?.takeIf { lockedNow - it.fetchedAt <= SUBJECT_COALESCE_WINDOW_MILLIS }
-                ?.subject
-                ?: api.getSubject(subjectId, auth.withPriority(priority)).bodyOrThrow().also { subject ->
-                    recentSubjects[subjectId] = CachedSubject(subject, System.currentTimeMillis())
-                    if (recentSubjects.size > MAX_RECENT_SUBJECTS) {
-                        recentSubjects.entries
-                            .sortedBy { it.value.fetchedAt }
-                            .take(recentSubjects.size - MAX_RECENT_SUBJECTS)
-                            .forEach { recentSubjects.remove(it.key, it.value) }
-                    }
-                }
+        val result = subjectCoalescer.get("$subjectId", priority) {
+            runCatchingApp { api.getSubject(subjectId, auth.withPriority(priority)).bodyOrThrow() }
+        }
+        return when (result) {
+            is AppResult.Success -> result.data
+            is AppResult.Failure -> throw result.error.asException()
         }
     }
 
@@ -215,19 +202,23 @@ class BangumiRemoteDataSource @Inject constructor(
     suspend fun getSubjectPersons(
         subjectId: Int,
         priority: RequestPriority = RequestPriority.FOREGROUND,
-    ): AppResult<List<BangumiRelatedPersonDto>> =
+    ): AppResult<List<BangumiRelatedPersonDto>> = personsCoalescer.get("$subjectId", priority) {
         runCatchingApp { api.getSubjectPersons(subjectId, auth.withPriority(priority)).bodyOrThrow() }
+    }
 
     /** 条目关联角色。 */
     suspend fun getSubjectCharacters(
         subjectId: Int,
         priority: RequestPriority = RequestPriority.FOREGROUND,
-    ): AppResult<List<BangumiRelatedCharacterDto>> =
+    ): AppResult<List<BangumiRelatedCharacterDto>> = charactersCoalescer.get("$subjectId", priority) {
         runCatchingApp { api.getSubjectCharacters(subjectId, auth.withPriority(priority)).bodyOrThrow() }
+    }
 
     /** 条目关联作品。 */
     suspend fun getSubjectRelations(subjectId: Int): AppResult<List<BangumiSubjectRelationDto>> =
-        runCatchingApp { api.getSubjectRelations(subjectId, auth).bodyOrThrow() }
+        relationsCoalescer.get("$subjectId", RequestPriority.FOREGROUND) {
+            runCatchingApp { api.getSubjectRelations(subjectId, auth).bodyOrThrow() }
+        }
 
     /** 用户收藏列表（个人评分 / 短评 / 进度 / 状态）。 */
     suspend fun getUserCollections(
@@ -380,16 +371,11 @@ class BangumiRemoteDataSource @Inject constructor(
         return body() ?: throw AppError.FieldMissing().asException()
     }
 
-    private data class CachedSubject(
-        val subject: BangumiSubjectDto,
-        val fetchedAt: Long,
-    )
-
     private companion object {
-        const val SUBJECT_COALESCE_WINDOW_MILLIS = 3_000L
-        const val MAX_RECENT_SUBJECTS = 32
+        /** 同一条目的条目信息、人物、角色、关联作品，一分钟内复用上一次的结果。 */
+        const val SHARED_RESULT_MILLIS = 60_000L
 
-        /** `GET /v0/episodes` 官方规范的单页上限（只取 100 时长篇会被截断）。 */
+        /** `GET /v0/episodes` 官方规范的单页上限（取满一页，长篇不会被截断）。 */
         const val EPISODE_PAGE_LIMIT = 200
     }
 }
