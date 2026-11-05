@@ -94,11 +94,22 @@ fun AcgBottomNavigation(
     val dark = MaterialTheme.colorScheme.surface.luminance() < DARK_LUMINANCE
     val dockLevel = if (dark) SurfaceLevel.Block else SurfaceLevel.Card
     val entries = TopLevelDestination.ENTRIES
+    val lens = remember { DockLens() }
+    val maxGrowthPx = with(LocalDensity.current) { DOCK_MAX_SWELL.toPx() }
     Box(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = DOCK_MARGIN, end = DOCK_MARGIN, top = DOCK_TOP_GAP, bottom = dockBottomGap()),
+            .padding(start = DOCK_MARGIN, end = DOCK_MARGIN, top = DOCK_TOP_GAP, bottom = dockBottomGap())
+            // 照 FlClash 的 _PressTransform：按住时整块底栏鼓起（最多长 16dp），拖出两端时沿拖动方向拉伸并跟着偏移。
+            .graphicsLayer {
+                val growth = minOf(DOCK_MAX_SWELL_RATIO, maxGrowthPx / size.width.coerceAtLeast(1f))
+                val swell = 1f + lens.swell.value * growth
+                val pull = lens.pull.value
+                scaleX = swell * (1f + abs(pull) / size.width.coerceAtLeast(1f) * PULL_STRETCH)
+                scaleY = swell
+                translationX = pull
+            },
     ) {
         // 底栏背景单独一层（只画底色和投影，不放内容）：镜片和图标画在它上面、不受它的圆角裁剪，
         // 按住时镜片才能像 FlClash 那样长出底栏之外。
@@ -116,6 +127,7 @@ fun AcgBottomNavigation(
                     entries = entries,
                     selectedIndex = selectedIndex,
                     slotWidthPx = slotWidthPx,
+                    lens = lens,
                     onSelect = onSelect,
                 )
             }
@@ -128,11 +140,12 @@ private fun DockBody(
     entries: List<TopLevelDestination>,
     selectedIndex: Int?,
     slotWidthPx: Float,
+    lens: DockLens,
     onSelect: (TopLevelDestination) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val lens = remember { DockLens() }
+    val pullLimitPx = with(LocalDensity.current) { DOCK_HEIGHT.toPx() } * PULL_LIMIT
     var hoverIndex by remember { mutableIntStateOf(-1) }
     val currentSelected by rememberUpdatedState(selectedIndex)
     val currentOnSelect by rememberUpdatedState(onSelect)
@@ -157,7 +170,10 @@ private fun DockBody(
                     hoverIndex = index
                 },
                 onPress = { x -> scope.pressLens(lens, x) },
-                onDrag = { x -> scope.launch { lens.x.animateTo(x, FollowSpring) } },
+                onDrag = { x, overshoot ->
+                    scope.launch { lens.x.animateTo(x, FollowSpring) }
+                    scope.launch { lens.pull.animateTo(rubberBand(overshoot, pullLimitPx), TrackSpring) }
+                },
                 onRelease = { chosen ->
                     scope.releaseLens(lens, slotCenter(chosen, slotWidthPx))
                     if (chosen != currentSelected) currentOnSelect(entries[chosen])
@@ -276,7 +292,7 @@ private fun Modifier.dockGestures(
     slotWidthPx: Float,
     onHover: (Int) -> Unit,
     onPress: (Float) -> Unit,
-    onDrag: (Float) -> Unit,
+    onDrag: (x: Float, overshoot: Float) -> Unit,
     onRelease: (Int) -> Unit,
 ): Modifier = pointerInput(count, slotWidthPx) {
     awaitEachGesture {
@@ -292,7 +308,7 @@ private fun Modifier.dockGestures(
             if (change != null && pressed) {
                 pointerX += change.positionChange().x
                 change.consume()
-                onDrag(overdrag(pointerX, slotWidthPx, maxX))
+                onDrag(overdrag(pointerX, slotWidthPx, maxX), pointerX - pointerX.coerceIn(0f, maxX))
                 onHover(indexAt(pointerX, slotWidthPx, count))
             }
         }
@@ -307,6 +323,12 @@ private class DockLens {
 
     /** 0 = 静止，1 = 按住抬起：镜片每边长出 [LENS_GROWTH]，里面的图标放大 [LENS_MAGNIFY]。 */
     val lift = Animatable(0f)
+
+    /** 整块底栏的鼓起程度：0 = 静止，1 = 按住。 */
+    val swell = Animatable(0f)
+
+    /** 拖出两端时底栏被拉出去的距离（px，带阻尼）。 */
+    val pull = Animatable(0f)
     var placed by androidx.compose.runtime.mutableStateOf(false)
 
     suspend fun place(target: Float) {
@@ -320,11 +342,14 @@ private fun CoroutineScope.pressLens(lens: DockLens, pointerX: Float) {
         if (!lens.placed) lens.place(pointerX) else lens.x.animateTo(pointerX, FollowSpring)
     }
     launch { lens.lift.animateTo(1f, LiftSpring) }
+    launch { lens.swell.animateTo(1f, PressSpring) }
 }
 
 private fun CoroutineScope.releaseLens(lens: DockLens, target: Float) {
     launch { lens.x.animateTo(target, SettleSpring) }
     launch { lens.lift.animateTo(0f, PressSpring) }
+    launch { lens.swell.animateTo(0f, SettleSpring) }
+    launch { lens.pull.animateTo(0f, SettleSpring) }
 }
 
 @Composable
@@ -390,6 +415,13 @@ private fun DockItem(
     }
 }
 
+/** FlClash 的 _rubberBand：越拉越费劲，最多拉出 [limit]。 */
+private fun rubberBand(overshoot: Float, limit: Float): Float {
+    if (overshoot == 0f || limit <= 0f) return 0f
+    val pull = 1f - 1f / (abs(overshoot) * RUBBER_BAND_FACTOR / limit + 1f)
+    return limit * pull * kotlin.math.sign(overshoot)
+}
+
 private fun slotCenter(index: Int, slotWidthPx: Float): Float = slotWidthPx * (index + HALF)
 
 private fun indexAt(x: Float, slotWidthPx: Float, count: Int): Int = (x / slotWidthPx).toInt().coerceIn(0, count - 1)
@@ -408,6 +440,12 @@ private fun overdrag(x: Float, slotWidthPx: Float, maxX: Float): Float {
 
 private val DOCK_HEIGHT = 62.dp
 private val DOCK_TOP_GAP = 8.dp
+
+// 整块底栏的按压鼓起与拉伸，数值取自 FlClash（_maxPressGrowth、_pressGrowth、_pullLimit、_pullStretch）。
+private val DOCK_MAX_SWELL = 16.dp
+private const val DOCK_MAX_SWELL_RATIO = 0.25f
+private const val PULL_STRETCH = 0.5f
+private const val RUBBER_BAND_FACTOR = 0.55f
 
 /** 底栏离屏幕底边至少 21dp（与 FlClash 一致），有导航条时至少高出导航条 8dp。 */
 private val DOCK_EDGE = 21.dp
@@ -449,3 +487,6 @@ private val FollowSpring = spring<Float>(dampingRatio = 0.9f, stiffness = 1024f)
 private val LiftSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 632f)
 private val TravelSpring = spring<Float>(dampingRatio = 0.85f, stiffness = 247f)
 private val SettleSpring = spring<Float>(dampingRatio = 0.68f, stiffness = 158f)
+
+/** FlClash 的 _trackSpring：约 120ms、无回弹，拉伸跟手。 */
+private val TrackSpring = spring<Float>(dampingRatio = 1f, stiffness = 2700f)
