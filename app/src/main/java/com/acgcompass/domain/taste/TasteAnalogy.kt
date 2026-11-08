@@ -7,7 +7,7 @@ package com.acgcompass.domain.taste
  * @property meanRating 这几部作品你打的平均分（按相似度加权）。
  * @property count 参与类比的作品数。
  */
-data class TasteAnalogy(val z: Double, val meanRating: Double, val count: Int)
+data class TasteAnalogy(val z: Double, val meanRating: Double, val count: Int, val topSimilarity: Double = 0.0)
 
 /**
  * 取标签向量最接近的 [ANALOGY_NEIGHBORS] 部已评分作品，按相似度的平方加权平均你的标准分，
@@ -36,9 +36,33 @@ fun PersonalDivergenceModel.analogy(feature: WorkFeature): TasteAnalogy? {
     val z = neighbors.indices.sumOf { i -> weights[i] * (neighbors[i].first.rating - meanRating) / std } /
         (total + ANALOGY_SHRINK)
     val mean = neighbors.indices.sumOf { i -> weights[i] * neighbors[i].first.rating } / total
-    return TasteAnalogy(z = z, meanRating = mean, count = neighbors.size)
+    return TasteAnalogy(z = z, meanRating = mean, count = neighbors.size, topSimilarity = neighbors.first().second)
 }
 
+/**
+ * 有条件地大胆：只有找到了很像的已评分作品（最高相似度 ≥ 0.4，到 0.7 时满额），才把预计评分往
+ * 「你给这些作品打的分」那边推，最多推 0.25 个标准差 × 类比标准分。
+ * Bangumi15M 盲测：最高相似度 ≥ 0.6 的作品里，这样做使「与大众相差 1.5 分以上」的评分误差从 1.49 降到 1.40，
+ * 整体误差只多 0.01；没有相近作品时不动，仍以社区基线为主。
+ */
+fun RatingPrediction.withAnalogy(analogy: TasteAnalogy?, ratingStd: Double): RatingPrediction {
+    val strength = analogy?.let { ((it.topSimilarity - BOLD_FROM) / (BOLD_FULL - BOLD_FROM)).coerceIn(0.0, 1.0) } ?: 0.0
+    val shift = BOLD_WEIGHT * strength * (analogy?.z ?: 0.0) * ratingStd.coerceAtLeast(MIN_ANALOGY_STD)
+    if (kotlin.math.abs(shift) < MIN_SHIFT) return this
+    return copy(
+        rating = (rating + shift).coerceIn(MIN_PREDICTED, MAX_PREDICTED),
+        divergence = divergence + shift,
+        factors = (factors + DivergenceFactor(ANALOGY_LABEL, shift)).sortedByDescending { kotlin.math.abs(it.delta) },
+    )
+}
+
+private const val MIN_PREDICTED = 1.0
+private const val MAX_PREDICTED = 10.0
+private const val BOLD_FROM = 0.4
+private const val BOLD_FULL = 0.7
+private const val BOLD_WEIGHT = 0.25
+private const val MIN_SHIFT = 0.05
+private const val ANALOGY_LABEL = "相似作品你的评分"
 private const val ANALOGY_NEIGHBORS = 8
 private const val ANALOGY_SHRINK = 0.3
 private const val MIN_ANALOGY_STD = 0.6

@@ -37,11 +37,11 @@ data class TasteMatchResult(
     /** 社区融合之前的纯画像分（5–95）；已评分作品与 [score] 相同。用于解释「口味本身怎么看」与离线评测。 */
     val profileScore: Int = score,
     /**
-     * 题材相似度：12 维画像给出的「像不像你常看、常给高分的类型」（旧的匹配分）。
+     * 题材相似度：12 维画像给出的「像不像你常看、常给高分的类型」（12 维画像匹配分）。
      * 它不回答「你会不会喜欢」，只作为主分数旁边的补充说明。
      */
     val tasteSimilarity: Int = score,
-    /** 主分数是否来自评分模型（评分足够多时为 true）；为 false 时主分数仍是旧的画像匹配分。 */
+    /** 主分数是否来自评分模型（评分足够多时为 true）；为 false 时主分数是 12 维画像匹配分。 */
     val fromRatingModel: Boolean = false,
     /**
      * 预计满意度（5–95，[TasteScoringParams.satisfactionScore]）：看完大概会有多满意。推荐排序用它；
@@ -57,6 +57,8 @@ data class TasteMatchResult(
     val similarRated: List<RatedExample> = emptyList(),
     /** 相似作品类比（主分数的主要依据）；评分太少建不了模型时为 null。 */
     val analogy: TasteAnalogy? = null,
+    /** 参与类比的已评分作品数（有标签、有社区评分的才算）；用来核对是否有评分没进模型。 */
+    val modelSamples: Int = 0,
 ) {
     /** 正向理由（真正「命中你口味」的维度）；负向贡献项不应被展示成「命中」。 */
     val positiveReasons: List<TasteReason> get() = reasons.filter { it.contribution > 0.0 }
@@ -110,7 +112,6 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             TasteScoringParams.logistic(rawZ, profile.calibration.mu, profile.calibration.tau),
             evidence,
         )
-        // 已评分作品以显式评分锚为主、长期画像修正；未评分作品用纯画像校准分。
         val p = if (isRated) {
             TasteScoringParams.RATED_ANCHOR_WEIGHT * TasteScoringParams.ratedAnchorProbability(rating) +
                 (1.0 - TasteScoringParams.RATED_ANCHOR_WEIGHT) * pProfile
@@ -140,7 +141,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             timeCoverage = profile.coverage.time,
         )
 
-        val prediction = profile.divergence?.predict(feature)
+        val (prediction, analogy) = predictWithAnalogy(profile.divergence, feature)
         val likeability = likeabilityOf(profile.divergence, rating, prediction)
         val satisfaction = likeability
             ?: fallbackSatisfaction(isRated, score, feature, profile, rawZ, evidence, prediction)
@@ -151,7 +152,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             satisfaction = satisfaction,
             prediction = prediction,
             similarRated = neighborsOf(profile, feature, withNeighbors),
-            analogy = profile.divergence?.analogy(feature),
+            analogy = analogy,
             score = score,
             confidence = confidence,
             rawZ = rawZ,
@@ -344,11 +345,24 @@ class ComputeTasteMatchUseCase @Inject constructor() {
 /** 候选证据量对置信度的折扣：没有证据时保留 [floor]，证据齐全时不打折。 */
 private fun evidenceConfidence(evidence: Double, floor: Double): Double = floor + (1.0 - floor) * evidence
 
+/** 预计评分（有很像的已评分作品时按类比修正）与相似作品类比。 */
+private fun predictWithAnalogy(
+    model: PersonalDivergenceModel?,
+    feature: WorkFeature,
+): Pair<RatingPrediction?, TasteAnalogy?> {
+    if (model == null) return null to null
+    val analogy = model.analogy(feature)
+    return model.predict(feature).withAnalogy(analogy, model.ratingStd) to analogy
+}
+
 /** 有评分模型时按 [ComputeTasteMatchUseCase.headlineScore] 出主分数；否则保持画像匹配分。 */
 private fun TasteMatchResult.withHeadline(model: PersonalDivergenceModel?, basisRating: Double?): TasteMatchResult {
     if (model == null || basisRating == null || !fromRatingModel) return this
     val ratingZ = (basisRating - model.meanRating) / model.ratingStd.coerceAtLeast(HEADLINE_MIN_STD)
-    return copy(score = ComputeTasteMatchUseCase.headlineScore(ratingZ, analogy?.z, tasteSimilarity))
+    return copy(
+        score = ComputeTasteMatchUseCase.headlineScore(ratingZ, analogy?.z, tasteSimilarity),
+        modelSamples = model.examples.size,
+    )
 }
 
 private const val HEADLINE_MIN_STD = 0.6

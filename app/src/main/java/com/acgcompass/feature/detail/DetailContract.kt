@@ -938,7 +938,8 @@ private fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         val analogyText = analogy?.let {
             "你给题材相近的 ${it.count} 部作品平均打 ${"%.1f".format(it.meanRating)} 分；"
         }.orEmpty()
-        analogyText + "主要看相近作品你打了几分，也参考$basis（高于你看过的 $satisfaction% 作品）和题材相似度。" +
+        analogyText + "主要看相近作品你打了几分，也参考$basis（高于你看过的 $satisfaction% 作品）和题材相似度；" +
+            "共参考你评过分的 $modelSamples 部作品。" +
             TasteVerdict.familiarityNote(tasteSimilarity) + "（下方是题材依据）"
     } else {
         when {

@@ -230,6 +230,9 @@ class PersonalDivergenceModel private constructor(
         /** 参与拟合的样本上限（取最近的）；核矩阵 n×n，300 以内在手机上是毫秒级。 */
         const val MAX_SAMPLES: Int = 300
 
+        /** 相似作品类比最多参考的已评分作品数。 */
+        const val MAX_ANALOGY_EXAMPLES: Int = 2000
+
         /** 标签岭回归的正则强度（真实数据网格：0.5–1 最优，取 1）。 */
         const val TAG_RIDGE_LAMBDA: Double = 1.0
 
@@ -347,10 +350,11 @@ class PersonalDivergenceModel private constructor(
             corpus: List<WorkFeature> = emptyList(),
             overrides: Map<String, TasteCategory> = emptyMap(),
         ): PersonalDivergenceModel? {
-            val rated = samples
+            val eligible = samples
                 .filter { it.rating != null && (it.feature.bangumiScore ?: 0f) > 0f }
                 .sortedByDescending { it.updatedAtMillis ?: 0L }
-                .take(MAX_SAMPLES)
+            // 回归只用最近 [MAX_SAMPLES] 部（口味会变）；相似作品类比用全部评分，早年评过的同类作品也算数。
+            val rated = eligible.take(MAX_SAMPLES)
             val n = rated.size
             if (n < MIN_SAMPLES) return null
 
@@ -380,9 +384,10 @@ class PersonalDivergenceModel private constructor(
                     ratingStd = sqrt(ratings.sumOf { (it - meanR) * (it - meanR) } / n).coerceAtLeast(MIN_RATING_STD),
                     sortedRatings = ratings.sortedArray(),
                     sampleCount = n,
-                    examples = rated.indices.map { i ->
-                        RatedExample(rated[i].subjectId, rated[i].rating!!, meanR + slope * (community[i] - meanC)) to
-                            vectors[i]
+                    examples = eligible.take(MAX_ANALOGY_EXAMPLES).mapIndexed { i, sample ->
+                        val c = sample.feature.bangumiScore!!.toDouble()
+                        RatedExample(sample.subjectId, sample.rating!!, meanR + slope * (c - meanC)) to
+                            (vectors.getOrNull(i) ?: tagVector(sample.feature, idf, defaultIdf, overrides))
                     },
                 )
             }
