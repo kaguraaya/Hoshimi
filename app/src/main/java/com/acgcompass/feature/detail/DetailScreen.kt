@@ -894,7 +894,7 @@ private fun TasteMatchBlock(
                 Text(text = if (aiMatch is AiMatchUi.Loading) "分析中…" else "AI 分析", maxLines = 1)
             }
         }
-        // AI 分析完成后，用 AI 的匹配度数值**替换**主匹配度（顶替本地算法值）；否则展示本地算法值。
+        // AI 分析完成后主数值换成 AI 的结果，内置算法的数值在下方保留一行；否则展示内置算法的结果。
         if (aiMatch is AiMatchUi.Result) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -920,10 +920,11 @@ private fun TasteMatchBlock(
                 )
             }
             Text(
-                text = "${aiMatch.confidenceText} · 由 AI 分析得出，已替换内置算法估计",
+                text = "${aiMatch.confidenceText} · 由 AI 分析得出",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            LocalEstimateLine(tasteMatch)
         } else {
             when (tasteMatch) {
                 is TasteMatchUiModel.Available -> {
@@ -1305,6 +1306,18 @@ private fun AiMatchLoadingContent() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/** AI 结果下方保留一行内置算法的数值，方便对照。 */
+@Composable
+private fun LocalEstimateLine(tasteMatch: TasteMatchUiModel) {
+    val local = tasteMatch as? TasteMatchUiModel.Available ?: return
+    val predicted = local.prediction?.let { "，预计你会打 ${it.predictedText} 分" }.orEmpty()
+    Text(
+        text = "内置算法：口味匹配度 ${local.percentText}$predicted",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

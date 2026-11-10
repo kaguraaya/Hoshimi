@@ -295,13 +295,16 @@ private fun HomeContent(
                 }
             } else {
                 items(data.continueItems, key = { "continue_${it.workId}" }) { item ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        WorkCard(model = item.card, onClick = { onOpenWork(item.workId) })
-                        val progress = listOfNotNull(item.progressText, item.nextUpText)
-                        if (progress.isNotEmpty()) {
-                            HintText(progress.joinToString(separator = " · "))
-                        }
-                    }
+                    // 进度写进卡片自己的状态行，卡片之间不夹文字。
+                    val progress = listOfNotNull(item.progressText, item.nextUpText).joinToString(separator = " · ")
+                    WorkCard(
+                        // 这里只看进度：「想看」和篇幅估计在待补池里看，状态行不至于被截断。
+                        model = item.card.copy(
+                            backlogStatus = progress.ifBlank { item.card.backlogStatus },
+                            completionCost = if (progress.isBlank()) item.card.completionCost else null,
+                        ),
+                        onClick = { onOpenWork(item.workId) },
+                    )
                 }
             }
         }
