@@ -298,8 +298,9 @@ class ComputeTasteMatchUseCase @Inject constructor() {
     }
 
     companion object {
-        private const val HEADLINE_CENTER = 68.0
-        private const val HEADLINE_SCALE = 16.0
+        private const val HEADLINE_CENTER = 70.0
+        private const val HEADLINE_SCALE_UP = 18.0
+        private const val HEADLINE_SCALE_DOWN = 9.0
         private const val RATING_WEIGHT = 0.5
         private const val SIMILARITY_WEIGHT = 0.25
         private const val SIMILARITY_CENTER = 50.0
@@ -312,15 +313,16 @@ class ComputeTasteMatchUseCase @Inject constructor() {
          * 口味匹配度（主分数）：衡量「这部像不像你会喜欢的那类」，可以和预计评分不同
          * （题材很对口、但作品本身一般时，匹配度高、预计评分中等）。
          *
-         * 以相似作品类比为主（[TasteAnalogy.z]），加上预计评分的一半（标准分）和少量题材相似度，
-         * 映射到 68 ± 16·z。Bangumi15M 盲测中，你自己的高分作品平均落在 78% 左右，一般作品 68% 左右；
-         * 相比只看预计评分，与社区分的相关从 0.71 降到 0.58，找出「比社区预期高 1 分以上」的作品更准。
+         * 以相似作品类比为主（[TasteAnalogy.z]），加上预计评分的一半（标准分）和少量题材相似度。
+         * 映射不对称：往上 70 + 18·z，往下只按一半（70 + 9·z）。相近作品打低分常常是因为剧情、制作这类
+         * 与题材无关的原因，所以低分端不该和高分端一样激进。映射是单调的，作品之间的排序不受影响。
          */
         fun headlineScore(ratingZ: Double, analogyZ: Double?, similarity: Int): Int {
             val similarityZ = ((similarity - SIMILARITY_CENTER) / SIMILARITY_SPREAD)
                 .coerceIn(-MAX_SIMILARITY_Z, MAX_SIMILARITY_Z)
             val z = RATING_WEIGHT * ratingZ + (analogyZ ?: 0.0) + SIMILARITY_WEIGHT * similarityZ
-            return (HEADLINE_CENTER + HEADLINE_SCALE * z).roundToInt().coerceIn(HEADLINE_MIN, HEADLINE_MAX)
+            val scale = if (z >= 0.0) HEADLINE_SCALE_UP else HEADLINE_SCALE_DOWN
+            return (HEADLINE_CENTER + scale * z).roundToInt().coerceIn(HEADLINE_MIN, HEADLINE_MAX)
         }
 
         private const val REASON_MIN: Double = 1e-3

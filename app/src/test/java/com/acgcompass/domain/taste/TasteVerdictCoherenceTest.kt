@@ -89,15 +89,18 @@ class TasteVerdictCoherenceTest : StringSpec({
 
     "below the pass line the verdict says so regardless of percentile" {
         TasteVerdict.of(60, 5.4) shouldBe "可能不太合你口味"
-        TasteVerdict.of(80, 8.2) shouldBe "很可能喜欢"
-        TasteVerdict.of(70, 7.5) shouldBe "应该不错"
+        TasteVerdict.of(84, 8.2) shouldBe "很可能喜欢"
+        TasteVerdict.of(74, 7.5) shouldBe "应该不错"
         // 评分太少、没有预计评分时，沿用画像匹配分的措辞，且不说「不太喜欢」。
         TasteVerdict.of(30, null) shouldBe "题材上不太对口"
     }
 
     "headline mapping is centred and bounded" {
-        ComputeTasteMatchUseCase.headlineScore(0.0, 0.0, 50) shouldBe 68
-        ComputeTasteMatchUseCase.headlineScore(0.4, 0.5, 80) shouldBeInRange 80..88
+        ComputeTasteMatchUseCase.headlineScore(0.0, 0.0, 50) shouldBe 70
+        ComputeTasteMatchUseCase.headlineScore(0.4, 0.5, 80) shouldBeInRange 84..92
+        // 低分端只按一半往下：同样幅度的负向证据，掉得比正向涨得少。
+        (70 - ComputeTasteMatchUseCase.headlineScore(-1.0, -1.0, 30)) shouldBeLessThan
+            (ComputeTasteMatchUseCase.headlineScore(1.0, 1.0, 70) - 70)
         ComputeTasteMatchUseCase.headlineScore(3.0, 3.0, 95) shouldBe 97
     }
 })
