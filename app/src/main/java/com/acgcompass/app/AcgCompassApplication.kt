@@ -15,6 +15,7 @@ import com.acgcompass.core.network.HttpClientFactory
 import com.acgcompass.core.network.HttpTimeouts
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.remote.bangumi.BangumiTokenRefresher
+import com.acgcompass.data.sync.BangumiWishSync
 import com.acgcompass.data.sync.CacheFillScheduler
 import com.acgcompass.data.sync.RatingBackfillScheduler
 import com.acgcompass.data.sync.SyncScheduler
@@ -63,6 +64,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
     @Inject lateinit var cacheFillScheduler: Lazy<CacheFillScheduler>
 
     @Inject lateinit var ratingBackfillScheduler: Lazy<RatingBackfillScheduler>
+
+    @Inject lateinit var bangumiWishSync: Lazy<BangumiWishSync>
 
     @Inject lateinit var cacheRepository: Lazy<CacheRepository>
 
@@ -153,6 +156,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             tasteProfileValidationScheduler.get().ensureScheduled()
             // Construct the durable manual-classification coordinator so an interrupted run can resume.
             tagClassificationController.get()
+            // 待补池里还没同步到 Bangumi 的作品继续推送「想看」。
+            runCatching { bangumiWishSync.get().resumeOnStartup() }
             // Bangumi OAuth token 启动期自动续期（best-effort，静默；无 refresh_token 时跳过）。
             runCatching { bangumiTokenRefresher.get().refreshIfNeeded() }
         }

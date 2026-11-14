@@ -1296,6 +1296,14 @@ private fun PrivacyToggles(card: PrivacyCardState, actions: SettingsActions) {
 
 @Composable
 private fun AutoSyncSettings(card: PrivacyCardState, actions: SettingsActions) {
+    ToggleRow(
+        label = "加入待补池时同步为 Bangumi「想看」",
+        description = "已登录 Bangumi 时，从任何地方加入待补池的作品都会在后台标成「想看」；" +
+            "Bangumi 上已经有收藏状态（看过、在看等）的不会改动，没网时会稍后重试",
+        checked = card.syncBacklogToBangumi,
+        enabled = true,
+        onCheckedChange = { actions.onToggleChange(ToggleKeys.SYNC_BACKLOG_TO_BANGUMI, it) },
+    )
     Text(text = "自动同步 Bangumi", style = MaterialTheme.typography.titleSmall)
     Text(
         text = "按所选间隔在后台自动拉取最新收藏（需已配置 Bangumi 账号、联网）。",

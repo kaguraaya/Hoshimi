@@ -359,13 +359,13 @@ class DetailViewModel @Inject constructor(
                 removeWantToWatch(work)
             } else {
                 backlogRepository.addAll(listOf(work))
-                // 加入待补池默认置「想看」，写本地 user_collections 并回写 Bangumi（已配置时）。
+                // 加入待补池默认置「想看」。
                 markWantToWatch(work)
             }
         }
     }
 
-    /** 把作品标记为「想看」——本地 user_collections 先写，再回写 Bangumi（best-effort，不阻塞）。 */
+    /** 把作品标记为「想看」：写本地 user_collections（Bangumi 那边由待补池的同步队列负责）。 */
     private suspend fun markWantToWatch(work: Work) {
         val now = System.currentTimeMillis()
         val existing = detailInteractions.personalRecord(work.id)
@@ -394,11 +394,7 @@ class DetailViewModel @Inject constructor(
                 isPrivate = existing?.isPrivate ?: false,
             ),
         )
-        if (work.primarySource == com.acgcompass.domain.model.SourceId.VNDB) return
-        val subjectId = resolveBangumiSubjectId(work) ?: return
-        val configured = detailInteractions.isBangumiConfigured()
-        if (!configured) return
-        runCatching { detailInteractions.updateBangumiRecord(subjectId, BangumiRecordUpdate(type = 1)) }
+        // 回写 Bangumi「想看」由待补池统一排队推送（先查 Bangumi 上有没有收藏，不会覆盖已有状态）。
     }
 
     /**

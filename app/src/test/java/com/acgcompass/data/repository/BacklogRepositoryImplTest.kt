@@ -43,7 +43,7 @@ class BacklogRepositoryImplTest : StringSpec({
     fun newRepo(): Triple<BacklogRepositoryImpl, FakeBacklogDao, FakeWorkDao> {
         val backlogDao = FakeBacklogDao()
         val workDao = FakeWorkDao()
-        val repo = BacklogRepositoryImpl(backlogDao, workDao, TestDispatchers())
+        val repo = BacklogRepositoryImpl(backlogDao, workDao, TestDispatchers(), NoWishSync)
         return Triple(repo, backlogDao, workDao)
     }
 

@@ -50,6 +50,7 @@ class BacklogRepositoryImpl @Inject constructor(
     private val backlogDao: BacklogDao,
     private val workDao: WorkDao,
     private val dispatchers: DispatcherProvider,
+    private val wishSync: com.acgcompass.data.sync.WishSyncQueue,
 ) : BacklogRepository {
 
     // --- observeBacklog ----------------------------------------------------
@@ -126,6 +127,8 @@ class BacklogRepositoryImpl @Inject constructor(
             incrementRecommendation(workId, now)
         }
 
+        // 新加入的作品排队同步成 Bangumi「想看」（后台推送，失败会重试）。
+        runCatching { wishSync.enqueue(added) }
         AddResult(addedWorkIds = added, duplicateWorkIds = duplicates)
     }
 

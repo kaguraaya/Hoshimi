@@ -99,6 +99,12 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindWishSyncQueue(
+        impl: com.acgcompass.data.sync.BangumiWishSync,
+    ): com.acgcompass.data.sync.WishSyncQueue
+
+    @Binds
+    @Singleton
     abstract fun bindImportRepository(impl: ImportRepositoryImpl): ImportRepository
 
     @Binds

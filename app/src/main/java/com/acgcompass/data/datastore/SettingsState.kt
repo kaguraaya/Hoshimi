@@ -50,6 +50,8 @@ data class SettingsState(
     val recordTimeMachineSnapshots: Boolean = DEFAULT_RECORD_TIME_MACHINE_SNAPSHOTS,
     /** 评分差异页打开时是否自动去其它平台补评分。 */
     val scoreDiffAutoBackfill: Boolean = true,
+    /** 加入待补池时同步为 Bangumi「想看」。 */
+    val syncBacklogToBangumi: Boolean = true,
     val bangumiEnabled: Boolean = DEFAULT_BANGUMI_ENABLED,
     val anilistEnabled: Boolean = DEFAULT_ANILIST_ENABLED,
     val jikanEnabled: Boolean = DEFAULT_JIKAN_ENABLED,

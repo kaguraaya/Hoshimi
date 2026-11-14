@@ -129,6 +129,29 @@ class SettingsDataStore @Inject constructor(
     val allowAiAnalyzeReviews: Flow<Boolean> =
         dataStore.data.map { it[Keys.ALLOW_AI_ANALYZE_REVIEWS] ?: SettingsState.DEFAULT_ALLOW_AI_ANALYZE_REVIEWS }
 
+    /** 加入待补池时是否同步为 Bangumi「想看」。 */
+    val syncBacklogToBangumi: Flow<Boolean> = dataStore.data.map { it[Keys.SYNC_BACKLOG_TO_BANGUMI] ?: true }
+
+    suspend fun setSyncBacklogToBangumi(enabled: Boolean) {
+        dataStore.edit { it[Keys.SYNC_BACKLOG_TO_BANGUMI] = enabled }
+    }
+
+    /** 等待同步成 Bangumi「想看」的作品 id。 */
+    val pendingWishWorkIds: Flow<Set<String>> = dataStore.data.map { it[Keys.PENDING_WISH_WORK_IDS].orEmpty() }
+
+    suspend fun updatePendingWish(transform: (Set<String>) -> Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[Keys.PENDING_WISH_WORK_IDS] = transform(prefs[Keys.PENDING_WISH_WORK_IDS].orEmpty())
+        }
+    }
+
+    /** 已有的待补池是否已经补同步过一次。 */
+    val wishBackfillDone: Flow<Boolean> = dataStore.data.map { it[Keys.WISH_BACKFILL_DONE] ?: false }
+
+    suspend fun setWishBackfillDone() {
+        dataStore.edit { it[Keys.WISH_BACKFILL_DONE] = true }
+    }
+
     /** 评分差异页：进入时是否自动去其它平台补评分。 */
     val scoreDiffAutoBackfill: Flow<Boolean> = dataStore.data.map { it[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true }
 
@@ -494,6 +517,7 @@ class SettingsDataStore @Inject constructor(
     private fun Preferences.toSettingsState(): SettingsState = SettingsState(
         allowAiAnalyzeReviews = this[Keys.ALLOW_AI_ANALYZE_REVIEWS] ?: SettingsState.DEFAULT_ALLOW_AI_ANALYZE_REVIEWS,
         scoreDiffAutoBackfill = this[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true,
+        syncBacklogToBangumi = this[Keys.SYNC_BACKLOG_TO_BANGUMI] ?: true,
         recordTimeMachineSnapshots =
         this[Keys.RECORD_TIME_MACHINE_SNAPSHOTS]
             ?: SettingsState.DEFAULT_RECORD_TIME_MACHINE_SNAPSHOTS,
@@ -549,6 +573,9 @@ class SettingsDataStore @Inject constructor(
     private object Keys {
         val ALLOW_AI_ANALYZE_REVIEWS = booleanPreferencesKey("allow_ai_analyze_reviews")
         val SCORE_DIFF_AUTO_BACKFILL = booleanPreferencesKey("score_diff_auto_backfill")
+        val SYNC_BACKLOG_TO_BANGUMI = booleanPreferencesKey("sync_backlog_to_bangumi")
+        val PENDING_WISH_WORK_IDS = stringSetPreferencesKey("pending_wish_work_ids")
+        val WISH_BACKFILL_DONE = booleanPreferencesKey("wish_backfill_done")
         val RECORD_TIME_MACHINE_SNAPSHOTS = booleanPreferencesKey("record_time_machine_snapshots")
         val BANGUMI_ENABLED = booleanPreferencesKey("bangumi_enabled")
         val ANILIST_ENABLED = booleanPreferencesKey("anilist_enabled")
