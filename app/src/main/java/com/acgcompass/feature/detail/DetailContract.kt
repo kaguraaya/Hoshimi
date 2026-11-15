@@ -789,8 +789,9 @@ private fun Work.toDecisionUiModel(
 
 /**
  * 补番优先级模型（可解释）。以「预计评分在你自己看过的作品里的位置」为主，再看口味匹配、社区共识、
- * 补完成本与情绪风险标签，
- * 输出 低/中/高 + 理由。无任何有效信号（无口味、无社区共识）时返回 (null, null)，不伪造。
+ * 补完成本与情绪风险标签，输出 低/中/高 + 理由。
+ * 理由跟着等级走：高只列拉高的因素，低先列拉低的因素（有明显的加分项时写成「……，但……」），
+ * 中两边都写。无任何有效信号（无口味、无社区共识）时返回 (null, null)，不伪造。
  */
 private fun computeBacklogPriority(
     tasteMatch: TasteMatchUiModel,
@@ -798,28 +799,44 @@ private fun computeBacklogPriority(
     completionCost: CompletionCostUiModel,
     tags: List<Tag>,
 ): Pair<String?, String?> {
-    var weighted = 0f
-    var weight = 0f
-    val reasons = mutableListOf<String>()
+    val factors = priorityFactors(tasteMatch, consensus, completionCost)
+    val weight = factors.sumOf { it.weight.toDouble() }.toFloat()
+    if (weight <= 0f) return null to null
+    var score = (factors.sumOf { (it.value * it.weight).toDouble() }.toFloat() / weight).coerceIn(0f, 1f)
+    // 情绪风险标签作为减项（致郁/压抑/高上头等），不归零，仅下调。
+    val riskTags = tags.filter { it.category == TagCategory.RISK }.map(Tag::name)
+    val risk = riskTags.takeIf { it.isNotEmpty() }?.let { "注意情绪风险（${it.take(2).joinToString("、")}）" }
+    if (risk != null) score = (score - RISK_PENALTY).coerceIn(0f, 1f)
+    val level = when {
+        score >= HIGH_PRIORITY -> "高"
+        score >= MID_PRIORITY -> "中"
+        else -> "低"
+    }
+    return level to priorityReason(level, factors, risk)
+}
 
-    // 口味：主分数 50% 以下视为不加分，90% 视为满分（主分数本身挤在 55–85 之间，直接用会让优先级普遍偏高）。
+/** 一项优先级因素：[value] ∈ [0,1]，高于 0.5 往上拉、低于 0.5 往下拉。 */
+private class PriorityFactor(val value: Float, val weight: Float, val up: String, val down: String) {
+    val pullsUp: Boolean get() = value >= FACTOR_STRONG_UP
+    val pullsDown: Boolean get() = value <= FACTOR_STRONG_DOWN
+}
+
+private fun priorityFactors(
+    tasteMatch: TasteMatchUiModel,
+    consensus: ConsensusUiModel,
+    completionCost: CompletionCostUiModel,
+): List<PriorityFactor> {
+    val factors = mutableListOf<PriorityFactor>()
     if (tasteMatch is TasteMatchUiModel.Available) {
+        // 口味：主分数 50% 以下视为不加分，90% 视为满分。
         val taste = ((tasteMatch.fraction - TASTE_FLOOR) / TASTE_SPAN).coerceIn(0f, 1f)
-        weighted += taste * W_TASTE
-        weight += W_TASTE
-        if (taste >= 0.6f) reasons += "口味匹配较高"
-        // 预计评分在你自己看过的作品里排在哪：最能区分「值得先补」的一项。
+        factors += PriorityFactor(taste, W_TASTE, "口味匹配较高", "口味匹配一般")
         tasteMatch.rankPercent?.let { rank ->
-            weighted += rank / 100f * W_RANK
-            weight += W_RANK
-            if (rank >= HIGH_RANK) reasons += "预计评分在你看过的作品里偏高"
-            if (rank < LOW_RANK) reasons += "预计评分在你看过的作品里偏低"
+            factors += PriorityFactor(rank / 100f, W_RANK, "预计评分在你看过的作品里偏高", "预计评分在你看过的作品里偏低")
         }
     }
     if (consensus is ConsensusUiModel.Available) {
-        weighted += consensus.priority.fraction * W_COMMUNITY
-        weight += W_COMMUNITY
-        if (consensus.priority.fraction >= 0.6f) reasons += "社区评价较高"
+        factors += PriorityFactor(consensus.priority.fraction, W_COMMUNITY, "社区评价较高", "社区评价一般")
     }
     if (completionCost.available) {
         val costScore = when (completionCost.bucketLabel) {
@@ -827,28 +844,28 @@ private fun computeBacklogPriority(
             "周末补完" -> 0.6f
             else -> 0.25f
         }
-        weighted += costScore * W_COST
-        weight += W_COST
-        if (completionCost.bucketLabel == "今晚可看完") reasons += "篇幅短易补完"
-        if (completionCost.bucketLabel == "长期坑") reasons += "体量较大需长期投入"
+        factors += PriorityFactor(costScore, W_COST, "篇幅短易补完", "体量较大需长期投入")
     }
-    if (weight <= 0f) return null to null
+    return factors
+}
 
-    var score = (weighted / weight).coerceIn(0f, 1f)
-    // 情绪风险标签作为减项（致郁/压抑/高上头等），不归零，仅下调。
-    val riskTags = tags.filter { it.category == TagCategory.RISK }.map(Tag::name)
-    if (riskTags.isNotEmpty()) {
-        score = (score - 0.1f).coerceIn(0f, 1f)
-        reasons += "注意情绪风险（${riskTags.take(2).joinToString("、")}）"
+private fun priorityReason(level: String, factors: List<PriorityFactor>, risk: String?): String {
+    val ups = factors.filter { it.pullsUp }.sortedByDescending { it.weight }.map { it.up }
+    val downs = factors.filter { it.pullsDown }.sortedByDescending { it.weight }.map { it.down } +
+        listOfNotNull(risk)
+    val text = when (level) {
+        "高" -> ups.joinToString(" · ")
+        "低" -> when {
+            downs.isEmpty() -> ""
+            ups.isEmpty() -> downs.joinToString(" · ")
+            else -> "${ups.first()}，但${downs.joinToString("、")}"
+        }
+        else -> when {
+            ups.isNotEmpty() && downs.isNotEmpty() -> "${ups.joinToString("、")}，但${downs.joinToString("、")}"
+            else -> (ups + downs).joinToString(" · ")
+        }
     }
-
-    val level = when {
-        score >= HIGH_PRIORITY -> "高"
-        score >= MID_PRIORITY -> "中"
-        else -> "低"
-    }
-    val reason = if (reasons.isEmpty()) "综合口味与社区信号的初步估计，仅供参考" else reasons.joinToString(" · ")
-    return level to reason
+    return text.ifEmpty { "各项信号都在中间，仅供参考" }
 }
 
 private const val TASTE_FLOOR = 0.5f
@@ -858,9 +875,10 @@ private const val W_TASTE = 0.25f
 private const val W_COMMUNITY = 0.2f
 private const val W_COST = 0.15f
 private const val HIGH_PRIORITY = 0.7f
-private const val HIGH_RANK = 70
-private const val LOW_RANK = 35
 private const val MID_PRIORITY = 0.45f
+private const val RISK_PENALTY = 0.1f
+private const val FACTOR_STRONG_UP = 0.6f
+private const val FACTOR_STRONG_DOWN = 0.4f
 
 /**
  * 从作品内容标签按关键词推断「适合心情」。匹配不到任何关键词时返回空（不伪造）。
