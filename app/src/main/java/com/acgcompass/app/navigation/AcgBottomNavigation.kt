@@ -70,6 +70,10 @@ import androidx.compose.ui.unit.sp
 import com.acgcompass.core.designsystem.SurfaceLevel
 import com.acgcompass.core.designsystem.SurfaceScope
 import com.acgcompass.core.designsystem.Surfaces
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeChild
 import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -90,6 +94,8 @@ fun AcgBottomNavigation(
     currentDestination: TopLevelDestination?,
     onSelect: (TopLevelDestination) -> Unit,
     modifier: Modifier = Modifier,
+    /** 传入时底栏是一层毛玻璃，透出下面滚过的内容；为 null 时用实色底。 */
+    hazeState: HazeState? = null,
 ) {
     val dark = MaterialTheme.colorScheme.surface.luminance() < DARK_LUMINANCE
     val dockLevel = if (dark) SurfaceLevel.Block else SurfaceLevel.Card
@@ -113,12 +119,15 @@ fun AcgBottomNavigation(
     ) {
         // 底栏背景单独一层（只画底色和投影，不放内容）：镜片和图标画在它上面、不受它的圆角裁剪，
         // 按住时镜片才能像 FlClash 那样长出底栏之外。
+        val dockColor = Surfaces.colorOf(dockLevel)
         Surface(
             modifier = Modifier.fillMaxWidth().height(DOCK_HEIGHT),
             shape = CircleShape,
-            color = Surfaces.colorOf(dockLevel),
+            color = if (hazeState != null) Color.Transparent else dockColor,
             shadowElevation = 12.dp,
-        ) {}
+        ) {
+            if (hazeState != null) Box(Modifier.fillMaxSize().dockBlur(hazeState, dockColor))
+        }
         SurfaceScope(dockLevel) {
             BoxWithConstraints(Modifier.fillMaxWidth().height(DOCK_HEIGHT).padding(DOCK_INSET)) {
                 val slotWidthPx = constraints.maxWidth.toFloat() / entries.size
@@ -490,3 +499,22 @@ private val SettleSpring = spring<Float>(dampingRatio = 0.68f, stiffness = 158f)
 
 /** FlClash 的 _trackSpring：约 120ms、无回弹，拉伸跟手。 */
 private val TrackSpring = spring<Float>(dampingRatio = 1f, stiffness = 2700f)
+
+/**
+ * 底栏毛玻璃：模糊下面的内容，再叠一层半透明的底栏底色，滑动时能看到内容的颜色从底栏下经过。
+ * Android 12 以下没有实时模糊，退回接近不透明的底色。
+ */
+private fun Modifier.dockBlur(state: HazeState, color: Color): Modifier = hazeChild(
+    state = state,
+    style = HazeStyle(
+        backgroundColor = color,
+        tint = HazeTint(color.copy(alpha = DOCK_TINT_ALPHA)),
+        blurRadius = DOCK_BLUR_RADIUS,
+        noiseFactor = 0f,
+        fallbackTint = HazeTint(color.copy(alpha = DOCK_FALLBACK_ALPHA)),
+    ),
+)
+
+private val DOCK_BLUR_RADIUS = 28.dp
+private const val DOCK_TINT_ALPHA = 0.62f
+private const val DOCK_FALLBACK_ALPHA = 0.95f

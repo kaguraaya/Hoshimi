@@ -15,6 +15,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +37,7 @@ import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.LocalFloatingBarInset
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.domain.cache.CachePolicy
 import com.acgcompass.domain.model.ImportItem
 import com.acgcompass.domain.model.ImportItemStatus
@@ -64,6 +66,7 @@ import com.acgcompass.feature.mine.MineUiState
 import com.acgcompass.feature.recommender.RecommenderInput
 import com.acgcompass.feature.recommender.RecommenderScreen
 import com.github.takahirom.roborazzi.captureRoboImage
+import dev.chrisbanes.haze.HazeState
 import java.time.DayOfWeek
 import kotlinx.coroutines.Dispatchers
 import org.junit.Rule
@@ -295,10 +298,12 @@ private fun SampleHome() {
 /** 「我的」页 + 悬浮底栏：看成组的行、统计块和底栏在一起的效果。 */
 @Composable
 private fun SampleMineWithDock() {
-    // 和应用里一样：底栏叠在内容上面，内容用 LocalFloatingBarInset 让出底部。
+    // 和应用里一样：底栏叠在内容上面（毛玻璃取样下面的内容），内容用 LocalFloatingBarInset 让出底部。
+    val dockHaze = remember { HazeState() }
     Box(Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalFloatingBarInset provides DOCK_SPACE) {
             MineScreen(
+                modifier = Modifier.topBarBlurSource(dockHaze),
                 state = UiState.Success(
                     MineUiState(
                         stats = MineStats(
@@ -321,6 +326,7 @@ private fun SampleMineWithDock() {
         AcgBottomNavigation(
             currentDestination = TopLevelDestination.ENTRIES.last(),
             onSelect = {},
+            hazeState = dockHaze,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }

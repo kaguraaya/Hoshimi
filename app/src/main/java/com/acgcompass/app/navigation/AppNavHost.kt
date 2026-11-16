@@ -34,6 +34,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.acgcompass.core.ui.LocalFloatingBarInset
+import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.core.ui.withoutTop
 import com.acgcompass.feature.backlog.BacklogRoute
 import com.acgcompass.feature.cache.CacheItemCleanupScreen
@@ -58,6 +59,7 @@ import com.acgcompass.feature.settings.SettingsScreen
 import com.acgcompass.feature.settings.SettingsSourceScreen
 import com.acgcompass.feature.taste.TasteProfileRoute
 import com.acgcompass.feature.timemachine.TimeMachineRoute
+import dev.chrisbanes.haze.HazeState
 
 /**
  * 应用导航根。
@@ -103,6 +105,8 @@ fun AcgApp(
     }
 
     val showDock = TopLevelDestination.isTopLevelRoute(currentRoute)
+    // 底栏是一层毛玻璃：取样它下面滚过的页面内容。
+    val dockHaze = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         // 统一 inset 单一来源模型。
@@ -125,13 +129,15 @@ fun AcgApp(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding.withoutTop())
-                        .consumeWindowInsets(innerPadding.withoutTop()),
+                        .consumeWindowInsets(innerPadding.withoutTop())
+                        .topBarBlurSource(dockHaze),
                 )
             }
             if (showDock) {
                 AcgBottomNavigation(
                     currentDestination = currentTopLevel,
                     onSelect = { tab -> navController.navigateToTopLevel(tab) },
+                    hazeState = dockHaze,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
