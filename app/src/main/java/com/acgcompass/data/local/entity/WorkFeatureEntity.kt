@@ -35,4 +35,7 @@ data class WorkFeatureEntity(
     @ColumnInfo(defaultValue = "'EXTENDED'")
     val completeness: String = "EXTENDED",
     val updatedAt: Long,
+    /** 封面地址与放送日期：和标签、评分存在一起，排行、列表不用再查别的表。 */
+    val coverUrl: String? = null,
+    val airDate: String? = null,
 )

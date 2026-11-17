@@ -175,6 +175,13 @@ private class MemoryWorkFeatureDao(initial: List<WorkFeatureEntity> = emptyList(
         .take(limit)
         .map { it.subjectId }
 
+    override suspend fun getPoolIdsWithoutFeature(mediaType: String, limit: Int): List<String> = emptyList()
+
+    override suspend fun count(): Int = rows.value.size
+
+    override suspend fun countVerified(): Int =
+        rows.value.values.count { it.completeness != WorkFeatureCompleteness.EMBEDDED.name }
+
     override suspend fun upsert(entity: WorkFeatureEntity) {
         rows.value = rows.value + (entity.subjectId to entity)
     }

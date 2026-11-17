@@ -43,6 +43,9 @@ data class WorkFeature(
     val baseDataUpdatedAt: Long = 0L,
     val extendedDataUpdatedAt: Long? = null,
     val updatedAt: Long = 0L,
+    val coverUrl: String? = null,
+    /** 放送 / 发售日期（`YYYY-MM-DD`）。 */
+    val airDate: String? = null,
 ) {
     /** subject 内最大标注人数（q_xk = log(1+count)/log(1+maxTagCount) 的分母）。 */
     val maxTagCount: Int get() = tagCounts.maxOfOrNull { it.count } ?: 0

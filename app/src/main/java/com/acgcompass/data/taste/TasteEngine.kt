@@ -2,15 +2,18 @@ package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.logging.RedactingLogger
+import com.acgcompass.data.local.dao.RatingDao
 import com.acgcompass.data.local.dao.RecommendationExposureDao
 import com.acgcompass.data.local.dao.TagDimensionDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkDao
 import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.domain.model.MediaType
+import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.taste.AdvancedTasteProfile
 import com.acgcompass.domain.taste.BuildTasteProfileUseCase
 import com.acgcompass.domain.taste.ComputeTasteMatchUseCase
+import com.acgcompass.domain.taste.HeadlineCalibrator
 import com.acgcompass.domain.taste.ImplicitSignal
 import com.acgcompass.domain.taste.TasteCategory
 import com.acgcompass.domain.taste.TasteMatchResult
@@ -61,6 +64,7 @@ class TasteEngine @Inject constructor(
     private val computeMatch: ComputeTasteMatchUseCase,
     private val tagDimensionDao: TagDimensionDao,
     private val exposureDao: RecommendationExposureDao,
+    private val ratingDao: RatingDao,
     private val dispatchers: DispatcherProvider,
 ) {
     private val logger = RedactingLogger()
@@ -143,7 +147,7 @@ class TasteEngine @Inject constructor(
                 }
             }.getOrDefault(emptyMap())
 
-            val samples = buildSamples(rated, features)
+            val samples = buildSamples(rated, withCommunityFallback(features))
             if (samples.isEmpty() && profileState.value?.isUsable == true) {
                 // 短暂的特征缓存缺口不能用空结果覆盖上一份有效画像。
                 if (networkBudget > 0) refreshProgressState.value = null
@@ -173,16 +177,10 @@ class TasteEngine @Inject constructor(
             // 显式评分锚定必须覆盖「全部已评分作品」——含特征未取到、未进 50 样本者，否则这些作品
             // 在详情页拿不到显式评分锚（rating 查不到）→ 仍会塌到个位数。用完整评分表覆盖 ratedSubjectScores。
             val allRatedScores = rated.mapNotNull { c -> c.rating?.let { c.sourceItemId to it } }.toMap()
-            val finalProfile = if (allRatedScores.isEmpty()) {
-                profile
-            } else {
-                profile.copy(
-                    ratedSubjectScores = allRatedScores,
-                )
-            }
-            profileState.value = finalProfile
+            val calibrated = withHeadlineCalibration(profile.withRatedScores(allRatedScores), calibrationPool)
+            profileState.value = calibrated
             if (networkBudget > 0) refreshProgressState.value = null
-            finalProfile
+            calibrated
         }
     }
 
@@ -424,6 +422,40 @@ class TasteEngine @Inject constructor(
         }
     }
 
+    /** 在本地作品池上定口味匹配度的个人刻度；池太小或出错时保持固定刻度。 */
+    private suspend fun withHeadlineCalibration(
+        profile: AdvancedTasteProfile,
+        pool: List<WorkFeature>,
+    ): AdvancedTasteProfile = profile.copy(
+        headlineCalibration = runCatching {
+            HeadlineCalibrator.fit(profile, pool, computeMatch, loadTagOverrides())
+        }.getOrNull(),
+    )
+
+    /**
+     * 特征里缺社区评分时，用本地已存的 Bangumi 评分补上（详情页打开过的作品都有）。
+     * 评分模型只用有社区评分的作品，缺了它，这部作品就进不了模型。
+     */
+    private suspend fun withCommunityFallback(features: Map<String, WorkFeature>): Map<String, WorkFeature> {
+        val missing = features.filterValues { (it.bangumiScore ?: 0f) <= 0f }.keys
+        val stored = if (missing.isEmpty()) {
+            emptyMap()
+        } else {
+            runCatching { ratingDao.getAll() }.getOrDefault(emptyList())
+                .filter { it.sourceId == SourceId.BANGUMI.name && !it.missing && it.score > 0f && it.workId in missing }
+                .associateBy { it.workId }
+        }
+        return if (stored.isEmpty()) {
+            features
+        } else {
+            features.mapValues { (id, f) ->
+                stored[id]?.let { r ->
+                    f.copy(bangumiScore = r.score, bangumiVotes = f.bangumiVotes.takeIf { it > 0 } ?: r.voteCount)
+                } ?: f
+            }
+        }
+    }
+
     /** 解析单条收藏的「评定时间」毫秒：优先 Bangumi `sourceUpdatedAt`，回退本地 `updatedAt`。 */
     private fun timestampOf(c: UserCollectionEntity): Long = parseIsoMillis(c.sourceUpdatedAt) ?: c.updatedAt
 
@@ -474,6 +506,9 @@ class TasteEngine @Inject constructor(
         const val IMPLICIT_WINDOW_MS = 180L * 24 * 60 * 60 * 1000
     }
 }
+
+private fun AdvancedTasteProfile.withRatedScores(scores: Map<String, Int>): AdvancedTasteProfile =
+    if (scores.isEmpty()) this else copy(ratedSubjectScores = scores)
 
 private fun WorkFeature.needsExtendedRefresh(): Boolean =
     completeness != com.acgcompass.domain.taste.WorkFeatureCompleteness.EXTENDED

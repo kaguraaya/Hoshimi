@@ -35,6 +35,12 @@ data class TasteCalibration(
     val isotonicPoints: List<Pair<Double, Double>>? = null,
 )
 
+/**
+ * 口味匹配度的个人刻度：在本地作品池上算出的原始匹配分（[TasteMatchResult.headlineZ]）的中心与离散度。
+ * 主分数按「这部作品在你的作品池里排在哪」换算，每个人的分数都能拉开，不会挤在一小段里。
+ */
+data class HeadlineCalibration(val center: Double, val spread: Double, val poolSize: Int)
+
 /** 画像样本对各维度的覆盖率（置信度计算用）。 */
 data class TasteCoverage(
     val tag: Double = 0.0,
@@ -62,6 +68,8 @@ data class AdvancedTasteProfile(
     val userAvgRating: Double = 0.0,
     /** 个人分歧模型（预测评分 + 分歧归因）；带社区分的已评分作品不足时为 `null`。 */
     val divergence: PersonalDivergenceModel? = null,
+    /** 口味匹配度的个人刻度（[HeadlineCalibrator]）；作品池太小时为 `null`，按固定刻度换算。 */
+    val headlineCalibration: HeadlineCalibration? = null,
     val algorithmVersion: Int = TasteScoringParams.ALGORITHM_VERSION,
     val generatedAt: Long = 0L,
 ) {

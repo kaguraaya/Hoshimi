@@ -50,6 +50,7 @@ object AcgMigrations {
     private const val VERSION_16 = 16
     private const val VERSION_17 = 17
     private const val VERSION_18 = 18
+    private const val VERSION_19 = 19
 
     /**
      * v1 → v2：新增 `user_collections` 表（用户个人收藏：状态、评分、进度、短评和标签）。
@@ -411,6 +412,12 @@ object AcgMigrations {
     }
 
     /** v17 -> v18 persists the stable taste/tag accounting ledger. */
+    /** v18 → v19：`work_features` 增加封面与放送日期，作品资料自成一条记录。 */
+    private val MIGRATION_18_19 = Migration(VERSION_18, VERSION_19) { db ->
+        db.execSQL("ALTER TABLE `work_features` ADD COLUMN `coverUrl` TEXT")
+        db.execSQL("ALTER TABLE `work_features` ADD COLUMN `airDate` TEXT")
+    }
+
     private val MIGRATION_17_18 = Migration(VERSION_17, VERSION_18) { db ->
         db.execSQL(
             "ALTER TABLE `background_task_state` ADD COLUMN `personalInputFingerprint` TEXT NOT NULL DEFAULT ''",
@@ -450,5 +457,6 @@ object AcgMigrations {
         MIGRATION_15_16,
         MIGRATION_16_17,
         MIGRATION_17_18,
+        MIGRATION_18_19,
     )
 }

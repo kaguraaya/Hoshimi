@@ -310,8 +310,8 @@ class CacheRepositoryImpl @Inject constructor(
         cacheDao.deleteRatings(entry.workId)
         cacheDao.deleteSourceLinks(entry.workId)
         cacheDao.deleteWorkTags(entry.workId)
-        cacheDao.deleteWorkFeature(entry.workId)
-        // AI 生成的内容不随缓存清理删除：重新生成要消耗额度，文本本身很小。
+        // 作品资料（标签、评分、封面地址等，每部几 KB）和 AI 生成的内容不随缓存清理删除：
+        // 口味画像和匹配度要靠前者，后者重新生成要消耗额度。
         cacheDao.deleteRouteNodes(entry.workId)
         cacheDao.deleteRecommendationExposures(entry.workId)
         cacheDao.deleteWork(entry.workId)

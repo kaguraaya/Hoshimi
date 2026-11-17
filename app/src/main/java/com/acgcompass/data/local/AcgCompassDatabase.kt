@@ -105,7 +105,7 @@ import com.acgcompass.data.local.entity.WorkTagEntity
         BroadcastScheduleEntity::class,
         TasteTagProcessingEntity::class,
     ],
-    version = 18,
+    version = 19,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

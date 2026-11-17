@@ -20,6 +20,7 @@ import kotlin.math.max
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -137,8 +139,14 @@ class TasteProfileAutoUpdater @Inject constructor(
             prefetchMissingFeatures(priorityIds)
             return@withLock false
         }
-        // 自动触发的重建走后台优先级；用户手动点的「重新分析」才用前台优先级抢时间。
-        val basicCollection = collectBasicFeatures(fingerprint, priorityIds, background = !force)
+        // 自动触发的重建只读本地缓存，几秒内完成；缺资料的作品之后在后台分批补（restoreInBackground）。
+        // 用户手动点的「重新分析」才联网补齐，并用前台优先级抢时间。
+        val basicCollection = collectBasicFeatures(
+            fingerprint,
+            priorityIds,
+            background = !force,
+            networkBudget = if (force) priorityIds.size else 0,
+        )
         val basicFeatures = basicCollection.features
         // 个别作品取不到标签时不让整次分析失败：用取到的部分建画像，缺的以后在后台补。
         if (basicFeatures.isEmpty() && priorityIds.isNotEmpty()) {
@@ -164,13 +172,44 @@ class TasteProfileAutoUpdater @Inject constructor(
         runCatching { tasteEngine.rebuildFromCache() }
         val completedAt = System.currentTimeMillis()
         persistCompletedState(fingerprint, priorityIds.size, completedAt)
+        restoreInBackground(priorityIds)
         true
+    }
+
+    @Volatile
+    private var restoreJob: Job? = null
+
+    /**
+     * 后台分批补齐还没有完整标签的作品（每批 [PREFETCH_BUDGET] 部，走后台优先级），每补完一批就用缓存静默重建一次画像。
+     * 一批没有任何进展（例如条目需要登录才能看）就停下，下次画像更新时再试。
+     */
+    private fun restoreInBackground(ids: List<String>) {
+        val scope = applicationScope ?: return
+        if (ids.isEmpty() || restoreJob?.isActive == true) return
+        restoreJob = scope.launch(dispatchers.io) {
+            repeat(MAX_RESTORE_ROUNDS) {
+                val before = runCatching { workFeatureRepository.countUnverified(ids) }.getOrDefault(0)
+                if (before == 0) return@launch
+                // 每批打乱顺序：个别一直取不到的作品不会每次都占住名额。
+                runCatching {
+                    workFeatureRepository.ensureBasic(
+                        ids.shuffled(),
+                        networkBudget = PREFETCH_BUDGET,
+                        background = true,
+                    )
+                }
+                val after = runCatching { workFeatureRepository.countUnverified(ids) }.getOrDefault(before)
+                if (after >= before) return@launch
+                runCatching { tasteEngine.rebuildFromCache() }
+            }
+        }
     }
 
     private suspend fun collectBasicFeatures(
         fingerprint: String,
         priorityIds: List<String>,
         background: Boolean,
+        networkBudget: Int,
     ): BasicFeatureCollection {
         val now = System.currentTimeMillis()
         val previous = taskStateDao.get(TASK_KEY)
@@ -182,7 +221,7 @@ class TasteProfileAutoUpdater @Inject constructor(
         val features = try {
             workFeatureRepository.ensureBasic(
                 priorityIds,
-                networkBudget = priorityIds.size,
+                networkBudget = networkBudget,
                 background = background,
             ) { done, total ->
                 progressMutex.withLock {
@@ -241,6 +280,9 @@ class TasteProfileAutoUpdater @Inject constructor(
         /** 一次后台补标签最多发多少个请求：够补新加的几部，又不会长时间占着限流额度。 */
         const val PREFETCH_BUDGET = 40
         const val MAX_PROGRESS_UPDATES = 100
+
+        /** 后台补齐最多跑这么多批（每批 [PREFETCH_BUDGET] 部）。 */
+        const val MAX_RESTORE_ROUNDS = 25
     }
 
     private suspend fun persistFailure(fingerprint: String, total: Int, message: String = "本地画像计算失败") {

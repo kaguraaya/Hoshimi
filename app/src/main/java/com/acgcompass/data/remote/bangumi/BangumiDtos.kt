@@ -70,6 +70,8 @@ data class BangumiSubjectDto(
     @SerialName("volumes") val volumes: Int? = null,
     @SerialName("tags") val tags: List<BangumiTagDto> = emptyList(),
     @SerialName("rating") val rating: BangumiRatingDto? = null,
+    /** 收藏列表里内嵌的精简条目没有 [rating]，只有这个分数。 */
+    @SerialName("score") val score: Float? = null,
     @SerialName("collection") val collection: BangumiCollectionDto? = null,
 )
 

@@ -168,8 +168,9 @@ fun TasteProfileScreen(
                 // 长说明使用辅助文本，进度条紧跟对应操作。
                 SectionCard("分析与优化") {
                     val localAnalysisRunning = localAnalysisState.isRunning
+                    // 个别作品可能一直取不到完整标签（需要登录才能看的条目等），覆盖八成以上就允许 AI 细分。
                     val featureSnapshotReady = processingSummary?.let {
-                        it.totalPriorityWorks > 0 && it.coveredPriorityWorks == it.totalPriorityWorks
+                        it.totalPriorityWorks > 0 && it.coverageFraction >= AI_CLASSIFY_MIN_COVERAGE
                     } == true
                     Text(
                         "上次分析：${formatLastUpdated(profile.generatedAt)}",
@@ -214,7 +215,9 @@ fun TasteProfileScreen(
                             when {
                                 classifying -> "停止标签分类"
                                 localAnalysisRunning -> "本地画像完成后可进行 AI 分类"
-                                !featureSnapshotReady -> "正在收集完整标签…"
+                                !featureSnapshotReady -> processingSummary?.let {
+                                    "正在收集完整标签（${it.coveredPriorityWorks}/${it.totalPriorityWorks}）…"
+                                } ?: "正在收集完整标签…"
                                 pendingTagCount == null -> "正在检查待分类标签…"
                                 pendingTagCount == 0 -> "没有待分类的新标签"
                                 else -> "用 AI 细分标签（$pendingTagCount 个待处理）"
@@ -260,6 +263,11 @@ fun TasteProfileScreen(
                         Text(
                             "优先作品标签覆盖 ${summary.coveredPriorityWorks}/${summary.totalPriorityWorks} " +
                                 "（${(summary.coverageFraction * 100).roundToInt()}%）",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "本地作品资料 ${summary.localFeatureCount} 部（完整标签 ${summary.verifiedFeatureCount} 部）",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -545,6 +553,15 @@ private fun TagDimensionUpgradeSection(summary: TagDimensionSummary) {
 private fun ProfileOverviewSection(profile: AdvancedTasteProfile) {
     SectionCard("画像概况") {
         StatLine("参与画像的评分样本", "${profile.sampleCount} 部")
+        StatLine("有评分的作品", "${profile.ratedSubjectScores.size} 部")
+        StatLine(
+            "进入评分模型",
+            profile.divergence?.let { "${it.examples.size} 部" } ?: "未建立（有社区评分的作品不足）",
+        )
+        StatLine(
+            "匹配度刻度",
+            profile.headlineCalibration?.let { "按本地 ${it.poolSize} 部作品" } ?: "固定刻度（本地作品资料不足）",
+        )
         if (profile.userAvgRating > 0.0) {
             StatLine("你的平均分", "${oneDecimal(profile.userAvgRating.toFloat())} 分")
         }
@@ -669,3 +686,5 @@ private fun TasteProfileScreenPreview() {
         )
     }
 }
+
+private const val AI_CLASSIFY_MIN_COVERAGE = 0.8f

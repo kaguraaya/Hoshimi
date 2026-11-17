@@ -29,25 +29,49 @@ class WorkFeatureMergeTest : StringSpec({
         merged.cv shouldBe listOf("cv")
     }
 
-    "changed embedded tags require base verification without discarding extended names" {
+    "truncated embedded tags never replace a verified snapshot" {
         val existing = entity(completeness = WorkFeatureCompleteness.EXTENDED, tagsJson = TAGS_JSON)
 
-        val merged = mergeLightweightFeature(feature(), existing, CHANGED_TAGS_JSON, NOW)
+        val merged = mergeLightweightFeature(feature(votes = 0), existing, CHANGED_TAGS_JSON, NOW)
+
+        merged.completeness shouldBe WorkFeatureCompleteness.EXTENDED.name
+        merged.tagCountsJson shouldBe TAGS_JSON
+        merged.baseDataUpdatedAt shouldBe BASE_UPDATED_AT
+        merged.bangumiVotes shouldBe 100
+        merged.staff shouldBe listOf("staff")
+    }
+
+    "embedded data without a score keeps the cached community score" {
+        val existing = entity(completeness = WorkFeatureCompleteness.BASIC, tagsJson = TAGS_JSON)
+
+        val merged = mergeLightweightFeature(feature(score = null), existing, CHANGED_TAGS_JSON, NOW)
+
+        merged.bangumiScore shouldBe 8f
+    }
+
+    "a verified basic snapshot with new tags replaces the old one" {
+        val existing = entity(completeness = WorkFeatureCompleteness.BASIC, tagsJson = TAGS_JSON)
+        val incoming = feature().copy(completeness = WorkFeatureCompleteness.BASIC)
+
+        val merged = mergeLightweightFeature(incoming, existing, CHANGED_TAGS_JSON, NOW)
+
+        merged.tagCountsJson shouldBe CHANGED_TAGS_JSON
+        merged.baseDataUpdatedAt shouldBe NOW
+    }
+
+    "embedded tags fill an empty cache" {
+        val merged = mergeLightweightFeature(feature(), null, CHANGED_TAGS_JSON, NOW)
 
         merged.completeness shouldBe WorkFeatureCompleteness.EMBEDDED.name
         merged.tagCountsJson shouldBe CHANGED_TAGS_JSON
-        merged.baseDataUpdatedAt shouldBe NOW
-        merged.staff shouldBe listOf("staff")
-        merged.characters shouldBe listOf("character")
-        merged.cv shouldBe listOf("cv")
     }
 }) {
     companion object {
-        private fun feature() = WorkFeature(
+        private fun feature(score: Float? = 8f, votes: Int = 100) = WorkFeature(
             subjectId = "1",
             tagCounts = listOf(TagCount("治愈", 3)),
-            bangumiScore = 8f,
-            bangumiVotes = 100,
+            bangumiScore = score,
+            bangumiVotes = votes,
             eps = 12,
             platform = "TV",
             mediaType = MediaType.ANIME,

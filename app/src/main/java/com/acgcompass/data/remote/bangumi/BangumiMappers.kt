@@ -52,7 +52,7 @@ fun BangumiSubjectDto.toBasicWorkFeature(
             .filter { it.name.isNotBlank() }
             .map { TagCount(name = it.name, count = it.count.coerceAtLeast(0)) }
             .toList(),
-        bangumiScore = rating?.score?.takeIf { it > 0f },
+        bangumiScore = (rating?.score ?: score)?.takeIf { it > 0f },
         bangumiVotes = rating?.total?.coerceAtLeast(0) ?: 0,
         eps = (eps ?: totalEpisodes ?: 0).coerceAtLeast(0),
         platform = platform?.takeIf { it.isNotBlank() },
@@ -64,6 +64,8 @@ fun BangumiSubjectDto.toBasicWorkFeature(
         completeness = completeness,
         baseDataUpdatedAt = updatedAt,
         updatedAt = updatedAt,
+        coverUrl = images?.large ?: images?.common,
+        airDate = date?.takeIf { it.isNotBlank() },
     )
 }
 

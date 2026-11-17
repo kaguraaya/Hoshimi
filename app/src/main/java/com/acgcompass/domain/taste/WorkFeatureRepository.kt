@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
  * 实现以 Room `work_features` 为单一可信源；缓存缺失 / 过期时 best-effort 联网（Bangumi 条目 + 关联人物
  * + 关联角色）补齐并落库，失败则返回已有缓存或 `null`（绝不伪造）。
  */
+@Suppress("TooManyFunctions") // 特征缓存的读、写、补齐、统计入口集中在一处
 interface WorkFeatureRepository {
     /** Persist base features already embedded in a user sync response without making network requests. */
     suspend fun seedLightweight(features: List<WorkFeature>)
@@ -24,6 +25,12 @@ interface WorkFeatureRepository {
         background: Boolean = false,
         onProgress: (suspend (done: Int, total: Int) -> Unit)? = null,
     ): Map<String, WorkFeature>
+
+    /** 指定作品里还没有经条目详情校验的基础标签的部数（缺失或只有收藏列表内嵌的精简标签）。 */
+    suspend fun countUnverified(subjectIds: Collection<String>): Int
+
+    /** 本地作品资料总数与其中有完整标签（经条目详情校验）的部数。 */
+    suspend fun localStats(): Pair<Int, Int>
 
     /** 仅当指定作品都已有经过条目详情校验的基础标签快照时返回 true。 */
     suspend fun hasStableBasicFeatures(subjectIds: Collection<String>): Boolean

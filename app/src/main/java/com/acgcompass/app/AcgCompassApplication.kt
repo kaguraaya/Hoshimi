@@ -21,6 +21,7 @@ import com.acgcompass.data.sync.RatingBackfillScheduler
 import com.acgcompass.data.sync.SyncScheduler
 import com.acgcompass.data.sync.TasteProfileAutoUpdater
 import com.acgcompass.data.sync.TasteProfileValidationScheduler
+import com.acgcompass.data.sync.WorkFeatureEnrichmentScheduler
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.cache.ManagedMediaRecord
 import com.acgcompass.domain.model.SourceId
@@ -66,6 +67,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
     @Inject lateinit var ratingBackfillScheduler: Lazy<RatingBackfillScheduler>
 
     @Inject lateinit var bangumiWishSync: Lazy<BangumiWishSync>
+
+    @Inject lateinit var featureEnrichmentScheduler: Lazy<WorkFeatureEnrichmentScheduler>
 
     @Inject lateinit var cacheRepository: Lazy<CacheRepository>
 
@@ -153,6 +156,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
                 .launchIn(appScope)
             // 个人收藏变化（同步入库 / 详情页改状态 / 加待补池）→ 防抖后自动重算口味画像。
             tasteProfileAutoUpdater.get().start(appScope)
+            // 本地作品资料（标签、评分、封面）在后台分批补齐，联网时才跑。
+            runCatching { featureEnrichmentScheduler.get().enqueue() }
             tasteProfileValidationScheduler.get().ensureScheduled()
             // Construct the durable manual-classification coordinator so an interrupted run can resume.
             tagClassificationController.get()

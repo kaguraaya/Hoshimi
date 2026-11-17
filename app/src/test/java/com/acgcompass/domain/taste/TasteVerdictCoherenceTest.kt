@@ -103,4 +103,28 @@ class TasteVerdictCoherenceTest : StringSpec({
             (ComputeTasteMatchUseCase.headlineScore(1.0, 1.0, 70) - 70)
         ComputeTasteMatchUseCase.headlineScore(3.0, 3.0, 95) shouldBe 97
     }
+
+    "the personal scale spreads scores around the local pool" {
+        val r = Random(5)
+        val pool = (0 until 80).map { i ->
+            val tags = (if (i % 3 == 0) listOf("搞笑") else emptyList()) + neutral.shuffled(r).take(3)
+            feature("p$i", tags, 6.0f + r.nextInt(25) / 10f)
+        }
+        val calibration = HeadlineCalibrator.fit(profile, pool, compute)
+        calibration shouldNotBe null
+        val c = calibration!!
+        (c.spread >= 0.25) shouldBe true
+        ComputeTasteMatchUseCase.calibratedScore(c.center, c) shouldBe 72
+        ComputeTasteMatchUseCase.calibratedScore(c.center + 1.3 * c.spread, c) shouldBeInRange 86..90
+        ComputeTasteMatchUseCase.calibratedScore(c.center - 1.3 * c.spread, c) shouldBeInRange 56..60
+
+        // 用个人刻度后，同一批作品的分数比固定刻度拉得更开，排序不变。
+        val calibrated = profile.copy(headlineCalibration = c)
+        val scores = pool.take(40).map { compute(it, calibrated).score }
+        (scores.max() - scores.min()) shouldBeGreaterThan 15
+    }
+
+    "too small a pool falls back to the fixed scale" {
+        HeadlineCalibrator.fit(profile, emptyList(), compute) shouldBe null
+    }
 })

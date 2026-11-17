@@ -121,6 +121,9 @@ data class TagDimensionSummary(val total: Int, val buckets: List<TagDimensionBuc
 }
 
 data class TasteProcessingSummary(
+    /** 本地作品资料总数 / 其中有完整标签的部数。 */
+    val localFeatureCount: Int = 0,
+    val verifiedFeatureCount: Int = 0,
     val localUniqueTags: Int = 0,
     val aiTerminalUniqueTags: Int = 0,
     val cumulativeUniqueTags: Int = 0,

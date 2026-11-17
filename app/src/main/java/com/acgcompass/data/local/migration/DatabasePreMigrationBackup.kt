@@ -119,7 +119,7 @@ class DatabasePreMigrationBackup @Inject constructor(
          * NOTE: must equal `AcgCompassDatabase` `@Database(version)`; `DatabasePreMigrationBackupTest`
          * guards this against drift (previously stuck at 1 → upgrade backup net silently disabled).
          */
-        const val CURRENT_DB_VERSION: Int = 18
+        const val CURRENT_DB_VERSION: Int = 19
     }
 }
 

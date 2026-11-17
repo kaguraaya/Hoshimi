@@ -282,7 +282,10 @@ class AiTagClassifier @Inject constructor(
         val covered = workFeatureRepository.getFeatures(ids.toList(), networkBudget = 0).values.count {
             it.completeness != WorkFeatureCompleteness.EMBEDDED
         }
+        val (featureCount, verifiedCount) = runCatching { workFeatureRepository.localStats() }.getOrDefault(0 to 0)
         TasteProcessingSummary(
+            localFeatureCount = featureCount,
+            verifiedFeatureCount = verifiedCount,
             localUniqueTags = processingDao.countLocalSeen(),
             aiTerminalUniqueTags = processingDao.countAiTerminal(),
             cumulativeUniqueTags = processingDao.countCumulative(),

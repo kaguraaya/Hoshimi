@@ -107,6 +107,16 @@ class WorkFeatureRepositoryImpl @Inject constructor(
         ids.mapNotNull { id -> resolved[id]?.let { id to it } }.toMap(LinkedHashMap())
     }
 
+    override suspend fun countUnverified(subjectIds: Collection<String>): Int = withContext(dispatchers.io) {
+        val ids = subjectIds.filter(String::isNotBlank).distinct()
+        val cached = ids.chunked(900).flatMap { workFeatureDao.getByIds(it) }.associateBy { it.subjectId }
+        ids.count { id -> cached[id]?.let(::hasUsableBaseData) != true }
+    }
+
+    override suspend fun localStats(): Pair<Int, Int> = withContext(dispatchers.io) {
+        workFeatureDao.count() to workFeatureDao.countVerified()
+    }
+
     override suspend fun hasStableBasicFeatures(subjectIds: Collection<String>): Boolean = withContext(dispatchers.io) {
         val ids = subjectIds.filter(String::isNotBlank).distinct()
         if (ids.isEmpty()) return@withContext true
@@ -247,10 +257,19 @@ class WorkFeatureRepositoryImpl @Inject constructor(
     ): WorkFeature? {
         val dto = (bangumi.getSubjectDto(sid, priority) as? AppResult.Success)?.data
             ?: return null
-        val entity = dto.toFeatureEntity(key, emptyList(), emptyList(), emptyList()).copy(
-            extendedDataUpdatedAt = null,
-            completeness = WorkFeatureCompleteness.BASIC.name,
-        )
+        val existing = workFeatureDao.getById(key)
+        val fetched = dto.toFeatureEntity(key, emptyList(), emptyList(), emptyList())
+        // 只刷新标签和数值；已有的 Staff / 角色 / 声优保留，不因补基础资料而丢失。
+        val entity = if (existing?.completeness == WorkFeatureCompleteness.EXTENDED.name) {
+            fetched.copy(
+                staff = existing.staff,
+                characters = existing.characters,
+                cv = existing.cv,
+                extendedDataUpdatedAt = existing.extendedDataUpdatedAt,
+            )
+        } else {
+            fetched.copy(extendedDataUpdatedAt = null, completeness = WorkFeatureCompleteness.BASIC.name)
+        }
         workFeatureDao.upsert(entity)
         return entity.toDomain()
     }
@@ -306,6 +325,8 @@ class WorkFeatureRepositoryImpl @Inject constructor(
             extendedDataUpdatedAt = now,
             completeness = WorkFeatureCompleteness.EXTENDED.name,
             updatedAt = now,
+            coverUrl = images?.large ?: images?.common,
+            airDate = date?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -338,6 +359,8 @@ class WorkFeatureRepositoryImpl @Inject constructor(
             baseDataUpdatedAt = baseDataUpdatedAt,
             extendedDataUpdatedAt = extendedDataUpdatedAt,
             updatedAt = updatedAt,
+            coverUrl = coverUrl,
+            airDate = airDate,
         )
     }
 
@@ -371,6 +394,13 @@ class WorkFeatureRepositoryImpl @Inject constructor(
     }
 }
 
+/**
+ * 合并一份「轻量」特征（收藏列表内嵌的精简条目、详情页顺带写入的基础资料）。
+ *
+ * 只升级不降级：收藏列表内嵌的条目只有前 10 个标签、没有评分人数，已经有经条目详情校验的
+ * 完整标签（BASIC / EXTENDED）时保留原有标签和完整度；评分、集数等数值只在新数据有效时才覆盖。
+ */
+@Suppress("CyclomaticComplexMethod") // 逐字段「新值有效才覆盖」，拆开反而难读
 internal fun mergeLightweightFeature(
     feature: WorkFeature,
     existing: WorkFeatureEntity?,
@@ -378,31 +408,31 @@ internal fun mergeLightweightFeature(
     now: Long,
 ): WorkFeatureEntity {
     val keepExtended = existing?.completeness == WorkFeatureCompleteness.EXTENDED.name
-    val keepStableBase = existing?.let { cached ->
-        val stable = cached.completeness == WorkFeatureCompleteness.BASIC.name ||
-            cached.completeness == WorkFeatureCompleteness.EXTENDED.name
-        stable && cached.tagCountsJson == incomingTagsJson
-    } == true
+    val existingStable = existing != null && existing.completeness in STABLE_NAMES &&
+        existing.tagCountsJson.isNotBlank()
+    val incomingWeaker = feature.completeness == WorkFeatureCompleteness.EMBEDDED
+    val keepBase = existingStable && (incomingWeaker || existing?.tagCountsJson == incomingTagsJson)
+    val incomingScore = feature.bangumiScore?.takeIf { it > 0f }
     return WorkFeatureEntity(
         subjectId = feature.subjectId,
-        tagCountsJson = if (keepStableBase) existing.tagCountsJson else incomingTagsJson,
-        staff = if (keepExtended) existing.staff else feature.staff,
-        characters = if (keepExtended) existing.characters else feature.characters,
-        cv = if (keepExtended) existing.cv else feature.cv,
-        bangumiScore = feature.bangumiScore ?: 0f,
-        bangumiVotes = feature.bangumiVotes,
-        eps = feature.eps,
-        durationMin = feature.durationMin,
-        platform = feature.platform,
-        mediaType = feature.mediaType?.name,
-        titles = feature.titleVariants,
-        baseDataUpdatedAt = if (keepStableBase) existing.baseDataUpdatedAt else now,
+        tagCountsJson = if (keepBase) existing!!.tagCountsJson else incomingTagsJson,
+        staff = if (keepExtended) existing!!.staff else feature.staff,
+        characters = if (keepExtended) existing!!.characters else feature.characters,
+        cv = if (keepExtended) existing!!.cv else feature.cv,
+        bangumiScore = incomingScore ?: existing?.bangumiScore ?: 0f,
+        bangumiVotes = feature.bangumiVotes.takeIf { it > 0 } ?: existing?.bangumiVotes ?: 0,
+        eps = feature.eps.takeIf { it > 0 } ?: existing?.eps ?: 0,
+        durationMin = feature.durationMin.takeIf { it > 0 } ?: existing?.durationMin ?: 0,
+        platform = feature.platform ?: existing?.platform,
+        mediaType = feature.mediaType?.name ?: existing?.mediaType,
+        titles = feature.titleVariants.ifEmpty { existing?.titles.orEmpty() },
+        baseDataUpdatedAt = if (keepBase) existing!!.baseDataUpdatedAt else now,
         extendedDataUpdatedAt = existing?.extendedDataUpdatedAt,
-        completeness = if (keepStableBase) {
-            existing.completeness
-        } else {
-            feature.completeness.name
-        },
+        completeness = if (keepBase) existing!!.completeness else feature.completeness.name,
         updatedAt = now,
+        coverUrl = feature.coverUrl ?: existing?.coverUrl,
+        airDate = feature.airDate ?: existing?.airDate,
     )
 }
+
+private val STABLE_NAMES = setOf(WorkFeatureCompleteness.BASIC.name, WorkFeatureCompleteness.EXTENDED.name)
