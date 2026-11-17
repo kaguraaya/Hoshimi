@@ -5,8 +5,10 @@ import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.asException
 import com.acgcompass.core.common.runCatchingApp
 import com.acgcompass.core.network.HttpErrorMapper
+import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.core.network.interceptor.SourceAuth
 import com.acgcompass.core.network.interceptor.SourceAuths
+import com.acgcompass.core.network.interceptor.withPriority
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.domain.model.RatingEntry
@@ -48,12 +50,16 @@ class MalRemoteDataSource @Inject constructor(
     }.getOrDefault(false)
 
     /** 搜索动画 → 候选 [WorkMatch] 列表（精确置信度由上层匹配器另行计算）。 */
-    suspend fun searchAnime(keyword: String, limit: Int? = null, offset: Int? = null): AppResult<List<WorkMatch>> =
-        guarded {
-            api.searchAnime(query = keyword, limit = limit, offset = offset, auth = auth)
-                .bodyOrThrow().data
-                .mapNotNull { it.toWorkMatchOrNull() }
-        }
+    suspend fun searchAnime(
+        keyword: String,
+        limit: Int? = null,
+        offset: Int? = null,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<List<WorkMatch>> = guarded {
+        api.searchAnime(query = keyword, limit = limit, offset = offset, auth = auth.withPriority(priority))
+            .bodyOrThrow().data
+            .mapNotNull { it.toWorkMatchOrNull() }
+    }
 
     /** 动画详情 → 规范化 [Work]；`id<=0` 视为缺失（`Failure(FieldMissing)`）。 */
     suspend fun getAnime(id: Int): AppResult<Work> = guarded {
@@ -63,8 +69,11 @@ class MalRemoteDataSource @Inject constructor(
     }
 
     /** 动画 MAL 评分 → 单源 [RatingEntry]；评分缺失返回 `Failure(FieldMissing)`（UI 显示「暂无数据」）。 */
-    suspend fun getAnimeRating(id: Int): AppResult<RatingEntry> = guarded {
-        api.getAnime(animeId = id, auth = auth).bodyOrThrow().toRatingEntry()
+    suspend fun getAnimeRating(
+        id: Int,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<RatingEntry> = guarded {
+        api.getAnime(animeId = id, auth = auth.withPriority(priority)).bodyOrThrow().toRatingEntry()
             ?: throw AppError.FieldMissing().asException()
     }
 

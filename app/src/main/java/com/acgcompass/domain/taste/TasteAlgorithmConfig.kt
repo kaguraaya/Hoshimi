@@ -11,17 +11,19 @@ enum class TasteMatchBranch(val key: String, val label: String, val description:
     STANDARD(
         key = "standard",
         label = "常规",
-        description = "以你给相似作品打的分为主，加一半预计评分和少量题材相似度",
+        description = "以你给题材相近的作品打的分为主，高了加分、低了同样扣分；预计评分只算一半",
     ),
     CONSERVATIVE(
         key = "conservative",
         label = "保守",
-        description = "跟着预计评分走：预计你会打的分越高，匹配度越高",
+        description = "只看预计评分：预计你会打的分越高，匹配度越高，不另外加减分。" +
+            "保守指不额外冒险，分数区间不一定更窄",
     ),
     AGGRESSIVE(
         key = "aggressive",
         label = "激进",
-        description = "以预计评分为底；你给相似作品打分高时大胆往上推，打分低时只轻轻往下扣",
+        description = "以预计评分为底；题材相近的作品你打过高分时加倍往上推，打过低分时只轻轻扣一点，" +
+            "更容易把冷门但对口味的作品推到前面",
     ),
     ;
 

@@ -66,6 +66,13 @@ interface WorkRepository {
     suspend fun aggregateRatings(workId: String, forceRefresh: Boolean = false): AppResult<RatingAggregate>
 
     /**
+     * 后台补充其它平台评分：和打开详情页时一样刷新各来源评分（含按标题去其它平台匹配），
+     * 但请求都走后台优先级，前台页面的请求先走；不补作品资料。
+     */
+    suspend fun backfillRatings(workId: String): AppResult<RatingAggregate> =
+        aggregateRatings(workId, forceRefresh = false)
+
+    /**
      * 仅读取本地已缓存的多源评分聚合（**不触发网络刷新**）。用于发现页榜单 / 评分差异 / 筛选
      * 等需要遍历大量作品的场景，避免逐作品网络刷新造成的卡顿 / 永不收敛。
      *

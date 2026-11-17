@@ -555,7 +555,7 @@
     <ID>ReturnCount:VisualNovelRepositoryImpl.kt$VisualNovelRepositoryImpl$private suspend fun addBangumiRating(detail: VisualNovelDetail): VisualNovelDetail</ID>
     <ID>ReturnCount:VndbMappers.kt$fun VndbVnDto.isAdult(): Boolean</ID>
     <ID>ReturnCount:VndbMappers.kt$fun VndbVnDto.toRatingEntry(): RatingEntry?</ID>
-    <ID>ReturnCount:WorkRepositoryImpl.kt$WorkRepositoryImpl$private suspend fun enrichViaCrossSourceSearch(workId: String)</ID>
+    <ID>ReturnCount:WorkRepositoryImpl.kt$WorkRepositoryImpl$private suspend fun enrichViaCrossSourceSearch( workId: String, priority: RequestPriority = RequestPriority.FOREGROUND, )</ID>
     <ID>SpreadOperator:DatabaseModule.kt$DatabaseModule$(*AcgMigrations.ALL)</ID>
     <ID>ThrowsCount:AniListApi.kt$AniListApi$private fun &lt;T&gt; queryDataExecute(response: GraphQlResponse, deserializer: DeserializationStrategy&lt;T&gt;): T</ID>
     <ID>ThrowsCount:BangumiOAuthClient.kt$BangumiOAuthClient$private fun Response&lt;BangumiTokenResponseDto&gt;.tokenOrThrow(): BangumiTokenResponseDto</ID>

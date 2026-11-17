@@ -841,6 +841,13 @@ class WorkRepositoryImpl @Inject constructor(
             }
         }
 
+    override suspend fun backfillRatings(workId: String): AppResult<RatingAggregate> = withContext(dispatchers.io) {
+        runCatchingApp {
+            refreshRatingsAndWork(workId, forceRefresh = false, priority = RequestPriority.BACKGROUND)
+            aggregateRatingsUseCase(ratingDao.getByWork(workId).toRatingAggregate().perSource)
+        }
+    }
+
     /** 仅读本地缓存评分聚合，不触发网络刷新（发现页批量场景用，避免逐作品联网卡顿）。 */
     override suspend fun aggregateRatingsCached(workId: String): RatingAggregate = withContext(dispatchers.io) {
         val perSource = ratingDao.getByWork(workId).toRatingAggregate().perSource
@@ -866,25 +873,34 @@ class WorkRepositoryImpl @Inject constructor(
         return needed
     }
 
-    private suspend fun refreshRatingsAndWork(workId: String, forceRefresh: Boolean, refreshProfile: Boolean = false) {
-        ensureWorkAvailable(workId)
+    /**
+     * 刷新作品各来源的评分（和打开详情页时一样）。[priority] 为后台时所有请求让前台先走，
+     * 并跳过非 Bangumi 主源作品的资料刷新（后台只补评分）。
+     */
+    private suspend fun refreshRatingsAndWork(
+        workId: String,
+        forceRefresh: Boolean,
+        refreshProfile: Boolean = false,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ) {
+        ensureWorkAvailable(workId, priority)
         val primarySource = workDao.getById(workId)?.let { sourceIdFromName(it.primarySource) }
         val sourcePairs = linkedSourcePairs(workId, primarySource)
         val bangumiPair = sourcePairs.firstOrNull { it.first == SourceId.BANGUMI }
         coroutineScope {
-            listOf(
-                async { refreshBangumiBundle(workId, bangumiPair, forceRefresh || refreshProfile) },
-                async { refreshLinkedRatings(workId, sourcePairs, forceRefresh) },
-                async { enrichViaCrossSourceSearch(workId) },
-                async { refreshPrimaryWork(workId, sourcePairs) },
+            listOfNotNull(
+                async { refreshBangumiBundle(workId, bangumiPair, forceRefresh || refreshProfile, priority) },
+                async { refreshLinkedRatings(workId, sourcePairs, forceRefresh, priority) },
+                async { enrichViaCrossSourceSearch(workId, priority) },
+                if (priority == RequestPriority.FOREGROUND) async { refreshPrimaryWork(workId, sourcePairs) } else null,
             ).forEach { it.await() }
         }
     }
 
-    private suspend fun ensureWorkAvailable(workId: String) {
+    private suspend fun ensureWorkAvailable(workId: String, priority: RequestPriority) {
         if (workDao.getById(workId) != null) return
         val subjectId = workId.toIntOrNull() ?: return
-        val fetched = bangumi.getSubjectBundle(subjectId)
+        val fetched = bangumi.getSubjectBundle(subjectId, priority)
         if (fetched is AppResult.Success) {
             persistBangumiBundle(workId, fetched.data)
         }
@@ -912,6 +928,7 @@ class WorkRepositoryImpl @Inject constructor(
         workId: String,
         sourcePairs: List<Pair<SourceId, String>>,
         forceRefresh: Boolean,
+        priority: RequestPriority,
     ) {
         val cachedRatings = ratingDao.getByWork(workId).associateBy { it.sourceId }
         val now = System.currentTimeMillis()
@@ -928,7 +945,7 @@ class WorkRepositoryImpl @Inject constructor(
         }
         coroutineScope {
             stalePairs.map { (source, itemId) ->
-                async { persistRatingResult(workId, source, fetchSourceRating(source, itemId)) }
+                async { persistRatingResult(workId, source, fetchSourceRating(source, itemId, priority)) }
             }.forEach { it.await() }
         }
     }
@@ -971,6 +988,7 @@ class WorkRepositoryImpl @Inject constructor(
         workId: String,
         sourcePair: Pair<SourceId, String>?,
         forceRefresh: Boolean,
+        priority: RequestPriority,
     ) {
         val subjectId = sourcePair?.second?.toIntOrNull() ?: return
         val cached = ratingDao.getByWorkAndSource(workId, SourceId.BANGUMI.name)
@@ -980,7 +998,7 @@ class WorkRepositoryImpl @Inject constructor(
             DetailCacheTtl.COMMENTS_MILLIS
         }
         if (!forceRefresh && cached != null && System.currentTimeMillis() - cached.fetchedAt < ttl) return
-        val result = bangumi.getSubjectBundle(subjectId)
+        val result = bangumi.getSubjectBundle(subjectId, priority)
         if (result is AppResult.Success) persistBangumiBundle(workId, result.data)
     }
 
@@ -1052,12 +1070,13 @@ class WorkRepositoryImpl @Inject constructor(
     private suspend fun fetchSourceRating(
         sid: SourceId,
         itemId: String,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
     ): AppResult<com.acgcompass.domain.model.RatingEntry>? = when (sid) {
-        SourceId.BANGUMI -> itemId.toIntOrNull()?.let { bangumi.getSubjectRating(it) }
-        SourceId.ANILIST -> itemId.toIntOrNull()?.let { anilist.getMediaRating(it) }
-        SourceId.TENRAI -> itemId.toIntOrNull()?.let { tenrai.getAnimeRating(it) }
+        SourceId.BANGUMI -> itemId.toIntOrNull()?.let { bangumi.getSubjectRating(it, priority) }
+        SourceId.ANILIST -> itemId.toIntOrNull()?.let { anilist.getMediaRating(it, priority) }
+        SourceId.TENRAI -> itemId.toIntOrNull()?.let { tenrai.getAnimeRating(it, priority) }
         SourceId.JIKAN -> null
-        SourceId.MAL -> if (mal.isEnabled()) itemId.toIntOrNull()?.let { mal.getAnimeRating(it) } else null
+        SourceId.MAL -> if (mal.isEnabled()) itemId.toIntOrNull()?.let { mal.getAnimeRating(it, priority) } else null
         SourceId.VNDB -> vndb.getVnRating(itemId)
     }
 
@@ -1136,7 +1155,10 @@ class WorkRepositoryImpl @Inject constructor(
      * 将本作作为锚点与各来源搜索结果聚类，只把同簇条目的来源链接和评分写到 [workId]。
      * 搜索与评分均按来源并行，单一来源失败不会阻塞其他来源。
      */
-    private suspend fun enrichViaCrossSourceSearch(workId: String) {
+    private suspend fun enrichViaCrossSourceSearch(
+        workId: String,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ) {
         val entity = workDao.getById(workId) ?: return
         if (com.acgcompass.domain.model.MediaType.fromStorage(entity.mediaType) !=
             com.acgcompass.domain.model.MediaType.ANIME
@@ -1149,7 +1171,7 @@ class WorkRepositoryImpl @Inject constructor(
             add(primary.name)
             sourceLinkDao.getByWork(workId).forEach { add(it.sourceId) }
         }
-        val searchers = crossSourceSearchers(existingSources)
+        val searchers = crossSourceSearchers(existingSources, priority)
         if (searchers.isEmpty()) return
         val queries = crossSourceQueries(self)
         if (queries.isEmpty()) return
@@ -1166,25 +1188,26 @@ class WorkRepositoryImpl @Inject constructor(
         val cluster = com.acgcompass.domain.matching.clusterMatches(listOf(anchor) + fresh)
             .firstOrNull { c -> c.any { it.work.id == self.id && it.sourceTag == primary } }
             ?: return
-        persistCrossSourceCluster(workId, primary, existingSources, cluster)
+        persistCrossSourceCluster(workId, primary, existingSources, cluster, priority)
     }
 
     private suspend fun crossSourceSearchers(
         existingSources: Set<String>,
+        priority: RequestPriority,
     ): List<Pair<SourceId, suspend (String) -> AppResult<List<WorkMatch>>>> {
         val tenraiEnabled = settingsDataStore.jikanEnabled.first()
         return buildList {
             if (SourceId.BANGUMI.name !in existingSources) {
-                add(SourceId.BANGUMI to { query -> bangumi.searchSubjects(keyword = query) })
+                add(SourceId.BANGUMI to { query -> bangumi.searchSubjects(keyword = query, priority = priority) })
             }
             if (SourceId.ANILIST.name !in existingSources) {
-                add(SourceId.ANILIST to { query -> anilist.searchMedia(keyword = query) })
+                add(SourceId.ANILIST to { query -> anilist.searchMedia(keyword = query, priority = priority) })
             }
             if (tenraiEnabled && SourceId.TENRAI.name !in existingSources) {
-                add(SourceId.TENRAI to { query -> tenrai.searchAnime(keyword = query) })
+                add(SourceId.TENRAI to { query -> tenrai.searchAnime(keyword = query, priority = priority) })
             }
             if (mal.isEnabled() && SourceId.MAL.name !in existingSources) {
-                add(SourceId.MAL to { query -> mal.searchAnime(keyword = query) })
+                add(SourceId.MAL to { query -> mal.searchAnime(keyword = query, priority = priority) })
             }
         }
     }
@@ -1199,6 +1222,7 @@ class WorkRepositoryImpl @Inject constructor(
         primary: SourceId,
         existingSources: Set<String>,
         cluster: List<WorkMatch>,
+        priority: RequestPriority,
     ) = coroutineScope {
         cluster
             .filter { it.sourceTag != primary && it.sourceTag.name !in existingSources }
@@ -1210,10 +1234,10 @@ class WorkRepositoryImpl @Inject constructor(
                     persistSourceLink(workId, sid, bestOfSource.work.id, bestOfSource.matchConfidence.toDouble())
                     if (sid == SourceId.BANGUMI) {
                         val subjectId = bestOfSource.work.id.toIntOrNull()
-                        val bundle = subjectId?.let { bangumi.getSubjectBundle(it) }
+                        val bundle = subjectId?.let { bangumi.getSubjectBundle(it, priority) }
                         if (bundle is AppResult.Success) persistBangumiBundle(workId, bundle.data)
                     } else {
-                        persistRatingResult(workId, sid, fetchSourceRating(sid, bestOfSource.work.id))
+                        persistRatingResult(workId, sid, fetchSourceRating(sid, bestOfSource.work.id, priority))
                     }
                 }
             }.forEach { it.await() }

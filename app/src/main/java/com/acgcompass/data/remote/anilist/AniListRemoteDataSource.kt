@@ -38,8 +38,11 @@ class AniListRemoteDataSource @Inject constructor(
     }
 
     /** 按 Media ID 取评分 → 单源 [RatingEntry]；评分缺失返回 `Failure(FieldMissing)`（UI「暂无数据」）。 */
-    suspend fun getMediaRating(mediaId: Int): AppResult<RatingEntry> = runCatchingApp {
-        api.getMediaById(mediaId).toRatingEntry() ?: throw AppError.FieldMissing().asException()
+    suspend fun getMediaRating(
+        mediaId: Int,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<RatingEntry> = runCatchingApp {
+        api.getMediaById(mediaId, priority).toRatingEntry() ?: throw AppError.FieldMissing().asException()
     }
 
     /**
@@ -51,8 +54,9 @@ class AniListRemoteDataSource @Inject constructor(
         keyword: String,
         type: String? = null,
         perPage: Int = AniListQueries.DEFAULT_SEARCH_PER_PAGE,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
     ): AppResult<List<WorkMatch>> = runCatchingApp {
-        api.searchMedia(keyword, type, perPage).map { it.toWorkMatch() }
+        api.searchMedia(keyword, type, perPage, priority).map { it.toWorkMatch() }
     }
 
     /**

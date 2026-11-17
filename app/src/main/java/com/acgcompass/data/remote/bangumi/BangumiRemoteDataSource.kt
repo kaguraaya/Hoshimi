@@ -107,8 +107,11 @@ class BangumiRemoteDataSource @Inject constructor(
     }
 
     /** 条目评分 → 单源 [RatingEntry]；评分缺失返回 `Failure(FieldMissing)`（UI 显示「暂无数据」）。 */
-    suspend fun getSubjectRating(subjectId: Int): AppResult<RatingEntry> = runCatchingApp {
-        val subject = fetchSubjectDto(subjectId, RequestPriority.FOREGROUND)
+    suspend fun getSubjectRating(
+        subjectId: Int,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<RatingEntry> = runCatchingApp {
+        val subject = fetchSubjectDto(subjectId, priority)
         subject.rating.toRatingEntry() ?: throw AppError.FieldMissing().asException()
     }
 

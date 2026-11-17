@@ -26,8 +26,12 @@ class TenraiRemoteDataSource @Inject constructor(
 ) {
     private val auth = SourceAuths.tenrai
 
-    suspend fun searchAnime(keyword: String, limit: Int = 10): AppResult<List<WorkMatch>> = runCatchingApp {
-        api.searchAnime(keyword, limit, null, true, auth).bodyOrThrow().data.map { dto ->
+    suspend fun searchAnime(
+        keyword: String,
+        limit: Int = 10,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<List<WorkMatch>> = runCatchingApp {
+        api.searchAnime(keyword, limit, null, true, auth.withPriority(priority)).bodyOrThrow().data.map { dto ->
             dto.toWorkMatch(source = SourceId.TENRAI)
         }
     }
@@ -47,8 +51,12 @@ class TenraiRemoteDataSource @Inject constructor(
         anime.toWork(SourceId.TENRAI)
     }
 
-    suspend fun getAnimeRating(id: Int): AppResult<RatingEntry> = runCatchingApp {
-        val anime = api.getAnime(id, auth).bodyOrThrow().data ?: throw AppError.FieldMissing().asException()
+    suspend fun getAnimeRating(
+        id: Int,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<RatingEntry> = runCatchingApp {
+        val anime = api.getAnime(id, auth.withPriority(priority)).bodyOrThrow().data
+            ?: throw AppError.FieldMissing().asException()
         anime.toRatingEntry() ?: throw AppError.FieldMissing().asException()
     }
 

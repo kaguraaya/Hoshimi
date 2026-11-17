@@ -162,6 +162,20 @@ class SettingsDataStore @Inject constructor(
     /** 评分差异页：进入时是否自动去其它平台补评分。 */
     val scoreDiffAutoBackfill: Flow<Boolean> = dataStore.data.map { it[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true }
 
+    /** 后台补评分最近查过的作品（作品 id → 查询时间）：一段时间内不重复查。 */
+    val ratingBackfillAttempts: Flow<Map<String, Long>> = dataStore.data.map { prefs ->
+        prefs[Keys.RATING_BACKFILL_ATTEMPTS].orEmpty().mapNotNull { entry ->
+            val at = entry.substringAfterLast('@').toLongOrNull()
+            at?.let { entry.substringBeforeLast('@') to it }
+        }.toMap()
+    }
+
+    suspend fun setRatingBackfillAttempts(attempts: Map<String, Long>) {
+        dataStore.edit { prefs ->
+            prefs[Keys.RATING_BACKFILL_ATTEMPTS] = attempts.mapTo(HashSet()) { (id, at) -> "$id@$at" }
+        }
+    }
+
     /** 是否记录本地时光机快照。 */
     val recordTimeMachineSnapshots: Flow<Boolean> = dataStore.data.map {
         it[Keys.RECORD_TIME_MACHINE_SNAPSHOTS] ?: SettingsState.DEFAULT_RECORD_TIME_MACHINE_SNAPSHOTS
@@ -583,6 +597,7 @@ class SettingsDataStore @Inject constructor(
         val SCORE_DIFF_AUTO_BACKFILL = booleanPreferencesKey("score_diff_auto_backfill")
         val SYNC_BACKLOG_TO_BANGUMI = booleanPreferencesKey("sync_backlog_to_bangumi")
         val TASTE_MATCH_BRANCH = stringPreferencesKey("taste_match_branch")
+        val RATING_BACKFILL_ATTEMPTS = stringSetPreferencesKey("rating_backfill_attempts")
         val PENDING_WISH_WORK_IDS = stringSetPreferencesKey("pending_wish_work_ids")
         val WISH_BACKFILL_DONE = booleanPreferencesKey("wish_backfill_done")
         val RECORD_TIME_MACHINE_SNAPSHOTS = booleanPreferencesKey("record_time_machine_snapshots")

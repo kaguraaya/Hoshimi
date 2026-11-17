@@ -31,9 +31,9 @@ class AniListApi(
 ) {
 
     /** 按 ID 取 Media；命中返回 [AniListMediaDto]，条目不存在 / 缺失抛 [AppError]。 */
-    suspend fun getMediaById(id: Int): AniListMediaDto {
+    suspend fun getMediaById(id: Int, priority: RequestPriority = RequestPriority.FOREGROUND): AniListMediaDto {
         val variables = buildJsonObject { put("id", id) }
-        val data = queryData(AniListQueries.MEDIA_BY_ID, variables, AniListMediaResponse.serializer())
+        val data = queryData(AniListQueries.MEDIA_BY_ID, variables, AniListMediaResponse.serializer(), priority)
         return data.media ?: throw AppError.FieldMissing().asException()
     }
 
@@ -42,13 +42,14 @@ class AniListApi(
         keyword: String,
         type: String? = null,
         perPage: Int = AniListQueries.DEFAULT_SEARCH_PER_PAGE,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
     ): List<AniListMediaDto> {
         val variables = buildJsonObject {
             put("search", keyword)
             if (type != null) put("type", type)
             put("perPage", perPage)
         }
-        val data = queryData(AniListQueries.SEARCH_BY_TITLE, variables, AniListPageResponse.serializer())
+        val data = queryData(AniListQueries.SEARCH_BY_TITLE, variables, AniListPageResponse.serializer(), priority)
         return data.page?.media.orEmpty()
     }
 
