@@ -80,8 +80,8 @@ android {
         applicationId = "com.kaguraaya.hoshimi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 74
-        versionName = "0.37.0"
+        versionCode = 75
+        versionName = "0.37.1"
 
         // 可选：用不同的包名 / 版本后缀出包（例如手头没有正式签名、想与已安装的正式版并存时）：
         //   ./gradlew assembleRelease -Phoshimi.applicationIdSuffix=.preview -Phoshimi.versionNameSuffix=-preview
@@ -209,6 +209,15 @@ val generateThirdPartyNotices = tasks.register<GenerateThirdPartyNoticesTask>("g
                 "https://developer.android.com/develop/ui/compose/testing",
             "Kotest Property ${libs.versions.kotest.get()}（Apache License 2.0）— " +
                 "https://kotest.io/docs/proptest/property-based-testing.html",
+            "JUnit Vintage Engine ${libs.versions.junitVintage.get()}（Eclipse Public License 2.0）— " +
+                "https://junit.org/junit5/",
+            "Robolectric ${libs.versions.robolectric.get()}（MIT License）— https://robolectric.org/",
+            "Roborazzi ${libs.versions.roborazzi.get()}（Apache License 2.0）— " +
+                "https://github.com/takahirom/roborazzi",
+            "",
+            "设计参考",
+            "界面的表面层级、底栏动效等设计语言参考了 FlClash（GPL-3.0）— https://github.com/chen08209/FlClash，" +
+                "本应用没有包含其源代码。",
         ),
     )
 }
