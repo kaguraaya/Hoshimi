@@ -121,9 +121,15 @@ data class TagDimensionSummary(val total: Int, val buckets: List<TagDimensionBuc
 }
 
 data class TasteProcessingSummary(
-    /** 本地作品资料总数 / 其中有完整标签的部数。 */
+    /**
+     * 本地作品库（work_features 全表）的部数 / 其中有完整标签的部数。除你的作品外，还包括浏览过的
+     * 榜单、放送表、搜索结果、探索队列里的作品，以及匹配度参照池，后台会逐批补齐它们的资料。
+     */
     val localFeatureCount: Int = 0,
     val verifiedFeatureCount: Int = 0,
+    /** 你的作品（收藏 + 待补池）里已有本地资料的部数。 */
+    val personalFeatureCount: Int = 0,
+    /** 你的作品的标签去重后的个数（已排除噪声标签）。 */
     val localUniqueTags: Int = 0,
     val aiTerminalUniqueTags: Int = 0,
     val cumulativeUniqueTags: Int = 0,
@@ -132,6 +138,10 @@ data class TasteProcessingSummary(
 ) {
     val coverageFraction: Float
         get() = if (totalPriorityWorks == 0) 0f else coveredPriorityWorks.toFloat() / totalPriorityWorks
+
+    /** 本地作品库里不属于你的作品的部数。 */
+    val otherFeatureCount: Int
+        get() = (localFeatureCount - personalFeatureCount).coerceAtLeast(0)
 }
 
 data class TagDimensionBucket(val category: TasteCategory, val count: Int)

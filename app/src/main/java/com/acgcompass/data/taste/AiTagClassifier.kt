@@ -279,13 +279,13 @@ class AiTagClassifier @Inject constructor(
 
     suspend fun processingSummary(): TasteProcessingSummary = withContext(dispatchers.io) {
         val ids = personalFeatureIds()
-        val covered = workFeatureRepository.getFeatures(ids.toList(), networkBudget = 0).values.count {
-            it.completeness != WorkFeatureCompleteness.EMBEDDED
-        }
+        val personal = workFeatureRepository.getFeatures(ids.toList(), networkBudget = 0).values
+        val covered = personal.count { it.completeness != WorkFeatureCompleteness.EMBEDDED }
         val (featureCount, verifiedCount) = runCatching { workFeatureRepository.localStats() }.getOrDefault(0 to 0)
         TasteProcessingSummary(
             localFeatureCount = featureCount,
             verifiedFeatureCount = verifiedCount,
+            personalFeatureCount = personal.size,
             localUniqueTags = processingDao.countLocalSeen(),
             aiTerminalUniqueTags = processingDao.countAiTerminal(),
             cumulativeUniqueTags = processingDao.countCumulative(),

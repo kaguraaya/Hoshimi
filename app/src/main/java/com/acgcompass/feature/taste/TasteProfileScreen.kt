@@ -255,7 +255,7 @@ fun TasteProfileScreen(
                     }
                     processingSummary?.let { summary ->
                         Text(
-                            "本地唯一标签 ${summary.localUniqueTags} · AI 终态处理 ${summary.aiTerminalUniqueTags} · " +
+                            "你的作品去重标签 ${summary.localUniqueTags} · AI 终态处理 ${summary.aiTerminalUniqueTags} · " +
                                 "累计去重 ${summary.cumulativeUniqueTags}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -267,7 +267,9 @@ fun TasteProfileScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            "本地作品资料 ${summary.localFeatureCount} 部（完整标签 ${summary.verifiedFeatureCount} 部）",
+                            "本地作品库 ${summary.localFeatureCount} 部（完整标签 ${summary.verifiedFeatureCount} 部）：" +
+                                "你的作品 ${summary.personalFeatureCount} 部，其余 ${summary.otherFeatureCount} 部" +
+                                "来自浏览过的榜单、放送表、搜索和探索队列，用作匹配度参照，会随浏览逐渐增加",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
