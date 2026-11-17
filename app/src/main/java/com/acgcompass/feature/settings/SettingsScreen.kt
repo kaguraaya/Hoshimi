@@ -1359,6 +1359,14 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
         }
     }
     ToggleRow(
+        label = "口味匹配度更大胆",
+        description = "只看你给题材相近的作品打了多少分，不再参考作品口碑：更容易发现社区评价一般、但很合你口味的作品；" +
+            "整体准确度会低一些，口碑好的作品分数也可能变低",
+        checked = card.tasteMatchBold,
+        enabled = true,
+        onCheckedChange = { actions.onToggleChange(ToggleKeys.TASTE_MATCH_BOLD, it) },
+    )
+    ToggleRow(
         label = "自动补充其它平台评分",
         description = "联网且电量不低时，约每 6 小时在后台为只有一个平台评分的作品去 AniList、MAL 等补查评分，" +
             "每次最多 20 部，按各平台的速率上限排队；打开「发现 → 评分差异」时也会补一批",

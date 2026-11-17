@@ -152,6 +152,7 @@ class SettingsViewModel @Inject constructor(
                         tasteMatchThreshold = settings.tasteMatchThreshold,
                         scoreDiffAutoBackfill = settings.scoreDiffAutoBackfill,
                         syncBacklogToBangumi = settings.syncBacklogToBangumi,
+                        tasteMatchBold = settings.tasteMatchBold,
                     ),
                     saveNoticeVisible = notice,
                     bangumiApi = buildBangumiApiState(settings, local),
@@ -275,6 +276,7 @@ class SettingsViewModel @Inject constructor(
                 ToggleKeys.RECORD_TIME_MACHINE_SNAPSHOTS -> settingsDataStore.setRecordTimeMachineSnapshots(checked)
                 ToggleKeys.SCORE_DIFF_AUTO_BACKFILL -> settingsDataStore.setScoreDiffAutoBackfill(checked)
                 ToggleKeys.SYNC_BACKLOG_TO_BANGUMI -> settingsDataStore.setSyncBacklogToBangumi(checked)
+                ToggleKeys.TASTE_MATCH_BOLD -> settingsDataStore.setTasteMatchBold(checked)
                 ToggleKeys.AI_THINKING_ENABLED -> settingsDataStore.setAiThinkingEnabled(
                     localUi.value.ai.selectedProvider.toProviderStorageId(),
                     checked,
@@ -616,6 +618,7 @@ internal object ToggleKeys {
     const val RECORD_TIME_MACHINE_SNAPSHOTS = "record_time_machine_snapshots"
     const val SCORE_DIFF_AUTO_BACKFILL = "score_diff_auto_backfill"
     const val SYNC_BACKLOG_TO_BANGUMI = "sync_backlog_to_bangumi"
+    const val TASTE_MATCH_BOLD = "taste_match_bold"
     const val AI_THINKING_ENABLED = "ai_thinking_enabled"
 }
 

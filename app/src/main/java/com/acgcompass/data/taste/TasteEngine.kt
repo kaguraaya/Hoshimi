@@ -2,6 +2,7 @@ package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.logging.RedactingLogger
+import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.RatingDao
 import com.acgcompass.data.local.dao.RecommendationExposureDao
 import com.acgcompass.data.local.dao.TagDimensionDao
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -65,6 +67,7 @@ class TasteEngine @Inject constructor(
     private val tagDimensionDao: TagDimensionDao,
     private val exposureDao: RecommendationExposureDao,
     private val ratingDao: RatingDao,
+    private val settingsDataStore: SettingsDataStore,
     private val dispatchers: DispatcherProvider,
 ) {
     private val logger = RedactingLogger()
@@ -422,15 +425,19 @@ class TasteEngine @Inject constructor(
         }
     }
 
-    /** 在本地作品池上定口味匹配度的个人刻度；池太小或出错时保持固定刻度。 */
+    /** 按设置里的风格，在本地作品池上定口味匹配度的个人刻度；池太小或出错时保持固定刻度。 */
     private suspend fun withHeadlineCalibration(
         profile: AdvancedTasteProfile,
         pool: List<WorkFeature>,
-    ): AdvancedTasteProfile = profile.copy(
-        headlineCalibration = runCatching {
-            HeadlineCalibrator.fit(profile, pool, computeMatch, loadTagOverrides())
-        }.getOrNull(),
-    )
+    ): AdvancedTasteProfile {
+        val bold = runCatching { settingsDataStore.tasteMatchBold.first() }.getOrDefault(false)
+        val styled = profile.copy(boldMatch = bold)
+        return styled.copy(
+            headlineCalibration = runCatching {
+                HeadlineCalibrator.fit(styled, pool, computeMatch, loadTagOverrides())
+            }.getOrNull(),
+        )
+    }
 
     /**
      * 特征里缺社区评分时，用本地已存的 Bangumi 评分补上（详情页打开过的作品都有）。

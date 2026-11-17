@@ -124,6 +124,16 @@ class TasteVerdictCoherenceTest : StringSpec({
         (scores.max() - scores.min()) shouldBeGreaterThan 15
     }
 
+    "the bold style looks only at similar works you rated" {
+        ComputeTasteMatchUseCase.headlineZ(1.5, 0.3, 90, bold = true) shouldBe 0.3
+        // 找不到相似作品时仍按综合口径。
+        ComputeTasteMatchUseCase.headlineZ(1.0, null, 50, bold = true) shouldBe
+            ComputeTasteMatchUseCase.headlineZ(1.0, null, 50)
+        val bold = profile.copy(boldMatch = true)
+        val comedy = compute(feature("g", listOf("搞笑", "日常", "校园"), 6.6f), bold)
+        comedy.headlineZ shouldBe comedy.analogy?.z
+    }
+
     "too small a pool falls back to the fixed scale" {
         HeadlineCalibrator.fit(profile, emptyList(), compute) shouldBe null
     }

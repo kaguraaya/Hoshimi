@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
@@ -80,6 +81,13 @@ class TasteProfileAutoUpdater @Inject constructor(
             .onEach { (fingerprint, collections) ->
                 recompute(fingerprint, collections, tasteFeatureIds(collections), force = false)
             }
+            .flowOn(dispatchers.io)
+            .launchIn(scope)
+        // 换了口味匹配度风格：用缓存重建一次画像，分数马上按新风格算。
+        settingsDataStore.tasteMatchBold
+            .distinctUntilChanged()
+            .drop(1)
+            .onEach { runCatching { tasteEngine.rebuildFromCache() } }
             .flowOn(dispatchers.io)
             .launchIn(scope)
         // 待补池新加的作品只需要把标签补回来（详情 / 推荐里好出分），安静地在后台做，不动画像。

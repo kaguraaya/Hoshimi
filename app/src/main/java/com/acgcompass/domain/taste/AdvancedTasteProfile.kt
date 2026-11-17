@@ -70,6 +70,8 @@ data class AdvancedTasteProfile(
     val divergence: PersonalDivergenceModel? = null,
     /** 口味匹配度的个人刻度（[HeadlineCalibrator]）；作品池太小时为 `null`，按固定刻度换算。 */
     val headlineCalibration: HeadlineCalibration? = null,
+    /** 口味匹配度只看相似作品类比（设置里的「更大胆」）。 */
+    val boldMatch: Boolean = false,
     val algorithmVersion: Int = TasteScoringParams.ALGORITHM_VERSION,
     val generatedAt: Long = 0L,
 ) {

@@ -304,10 +304,10 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         private const val HEADLINE_SCALE_UP = 18.0
         private const val HEADLINE_SCALE_DOWN = 9.0
         private const val POOL_CENTER = 72.0
-        private const val POOL_SCALE_UP = 13.0
-        private const val POOL_SCALE_DOWN = 11.0
-        private const val RATING_WEIGHT = 0.5
-        private const val SIMILARITY_WEIGHT = 0.25
+        private const val POOL_SCALE_UP = 14.0
+        private const val POOL_SCALE_DOWN = 12.0
+        private const val RATING_WEIGHT = 0.25
+        private const val SIMILARITY_WEIGHT = 0.1
         private const val SIMILARITY_CENTER = 50.0
         private const val SIMILARITY_SPREAD = 20.0
         private const val MAX_SIMILARITY_Z = 2.0
@@ -315,10 +315,12 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         private const val HEADLINE_MAX = 97
 
         /**
-         * 原始匹配分：以相似作品类比为主（[TasteAnalogy.z]），加上预计评分的一半（标准分）和少量题材相似度。
-         * 口味匹配度衡量「这部像不像你会喜欢的那类」，可以和预计评分不同。
+         * 原始匹配分：以相似作品类比为主（[TasteAnalogy.z]），加上四分之一的预计评分（标准分）和少量题材相似度。
+         * 口味匹配度衡量「这部像不像你会喜欢的那类」，可以和预计评分不同：作品口碑主要体现在预计评分里。
+         * [bold]（设置里的「更大胆」）时只看相似作品类比；找不到相似作品时仍按综合口径。
          */
-        fun headlineZ(ratingZ: Double, analogyZ: Double?, similarity: Int): Double {
+        fun headlineZ(ratingZ: Double, analogyZ: Double?, similarity: Int, bold: Boolean = false): Double {
+            if (bold && analogyZ != null) return analogyZ
             val similarityZ = ((similarity - SIMILARITY_CENTER) / SIMILARITY_SPREAD)
                 .coerceIn(-MAX_SIMILARITY_Z, MAX_SIMILARITY_Z)
             return RATING_WEIGHT * ratingZ + (analogyZ ?: 0.0) + SIMILARITY_WEIGHT * similarityZ
@@ -327,15 +329,18 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         /**
          * 没有个人刻度时的固定换算（作品池太小）：往上 70 + 18·z，往下 70 + 9·z。
          */
-        fun headlineScore(ratingZ: Double, analogyZ: Double?, similarity: Int): Int {
-            val z = headlineZ(ratingZ, analogyZ, similarity)
+        fun headlineScore(ratingZ: Double, analogyZ: Double?, similarity: Int): Int =
+            fixedScore(headlineZ(ratingZ, analogyZ, similarity))
+
+        /** 原始匹配分按固定刻度换算。 */
+        fun fixedScore(z: Double): Int {
             val scale = if (z >= 0.0) HEADLINE_SCALE_UP else HEADLINE_SCALE_DOWN
             return (HEADLINE_CENTER + scale * z).roundToInt().coerceIn(HEADLINE_MIN, HEADLINE_MAX)
         }
 
         /**
          * 有个人刻度时：按这部作品在你作品池里的位置换算。池里中等的作品约 [POOL_CENTER]%，
-         * 比池里九成作品更合口味的约 88%，垫底一成的约 58%。单调换算，作品之间的排序不变。
+         * 比池里九成作品更合口味的约 90%，垫底一成的约 57%。单调换算，作品之间的排序不变。
          */
         fun calibratedScore(z: Double, calibration: HeadlineCalibration): Int {
             val standardized = (z - calibration.center) / calibration.spread
@@ -380,13 +385,13 @@ private fun TasteMatchResult.withHeadline(profile: AdvancedTasteProfile, basisRa
     val model = profile.divergence
     if (model == null || basisRating == null || !fromRatingModel) return this
     val ratingZ = (basisRating - model.meanRating) / model.ratingStd.coerceAtLeast(HEADLINE_MIN_STD)
-    val z = ComputeTasteMatchUseCase.headlineZ(ratingZ, analogy?.z, tasteSimilarity)
+    val z = ComputeTasteMatchUseCase.headlineZ(ratingZ, analogy?.z, tasteSimilarity, profile.boldMatch)
     val calibration = profile.headlineCalibration
     return copy(
         score = if (calibration != null) {
             ComputeTasteMatchUseCase.calibratedScore(z, calibration)
         } else {
-            ComputeTasteMatchUseCase.headlineScore(ratingZ, analogy?.z, tasteSimilarity)
+            ComputeTasteMatchUseCase.fixedScore(z)
         },
         modelSamples = model.examples.size,
         headlineZ = z,
