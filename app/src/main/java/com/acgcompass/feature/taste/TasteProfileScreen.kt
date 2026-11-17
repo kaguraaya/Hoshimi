@@ -558,10 +558,7 @@ private fun ProfileOverviewSection(profile: AdvancedTasteProfile) {
             "进入评分模型",
             profile.divergence?.let { "${it.examples.size} 部" } ?: "未建立（有社区评分的作品不足）",
         )
-        StatLine(
-            "匹配度刻度",
-            profile.headlineCalibration?.let { "按本地 ${it.poolSize} 部作品" } ?: "固定刻度（本地作品资料不足）",
-        )
+        StatLine("口味匹配度算法", profile.matchBranch.label)
         if (profile.userAvgRating > 0.0) {
             StatLine("你的平均分", "${oneDecimal(profile.userAvgRating.toFloat())} 分")
         }

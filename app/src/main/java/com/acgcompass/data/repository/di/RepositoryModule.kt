@@ -151,6 +151,12 @@ abstract class RepositoryModule {
     @Singleton
     abstract fun bindTagClassificationController(impl: TagClassificationCoordinator): TagClassificationController
 
+    @Binds
+    @Singleton
+    abstract fun bindTasteAlgorithmConfigSource(
+        impl: com.acgcompass.data.taste.BuiltInTasteAlgorithmConfigSource,
+    ): com.acgcompass.domain.taste.TasteAlgorithmConfigSource
+
     companion object {
 
         @Provides

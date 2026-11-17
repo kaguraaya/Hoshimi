@@ -227,8 +227,8 @@ data class PrivacyCardState(
     val scoreDiffAutoBackfill: Boolean = true,
     /** 加入待补池时同步为 Bangumi「想看」。 */
     val syncBacklogToBangumi: Boolean = true,
-    /** 口味匹配度只看相似作品（更大胆）。 */
-    val tasteMatchBold: Boolean = false,
+    /** 口味匹配度分支（[com.acgcompass.domain.taste.TasteMatchBranch.key]）。 */
+    val tasteMatchBranch: String = "standard",
 )
 
 /**

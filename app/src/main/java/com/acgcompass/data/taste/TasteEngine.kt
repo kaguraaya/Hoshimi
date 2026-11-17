@@ -14,9 +14,10 @@ import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.taste.AdvancedTasteProfile
 import com.acgcompass.domain.taste.BuildTasteProfileUseCase
 import com.acgcompass.domain.taste.ComputeTasteMatchUseCase
-import com.acgcompass.domain.taste.HeadlineCalibrator
 import com.acgcompass.domain.taste.ImplicitSignal
+import com.acgcompass.domain.taste.TasteAlgorithmConfigSource
 import com.acgcompass.domain.taste.TasteCategory
+import com.acgcompass.domain.taste.TasteMatchBranch
 import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.TasteRefreshProgress
 import com.acgcompass.domain.taste.TasteSample
@@ -68,6 +69,7 @@ class TasteEngine @Inject constructor(
     private val exposureDao: RecommendationExposureDao,
     private val ratingDao: RatingDao,
     private val settingsDataStore: SettingsDataStore,
+    private val algorithmConfig: TasteAlgorithmConfigSource,
     private val dispatchers: DispatcherProvider,
 ) {
     private val logger = RedactingLogger()
@@ -180,10 +182,10 @@ class TasteEngine @Inject constructor(
             // 显式评分锚定必须覆盖「全部已评分作品」——含特征未取到、未进 50 样本者，否则这些作品
             // 在详情页拿不到显式评分锚（rating 查不到）→ 仍会塌到个位数。用完整评分表覆盖 ratedSubjectScores。
             val allRatedScores = rated.mapNotNull { c -> c.rating?.let { c.sourceItemId to it } }.toMap()
-            val calibrated = withHeadlineCalibration(profile.withRatedScores(allRatedScores), calibrationPool)
-            profileState.value = calibrated
+            val finalProfile = withMatchBranch(profile.withRatedScores(allRatedScores))
+            profileState.value = finalProfile
             if (networkBudget > 0) refreshProgressState.value = null
-            calibrated
+            finalProfile
         }
     }
 
@@ -395,6 +397,31 @@ class TasteEngine @Inject constructor(
             features.keys.mapNotNull { id -> memo[id]?.let { id to it } }.toMap()
         }
 
+    /**
+     * 给本地作品资料库里的全部作品（已评分的除外，最多 [limit] 部）算口味匹配度并从高到低排序，不联网。
+     * 只算分数（不算推荐理由和相近作品），分块并行。供以后的「口味匹配度排行」使用。
+     */
+    suspend fun rankLocalPool(limit: Int = LOCAL_RANK_LIMIT): List<Pair<String, Int>> = withContext(dispatchers.io) {
+        val profile = profileState.value ?: rebuildFromCache()
+        if (profile == null || !profile.isUsable) return@withContext emptyList()
+        val rated = profile.ratedSubjectScores.keys
+        val pool = runCatching { workFeatureRepository.getCachedPool(limit) }.getOrDefault(emptyList())
+            .filter { it.subjectId !in rated }
+        val overrides = loadTagOverrides()
+        val chunkSize = (pool.size / PARALLEL_CHUNKS + 1).coerceAtLeast(MIN_CHUNK)
+        coroutineScope {
+            pool.chunked(chunkSize).map { chunk ->
+                async(dispatchers.default) {
+                    chunk.map { f ->
+                        val result =
+                            computeMatch(f, profile, null, overrides, withNeighbors = false, withReasons = false)
+                        f.subjectId to result.score
+                    }
+                }
+            }.awaitAll().flatten()
+        }.sortedByDescending { it.second }
+    }
+
     private class BatchMemo(
         val profile: AdvancedTasteProfile,
         val overridesHash: Int,
@@ -425,18 +452,11 @@ class TasteEngine @Inject constructor(
         }
     }
 
-    /** 按设置里的风格，在本地作品池上定口味匹配度的个人刻度；池太小或出错时保持固定刻度。 */
-    private suspend fun withHeadlineCalibration(
-        profile: AdvancedTasteProfile,
-        pool: List<WorkFeature>,
-    ): AdvancedTasteProfile {
-        val bold = runCatching { settingsDataStore.tasteMatchBold.first() }.getOrDefault(false)
-        val styled = profile.copy(boldMatch = bold)
-        return styled.copy(
-            headlineCalibration = runCatching {
-                HeadlineCalibrator.fit(styled, pool, computeMatch, loadTagOverrides())
-            }.getOrNull(),
-        )
+    /** 按设置里选的分支（常规 / 保守 / 激进）带上口味匹配度公式。 */
+    private suspend fun withMatchBranch(profile: AdvancedTasteProfile): AdvancedTasteProfile {
+        val key = runCatching { settingsDataStore.tasteMatchBranch.first() }.getOrNull()
+        val branch = TasteMatchBranch.fromKey(key)
+        return profile.copy(matchBranch = branch, headlineFormula = algorithmConfig.current().formula(branch))
     }
 
     /**
@@ -505,6 +525,9 @@ class TasteEngine @Inject constructor(
         /** 批量评分分成约这么多块并行（手机一般 4–8 核）。 */
         const val PARALLEL_CHUNKS = 4
         const val MIN_CHUNK = 32
+
+        /** 本地排名一次最多算多少部（作品资料库里通常几百到几千部）。 */
+        const val LOCAL_RANK_LIMIT = 20_000
 
         /** 批量评分记忆表的上限：超过就整表换新。 */
         const val BATCH_MEMO_LIMIT = 6_000

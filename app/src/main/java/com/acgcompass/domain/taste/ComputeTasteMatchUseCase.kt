@@ -59,7 +59,7 @@ data class TasteMatchResult(
     val analogy: TasteAnalogy? = null,
     /** 参与类比的已评分作品数（有标签、有社区评分的才算）；用来核对是否有评分没进模型。 */
     val modelSamples: Int = 0,
-    /** 换算成百分比之前的原始匹配分（[ComputeTasteMatchUseCase.headlineZ]）；没有评分模型时为 null。 */
+    /** 换算成百分比之前的原始匹配分（[HeadlineFormula.z]）；没有评分模型时为 null。 */
     val headlineZ: Double? = null,
 ) {
     /** 正向理由（真正「命中你口味」的维度）；负向贡献项不应被展示成「命中」。 */
@@ -93,6 +93,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
      * @param userRating 若用户已给该作品评分则传入（触发已评分偏置）；否则回退到画像内记录的评分。
      * @param tagOverrides AI 升维分类缓存，仅覆盖本地暂归为题材的未知标签；空表使用本地规则。
      */
+    @Suppress("LongParameterList") // 后两个是批量 / 排名场景的开关，都有默认值
     operator fun invoke(
         feature: WorkFeature,
         profile: AdvancedTasteProfile,
@@ -100,6 +101,8 @@ class ComputeTasteMatchUseCase @Inject constructor() {
         tagOverrides: Map<String, TasteCategory> = emptyMap(),
         /** 批量排序时为 false：「题材相近的已评分作品」只在详情页用，批量算它是白花时间。 */
         withNeighbors: Boolean = true,
+        /** 只要分数（本地排名）时为 false：不算推荐理由，每部作品约省三成时间。 */
+        withReasons: Boolean = true,
     ): TasteMatchResult {
         val rating = userRating ?: profile.ratedSubjectScores[feature.subjectId]
         val isRated = rating != null
@@ -160,7 +163,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             rawZ = rawZ,
             probability = p,
             isRated = isRated,
-            reasons = buildReasons(f, feature, profile),
+            reasons = if (withReasons) buildReasons(f, feature, profile) else emptyList(),
             evidence = evidence,
             familiarity = familiarity,
             communityScore10 = feature.bangumiScore?.toDouble()?.takeIf { it > 0.0 },
@@ -300,53 +303,16 @@ class ComputeTasteMatchUseCase @Inject constructor() {
     }
 
     companion object {
-        private const val HEADLINE_CENTER = 70.0
-        private const val HEADLINE_SCALE_UP = 18.0
-        private const val HEADLINE_SCALE_DOWN = 9.0
-        private const val POOL_CENTER = 72.0
-        private const val POOL_SCALE_UP = 14.0
-        private const val POOL_SCALE_DOWN = 12.0
-        private const val RATING_WEIGHT = 0.25
-        private const val SIMILARITY_WEIGHT = 0.1
-        private const val SIMILARITY_CENTER = 50.0
-        private const val SIMILARITY_SPREAD = 20.0
-        private const val MAX_SIMILARITY_Z = 2.0
-        private const val HEADLINE_MIN = 5
-        private const val HEADLINE_MAX = 97
-
         /**
-         * 原始匹配分：以相似作品类比为主（[TasteAnalogy.z]），加上四分之一的预计评分（标准分）和少量题材相似度。
-         * 口味匹配度衡量「这部像不像你会喜欢的那类」，可以和预计评分不同：作品口碑主要体现在预计评分里。
-         * [bold]（设置里的「更大胆」）时只看相似作品类比；找不到相似作品时仍按综合口径。
+         * 口味匹配度（主分数）：按 [formula]（设置里选的分支，见 [TasteMatchBranch]）把预计评分、
+         * 相似作品类比和题材相似度换算成百分比。
          */
-        fun headlineZ(ratingZ: Double, analogyZ: Double?, similarity: Int, bold: Boolean = false): Double {
-            if (bold && analogyZ != null) return analogyZ
-            val similarityZ = ((similarity - SIMILARITY_CENTER) / SIMILARITY_SPREAD)
-                .coerceIn(-MAX_SIMILARITY_Z, MAX_SIMILARITY_Z)
-            return RATING_WEIGHT * ratingZ + (analogyZ ?: 0.0) + SIMILARITY_WEIGHT * similarityZ
-        }
-
-        /**
-         * 没有个人刻度时的固定换算（作品池太小）：往上 70 + 18·z，往下 70 + 9·z。
-         */
-        fun headlineScore(ratingZ: Double, analogyZ: Double?, similarity: Int): Int =
-            fixedScore(headlineZ(ratingZ, analogyZ, similarity))
-
-        /** 原始匹配分按固定刻度换算。 */
-        fun fixedScore(z: Double): Int {
-            val scale = if (z >= 0.0) HEADLINE_SCALE_UP else HEADLINE_SCALE_DOWN
-            return (HEADLINE_CENTER + scale * z).roundToInt().coerceIn(HEADLINE_MIN, HEADLINE_MAX)
-        }
-
-        /**
-         * 有个人刻度时：按这部作品在你作品池里的位置换算。池里中等的作品约 [POOL_CENTER]%，
-         * 比池里九成作品更合口味的约 90%，垫底一成的约 57%。单调换算，作品之间的排序不变。
-         */
-        fun calibratedScore(z: Double, calibration: HeadlineCalibration): Int {
-            val standardized = (z - calibration.center) / calibration.spread
-            val scale = if (standardized >= 0.0) POOL_SCALE_UP else POOL_SCALE_DOWN
-            return (POOL_CENTER + scale * standardized).roundToInt().coerceIn(HEADLINE_MIN, HEADLINE_MAX)
-        }
+        fun headlineScore(
+            ratingZ: Double,
+            analogyZ: Double?,
+            similarity: Int,
+            formula: HeadlineFormula = TasteAlgorithmConfig.DEFAULT.formula(TasteMatchBranch.STANDARD),
+        ): Int = formula.score(formula.z(ratingZ, analogyZ, similarity))
 
         private const val REASON_MIN: Double = 1e-3
         private const val MAX_REASONS: Int = 4
@@ -380,22 +346,13 @@ private fun predictWithAnalogy(
     return model.predict(feature).withAnalogy(analogy, model.ratingStd) to analogy
 }
 
-/** 有评分模型时按原始匹配分出主分数（有个人刻度用个人刻度）；否则保持画像匹配分。 */
+/** 有评分模型时按所选分支的公式出主分数；否则保持画像匹配分。 */
 private fun TasteMatchResult.withHeadline(profile: AdvancedTasteProfile, basisRating: Double?): TasteMatchResult {
     val model = profile.divergence
     if (model == null || basisRating == null || !fromRatingModel) return this
     val ratingZ = (basisRating - model.meanRating) / model.ratingStd.coerceAtLeast(HEADLINE_MIN_STD)
-    val z = ComputeTasteMatchUseCase.headlineZ(ratingZ, analogy?.z, tasteSimilarity, profile.boldMatch)
-    val calibration = profile.headlineCalibration
-    return copy(
-        score = if (calibration != null) {
-            ComputeTasteMatchUseCase.calibratedScore(z, calibration)
-        } else {
-            ComputeTasteMatchUseCase.fixedScore(z)
-        },
-        modelSamples = model.examples.size,
-        headlineZ = z,
-    )
+    val z = profile.headlineFormula.z(ratingZ, analogy?.z, tasteSimilarity)
+    return copy(score = profile.headlineFormula.score(z), modelSamples = model.examples.size, headlineZ = z)
 }
 
 private const val HEADLINE_MIN_STD = 0.6

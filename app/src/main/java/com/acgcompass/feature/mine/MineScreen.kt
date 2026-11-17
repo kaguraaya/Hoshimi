@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -66,7 +66,7 @@ private val TIME_FORMATTER: DateTimeFormatter =
 @Composable
 fun MineRoute(
     onNavigateToSettings: () -> Unit,
-    onOpenPrivacySettings: () -> Unit,
+    onOpenDataSettings: () -> Unit,
     onOpenTasteProfile: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -88,7 +88,7 @@ fun MineRoute(
         syncing = syncing,
         onSyncBangumi = viewModel::onSyncBangumi,
         onNavigateToSettings = onNavigateToSettings,
-        onOpenPrivacySettings = onOpenPrivacySettings,
+        onOpenDataSettings = onOpenDataSettings,
         onOpenTasteProfile = onOpenTasteProfile,
         onOpenAbout = onOpenAbout,
         onOpenLibrary = onOpenLibrary,
@@ -105,7 +105,7 @@ fun MineRoute(
 fun MineScreen(
     state: UiState<MineUiState>,
     onNavigateToSettings: () -> Unit,
-    onOpenPrivacySettings: () -> Unit,
+    onOpenDataSettings: () -> Unit,
     onOpenTasteProfile: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -154,7 +154,7 @@ fun MineScreen(
                         ActionsCard(
                             onOpenTasteProfile = onOpenTasteProfile,
                             onNavigateToSettings = onNavigateToSettings,
-                            onOpenPrivacySettings = onOpenPrivacySettings,
+                            onOpenDataSettings = onOpenDataSettings,
                             onOpenAbout = onOpenAbout,
                         )
                     }
@@ -348,12 +348,12 @@ private fun StatRow(label: String, value: String) {
     }
 }
 
-/** 入口：口味画像、设置、隐私与数据管理、关于——成组的行，行首圆形图标底，行尾箭头。 */
+/** 入口：口味画像、设置、备份与导出、关于——成组的行，行首圆形图标底，行尾箭头。 */
 @Composable
 private fun ActionsCard(
     onOpenTasteProfile: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onOpenPrivacySettings: () -> Unit,
+    onOpenDataSettings: () -> Unit,
     onOpenAbout: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -368,12 +368,12 @@ private fun ActionsCard(
             RowGroupDivider()
             NavRow(title = "设置", onClick = onNavigateToSettings, leading = { IconWell(Icons.Outlined.Settings) })
             RowGroupDivider()
-            // 隐私控制、导入导出和缓存管理集中在设置页；此入口会自动展开对应区域。
+            // 直接打开设置里的「备份与导出」。
             NavRow(
-                title = "隐私与数据",
-                supporting = "清除 / 导出 / 导入 / 清理缓存",
-                onClick = onOpenPrivacySettings,
-                leading = { IconWell(Icons.Outlined.Shield) },
+                title = "备份与导出",
+                supporting = "导出 / 导入备份、导出 CSV、缓存管理",
+                onClick = onOpenDataSettings,
+                leading = { IconWell(Icons.Outlined.SaveAlt) },
             )
             RowGroupDivider()
             NavRow(title = "关于", onClick = onOpenAbout, leading = { IconWell(Icons.Outlined.Info) })
@@ -418,7 +418,7 @@ private fun MineScreenPreview() {
                 ),
             ),
             onNavigateToSettings = {},
-            onOpenPrivacySettings = {},
+            onOpenDataSettings = {},
             onOpenTasteProfile = {},
             onOpenAbout = {},
         )

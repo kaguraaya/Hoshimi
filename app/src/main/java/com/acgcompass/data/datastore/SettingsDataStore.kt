@@ -132,11 +132,11 @@ class SettingsDataStore @Inject constructor(
     /** 加入待补池时是否同步为 Bangumi「想看」。 */
     val syncBacklogToBangumi: Flow<Boolean> = dataStore.data.map { it[Keys.SYNC_BACKLOG_TO_BANGUMI] ?: true }
 
-    /** 口味匹配度「大胆」风格：只看你给题材相近的作品打的分。 */
-    val tasteMatchBold: Flow<Boolean> = dataStore.data.map { it[Keys.TASTE_MATCH_BOLD] ?: false }
+    /** 口味匹配度分支（[com.acgcompass.domain.taste.TasteMatchBranch.key]）：常规 / 保守 / 激进。 */
+    val tasteMatchBranch: Flow<String> = dataStore.data.map { it[Keys.TASTE_MATCH_BRANCH] ?: DEFAULT_MATCH_BRANCH }
 
-    suspend fun setTasteMatchBold(enabled: Boolean) {
-        dataStore.edit { it[Keys.TASTE_MATCH_BOLD] = enabled }
+    suspend fun setTasteMatchBranch(key: String) {
+        dataStore.edit { it[Keys.TASTE_MATCH_BRANCH] = key }
     }
 
     suspend fun setSyncBacklogToBangumi(enabled: Boolean) {
@@ -525,7 +525,7 @@ class SettingsDataStore @Inject constructor(
         allowAiAnalyzeReviews = this[Keys.ALLOW_AI_ANALYZE_REVIEWS] ?: SettingsState.DEFAULT_ALLOW_AI_ANALYZE_REVIEWS,
         scoreDiffAutoBackfill = this[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true,
         syncBacklogToBangumi = this[Keys.SYNC_BACKLOG_TO_BANGUMI] ?: true,
-        tasteMatchBold = this[Keys.TASTE_MATCH_BOLD] ?: false,
+        tasteMatchBranch = this[Keys.TASTE_MATCH_BRANCH] ?: DEFAULT_MATCH_BRANCH,
         recordTimeMachineSnapshots =
         this[Keys.RECORD_TIME_MACHINE_SNAPSHOTS]
             ?: SettingsState.DEFAULT_RECORD_TIME_MACHINE_SNAPSHOTS,
@@ -582,7 +582,7 @@ class SettingsDataStore @Inject constructor(
         val ALLOW_AI_ANALYZE_REVIEWS = booleanPreferencesKey("allow_ai_analyze_reviews")
         val SCORE_DIFF_AUTO_BACKFILL = booleanPreferencesKey("score_diff_auto_backfill")
         val SYNC_BACKLOG_TO_BANGUMI = booleanPreferencesKey("sync_backlog_to_bangumi")
-        val TASTE_MATCH_BOLD = booleanPreferencesKey("taste_match_bold")
+        val TASTE_MATCH_BRANCH = stringPreferencesKey("taste_match_branch")
         val PENDING_WISH_WORK_IDS = stringSetPreferencesKey("pending_wish_work_ids")
         val WISH_BACKFILL_DONE = booleanPreferencesKey("wish_backfill_done")
         val RECORD_TIME_MACHINE_SNAPSHOTS = booleanPreferencesKey("record_time_machine_snapshots")
@@ -639,3 +639,5 @@ enum class HomeModulePref(val key: String, val label: String, val defaultOn: Boo
 object HomeModulePrefs {
     val DEFAULT_KEYS: Set<String> = HomeModulePref.entries.filter { it.defaultOn }.map { it.key }.toSet()
 }
+
+private const val DEFAULT_MATCH_BRANCH = "standard"

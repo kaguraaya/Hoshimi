@@ -95,46 +95,60 @@ class TasteVerdictCoherenceTest : StringSpec({
         TasteVerdict.of(30, null) shouldBe "题材上不太对口"
     }
 
-    "headline mapping is centred and bounded" {
+    "headline mapping is centred, monotone and softly bounded" {
         ComputeTasteMatchUseCase.headlineScore(0.0, 0.0, 50) shouldBe 70
         ComputeTasteMatchUseCase.headlineScore(0.4, 0.5, 80) shouldBeInRange 84..92
-        // 低分端只按一半往下：同样幅度的负向证据，掉得比正向涨得少。
-        (70 - ComputeTasteMatchUseCase.headlineScore(-1.0, -1.0, 30)) shouldBeLessThan
-            (ComputeTasteMatchUseCase.headlineScore(1.0, 1.0, 70) - 70)
-        ComputeTasteMatchUseCase.headlineScore(3.0, 3.0, 95) shouldBe 97
+        val scores = (-30..30).map { ComputeTasteMatchUseCase.headlineScore(it / 10.0, it / 10.0, 50) }
+        scores.zipWithNext().all { (a, b) -> b >= a } shouldBe true
+        // 顶端平滑接近上限，不会一大片挤在 97。
+        ComputeTasteMatchUseCase.headlineScore(1.5, 1.5, 80) shouldBeLessThan 97
+        ComputeTasteMatchUseCase.headlineScore(30.0, 30.0, 95) shouldBe 97
+        ComputeTasteMatchUseCase.headlineScore(-30.0, -30.0, 5) shouldBe 5
     }
 
-    "the personal scale spreads scores around the local pool" {
-        val r = Random(5)
-        val pool = (0 until 80).map { i ->
-            val tags = (if (i % 3 == 0) listOf("搞笑") else emptyList()) + neutral.shuffled(r).take(3)
-            feature("p$i", tags, 6.0f + r.nextInt(25) / 10f)
-        }
-        val calibration = HeadlineCalibrator.fit(profile, pool, compute)
-        calibration shouldNotBe null
-        val c = calibration!!
-        (c.spread >= 0.25) shouldBe true
-        ComputeTasteMatchUseCase.calibratedScore(c.center, c) shouldBe 72
-        ComputeTasteMatchUseCase.calibratedScore(c.center + 1.3 * c.spread, c) shouldBeInRange 86..90
-        ComputeTasteMatchUseCase.calibratedScore(c.center - 1.3 * c.spread, c) shouldBeInRange 56..60
+    "the three branches behave as described" {
+        val config = TasteAlgorithmConfig.DEFAULT
+        val standard = config.formula(TasteMatchBranch.STANDARD)
+        val conservative = config.formula(TasteMatchBranch.CONSERVATIVE)
+        val aggressive = config.formula(TasteMatchBranch.AGGRESSIVE)
+        fun score(f: HeadlineFormula, rating: Double, analogy: Double) =
+            ComputeTasteMatchUseCase.headlineScore(rating, analogy, 50, f)
 
-        // 用个人刻度后，同一批作品的分数比固定刻度拉得更开，排序不变。
-        val calibrated = profile.copy(headlineCalibration = c)
-        val scores = pool.take(40).map { compute(it, calibrated).score }
-        (scores.max() - scores.min()) shouldBeGreaterThan 15
+        // 保守：只跟预计评分走，相似作品类比不影响。
+        score(conservative, 0.5, 2.0) shouldBe score(conservative, 0.5, -2.0)
+        (score(conservative, 0.8, 0.0) > score(conservative, 0.2, 0.0)) shouldBe true
+        // 激进：相似作品打分高时往上推得多，打分低时只轻扣。
+        val up = score(aggressive, 0.0, 1.0) - score(aggressive, 0.0, 0.0)
+        val down = score(aggressive, 0.0, 0.0) - score(aggressive, 0.0, -1.0)
+        (up > down) shouldBe true
+        // 预计评分在你的平均分以上时，激进不会因为类比偏低就掉到很低（不会「反向」）。
+        score(aggressive, 0.3, -1.0) shouldBeGreaterThan 65
+        // 常规：类比为主，正反两边同样对待。
+        (score(standard, 0.0, 1.0) - 70) shouldBeGreaterThan (70 - score(standard, 0.0, -1.0)) - 5
     }
 
-    "the bold style looks only at similar works you rated" {
-        ComputeTasteMatchUseCase.headlineZ(1.5, 0.3, 90, bold = true) shouldBe 0.3
-        // 找不到相似作品时仍按综合口径。
-        ComputeTasteMatchUseCase.headlineZ(1.0, null, 50, bold = true) shouldBe
-            ComputeTasteMatchUseCase.headlineZ(1.0, null, 50)
-        val bold = profile.copy(boldMatch = true)
-        val comedy = compute(feature("g", listOf("搞笑", "日常", "校园"), 6.6f), bold)
-        comedy.headlineZ shouldBe comedy.analogy?.z
+    "the selected branch is used by the engine" {
+        val conservative = profile.copy(
+            matchBranch = TasteMatchBranch.CONSERVATIVE,
+            headlineFormula = TasteAlgorithmConfig.DEFAULT.formula(TasteMatchBranch.CONSERVATIVE),
+        )
+        val work = feature("h", listOf("搞笑", "日常", "校园"), 7.2f)
+        val result = compute(work, conservative)
+        val m = conservative.divergence!!
+        val ratingZ = (result.prediction!!.rating - m.meanRating) / m.ratingStd.coerceAtLeast(0.6)
+        result.score shouldBe ComputeTasteMatchUseCase.headlineScore(
+            ratingZ,
+            result.analogy?.z,
+            result.tasteSimilarity,
+            conservative.headlineFormula,
+        )
     }
 
-    "too small a pool falls back to the fixed scale" {
-        HeadlineCalibrator.fit(profile, emptyList(), compute) shouldBe null
+    "score-only mode gives the same score without reasons" {
+        val work = feature("i", listOf("搞笑", "校园", "音乐"), 7.0f)
+        val full = compute(work, profile, withNeighbors = false)
+        val light = compute(work, profile, withNeighbors = false, withReasons = false)
+        light.score shouldBe full.score
+        light.reasons.isEmpty() shouldBe true
     }
 })

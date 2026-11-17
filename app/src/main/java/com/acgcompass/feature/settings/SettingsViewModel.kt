@@ -152,7 +152,7 @@ class SettingsViewModel @Inject constructor(
                         tasteMatchThreshold = settings.tasteMatchThreshold,
                         scoreDiffAutoBackfill = settings.scoreDiffAutoBackfill,
                         syncBacklogToBangumi = settings.syncBacklogToBangumi,
-                        tasteMatchBold = settings.tasteMatchBold,
+                        tasteMatchBranch = settings.tasteMatchBranch,
                     ),
                     saveNoticeVisible = notice,
                     bangumiApi = buildBangumiApiState(settings, local),
@@ -276,7 +276,6 @@ class SettingsViewModel @Inject constructor(
                 ToggleKeys.RECORD_TIME_MACHINE_SNAPSHOTS -> settingsDataStore.setRecordTimeMachineSnapshots(checked)
                 ToggleKeys.SCORE_DIFF_AUTO_BACKFILL -> settingsDataStore.setScoreDiffAutoBackfill(checked)
                 ToggleKeys.SYNC_BACKLOG_TO_BANGUMI -> settingsDataStore.setSyncBacklogToBangumi(checked)
-                ToggleKeys.TASTE_MATCH_BOLD -> settingsDataStore.setTasteMatchBold(checked)
                 ToggleKeys.AI_THINKING_ENABLED -> settingsDataStore.setAiThinkingEnabled(
                     localUi.value.ai.selectedProvider.toProviderStorageId(),
                     checked,
@@ -482,6 +481,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsDataStore.setRecommendMinCommunityScore(score) }
     }
 
+    /** 选择口味匹配度分支（常规 / 保守 / 激进）；口味引擎会随之重算。 */
+    fun onSetTasteMatchBranch(key: String) {
+        viewModelScope.launch { settingsDataStore.setTasteMatchBranch(key) }
+    }
+
     /** 设置口味匹配度阈值（0~1，0=关闭）。低于此匹配度的作品不进入推荐。 */
     fun onSetTasteMatchThreshold(threshold: Float) {
         viewModelScope.launch { settingsDataStore.setTasteMatchThreshold(threshold) }
@@ -618,7 +622,6 @@ internal object ToggleKeys {
     const val RECORD_TIME_MACHINE_SNAPSHOTS = "record_time_machine_snapshots"
     const val SCORE_DIFF_AUTO_BACKFILL = "score_diff_auto_backfill"
     const val SYNC_BACKLOG_TO_BANGUMI = "sync_backlog_to_bangumi"
-    const val TASTE_MATCH_BOLD = "taste_match_bold"
     const val AI_THINKING_ENABLED = "ai_thinking_enabled"
 }
 

@@ -83,8 +83,8 @@ class TasteProfileAutoUpdater @Inject constructor(
             }
             .flowOn(dispatchers.io)
             .launchIn(scope)
-        // 换了口味匹配度风格：用缓存重建一次画像，分数马上按新风格算。
-        settingsDataStore.tasteMatchBold
+        // 换了口味匹配度分支：用缓存重建一次画像，分数马上按新分支算。
+        settingsDataStore.tasteMatchBranch
             .distinctUntilChanged()
             .drop(1)
             .onEach { runCatching { tasteEngine.rebuildFromCache() } }

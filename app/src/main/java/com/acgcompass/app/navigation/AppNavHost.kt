@@ -268,8 +268,8 @@ fun AppNavHost(
                 onNavigateToSettings = {
                     navController.navigateOnce(AppDestination.Settings.route)
                 },
-                onOpenPrivacySettings = {
-                    navController.navigateOnce(settingsSourceRoute(com.acgcompass.feature.settings.PRIVACY_SOURCE_KEY))
+                onOpenDataSettings = {
+                    navController.navigateOnce(settingsSourceRoute(com.acgcompass.feature.settings.DATA_SOURCE_KEY))
                 },
                 onOpenTasteProfile = {
                     navController.navigateOnce(AppDestination.TasteProfile.route)

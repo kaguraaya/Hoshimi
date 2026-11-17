@@ -58,11 +58,11 @@ fun RatingPrediction.withAnalogy(analogy: TasteAnalogy?, ratingStd: Double): Rat
 
 private const val MIN_PREDICTED = 1.0
 private const val MAX_PREDICTED = 10.0
-private const val BOLD_FROM = 0.4
-private const val BOLD_FULL = 0.7
-private const val BOLD_WEIGHT = 0.25
+internal const val BOLD_FROM = 0.4
+internal const val BOLD_FULL = 0.7
+internal const val BOLD_WEIGHT = 0.25
 private const val MIN_SHIFT = 0.05
 private const val ANALOGY_LABEL = "相似作品你的评分"
-private const val ANALOGY_NEIGHBORS = 8
-private const val ANALOGY_SHRINK = 0.3
-private const val MIN_ANALOGY_STD = 0.6
+internal const val ANALOGY_NEIGHBORS = 8
+internal const val ANALOGY_SHRINK = 0.3
+internal const val MIN_ANALOGY_STD = 0.6

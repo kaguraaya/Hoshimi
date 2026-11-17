@@ -11,9 +11,9 @@ object TasteVerdict {
     /** 及格线：预计分低于它，无论排在你历史里的什么位置，都按「不太合口味」说。 */
     const val PASS_LINE = 6.0
 
-    private const val LIKELY_LOVE = 84
-    private const val LIKELY_GOOD = 74
-    private const val AVERAGE = 60
+    const val LIKELY_LOVE = 84
+    const val LIKELY_GOOD = 72
+    const val AVERAGE = 60
 
     private const val LEGACY_HIGH = 80
     private const val LEGACY_GOOD = 65

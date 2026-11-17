@@ -318,7 +318,7 @@ private fun SampleMineWithDock() {
                     ),
                 ),
                 onNavigateToSettings = {},
-                onOpenPrivacySettings = {},
+                onOpenDataSettings = {},
                 onOpenTasteProfile = {},
                 onOpenAbout = {},
             )

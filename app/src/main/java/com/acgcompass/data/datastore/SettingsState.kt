@@ -52,8 +52,8 @@ data class SettingsState(
     val scoreDiffAutoBackfill: Boolean = true,
     /** 加入待补池时同步为 Bangumi「想看」。 */
     val syncBacklogToBangumi: Boolean = true,
-    /** 口味匹配度「大胆」风格（只看相似作品）。 */
-    val tasteMatchBold: Boolean = false,
+    /** 口味匹配度分支：standard（常规）/ conservative（保守）/ aggressive（激进）。 */
+    val tasteMatchBranch: String = "standard",
     val bangumiEnabled: Boolean = DEFAULT_BANGUMI_ENABLED,
     val anilistEnabled: Boolean = DEFAULT_ANILIST_ENABLED,
     val jikanEnabled: Boolean = DEFAULT_JIKAN_ENABLED,

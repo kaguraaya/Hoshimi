@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -82,6 +83,7 @@ import com.acgcompass.data.credential.SourceId
 import com.acgcompass.data.datastore.SettingsState
 import com.acgcompass.data.datastore.ThemeMode
 import com.acgcompass.domain.model.ThemePreset
+import com.acgcompass.domain.taste.TasteMatchBranch
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 
@@ -132,6 +134,7 @@ data class SettingsActions(
     // 推荐社区均分下限与口味匹配度阈值
     val onSetRecommendMinScore: (Float) -> Unit = {},
     val onSetTasteMatchThreshold: (Float) -> Unit = {},
+    val onSetTasteMatchBranch: (String) -> Unit = {},
     val onSetThemeMode: (ThemeMode) -> Unit = {},
     val onSetDynamicColor: (Boolean) -> Unit = {},
     val onSetLightThemePreset: (ThemePreset) -> Unit = {},
@@ -404,6 +407,7 @@ private fun rememberSettingsActions(
             onSetAutoSyncInterval = viewModel::onSetAutoSyncInterval,
             onSetRecommendMinScore = viewModel::onSetRecommendMinScore,
             onSetTasteMatchThreshold = viewModel::onSetTasteMatchThreshold,
+            onSetTasteMatchBranch = viewModel::onSetTasteMatchBranch,
             onSetThemeMode = viewModel::onSetThemeMode,
             onSetDynamicColor = viewModel::onSetDynamicColor,
             onSetLightThemePreset = viewModel::onSetLightThemePreset,
@@ -540,23 +544,58 @@ private fun SettingsList(
                 onClick = { onOpenSource(SourceId.AI_PROVIDER.name) },
             )
         }
-        item(key = "more_header") { SettingsSectionHeader("更多") }
-        item(key = "cache_management") {
-            SettingsSummaryRow(
-                title = "缓存管理",
-                statusText = "设置数量或空间上限，按来源、分类或作品清理",
-                lastTestedAtText = null,
-                onClick = actions.onOpenCacheManagement,
-            )
-        }
-        item(key = "privacy") {
-            SettingsSummaryRow(
-                title = "隐私与数据",
-                statusText = "数据管理、备份导入导出与隐私开关",
-                lastTestedAtText = null,
-                onClick = { onOpenSource(PRIVACY_SOURCE_KEY) },
-            )
-        }
+        preferenceAndDataItems(data = data, actions = actions, onOpenSource = onOpenSource)
+    }
+}
+
+/** 设置首页的「偏好」「数据」两组入口。 */
+private fun LazyListScope.preferenceAndDataItems(
+    data: SettingsUiState,
+    actions: SettingsActions,
+    onOpenSource: (String) -> Unit,
+) {
+    item(key = "preferences_header") { SettingsSectionHeader("偏好") }
+    item(key = "recommend") {
+        SettingsSummaryRow(
+            title = "推荐与口味",
+            statusText = "口味匹配度算法（${TasteMatchBranch.fromKey(data.privacy.tasteMatchBranch).label}）、" +
+                "推荐门槛、补充评分",
+            lastTestedAtText = null,
+            onClick = { onOpenSource(RECOMMEND_SOURCE_KEY) },
+        )
+    }
+    item(key = "sync") {
+        SettingsSummaryRow(
+            title = "同步",
+            statusText = "自动同步 Bangumi、加入待补池时同步「想看」",
+            lastTestedAtText = null,
+            onClick = { onOpenSource(SYNC_SOURCE_KEY) },
+        )
+    }
+    item(key = "privacy") {
+        SettingsSummaryRow(
+            title = "隐私",
+            statusText = "短评是否发给 AI、是否记录时光机快照",
+            lastTestedAtText = null,
+            onClick = { onOpenSource(PRIVACY_SOURCE_KEY) },
+        )
+    }
+    item(key = "data_header") { SettingsSectionHeader("数据") }
+    item(key = "data") {
+        SettingsSummaryRow(
+            title = "备份与导出",
+            statusText = "导出 / 导入备份、导出 CSV",
+            lastTestedAtText = null,
+            onClick = { onOpenSource(DATA_SOURCE_KEY) },
+        )
+    }
+    item(key = "cache_management") {
+        SettingsSummaryRow(
+            title = "缓存管理",
+            statusText = "设置数量或空间上限，按来源、分类或作品清理",
+            lastTestedAtText = null,
+            onClick = actions.onOpenCacheManagement,
+        )
     }
 }
 
@@ -681,6 +720,9 @@ private const val SWATCH_DARK_CHECK = 0.5f
 
 /** 设置二级页的标识键：[SourceId] 枚举名复用为源键；隐私页用独立常量。 */
 internal const val PRIVACY_SOURCE_KEY = "PRIVACY"
+internal const val RECOMMEND_SOURCE_KEY = "RECOMMEND"
+internal const val SYNC_SOURCE_KEY = "SYNC"
+internal const val DATA_SOURCE_KEY = "DATA"
 
 /** 二级页标题映射（静态，避免依赖异步状态；与各源卡片标题保持一致）。 */
 internal fun settingsSourceTitle(sourceKey: String): String = when (sourceKey) {
@@ -690,7 +732,10 @@ internal fun settingsSourceTitle(sourceKey: String): String = when (sourceKey) {
     SourceId.MAL.name -> "MyAnimeList（官方）"
     SourceId.VNDB.name -> "VNDB"
     SourceId.AI_PROVIDER.name -> "AI 提供商"
-    PRIVACY_SOURCE_KEY -> "隐私与数据"
+    PRIVACY_SOURCE_KEY -> "隐私"
+    RECOMMEND_SOURCE_KEY -> "推荐与口味"
+    SYNC_SOURCE_KEY -> "同步"
+    DATA_SOURCE_KEY -> "备份与导出"
     else -> "设置"
 }
 
@@ -748,8 +793,25 @@ private fun SettingsSourceDetail(
             SourceId.AI_PROVIDER.name -> item(key = "ai_provider") {
                 AiProviderSettingsCard(card = data.aiProvider.copy(expanded = true), actions = actions)
             }
+            RECOMMEND_SOURCE_KEY -> item(key = "recommend") {
+                SettingsGroupCard("推荐与口味") { RecommendationSettings(card = data.privacy, actions = actions) }
+            }
+            SYNC_SOURCE_KEY -> item(key = "sync") {
+                SettingsGroupCard("同步") { AutoSyncSettings(card = data.privacy, actions = actions) }
+            }
             PRIVACY_SOURCE_KEY -> item(key = "privacy") {
-                PrivacySettingsCard(card = data.privacy.copy(expanded = true), actions = actions)
+                SettingsGroupCard("隐私") { PrivacyToggles(card = data.privacy, actions = actions) }
+            }
+            DATA_SOURCE_KEY -> {
+                item(key = "data") { SettingsGroupCard("备份与导出") { DataManagementActions(actions) } }
+                item(key = "data_cache") {
+                    SettingsSummaryRow(
+                        title = "缓存管理",
+                        statusText = "设置数量或空间上限，按来源、分类或作品清理",
+                        lastTestedAtText = null,
+                        onClick = actions.onOpenCacheManagement,
+                    )
+                }
             }
             else -> {
                 val card = data.cards.firstOrNull { it.sourceId.name == sourceKey }
@@ -1252,25 +1314,17 @@ private const val MAX_TAG_INPUT_DIGITS = 4
 
 // region 隐私卡片
 
-/**
- * 隐私控制卡片：是否允许把短评发给 AI、是否记录本地时光机快照两个开关，
- * 以及本地数据清除 / 缓存清除 / 导入 / 导出导航入口。
- */
+/** 设置二级页里的一组设置：标题 + 内容，直接展开。 */
 @Composable
-internal fun PrivacySettingsCard(card: PrivacyCardState, actions: SettingsActions, modifier: Modifier = Modifier) {
-    CollapsibleCard(
-        title = "隐私与数据",
-        expanded = card.expanded,
-        onToggleExpand = actions.onTogglePrivacyExpand,
-        modifier = modifier,
-    ) {
-        PrivacyToggles(card = card, actions = actions)
-        FlatDivider()
-        AutoSyncSettings(card = card, actions = actions)
-        FlatDivider()
-        RecommendationSettings(card = card, actions = actions)
-        FlatDivider()
-        DataManagementActions(actions)
+private fun SettingsGroupCard(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    PrismCard(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            content()
+        }
     }
 }
 
@@ -1326,7 +1380,20 @@ private fun AutoSyncSettings(card: PrivacyCardState, actions: SettingsActions) {
 
 @Composable
 private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActions) {
-    Text(text = "推荐与口味", style = MaterialTheme.typography.titleSmall)
+    val branch = TasteMatchBranch.fromKey(card.tasteMatchBranch)
+    OptionList(
+        title = "口味匹配度算法",
+        options = TasteMatchBranch.entries,
+        selected = branch,
+        label = { it.label },
+        onSelect = { actions.onSetTasteMatchBranch(it.key) },
+    )
+    Text(
+        text = branch.description,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    FlatDivider()
     Text(
         text = "「今晚看什么」只推荐社区均分 ≥ 下限、且口味匹配度 ≥ 阈值的作品；阈值越高越严格（结果可能更少）。",
         style = MaterialTheme.typography.bodySmall,
@@ -1359,14 +1426,6 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
         }
     }
     ToggleRow(
-        label = "口味匹配度更大胆",
-        description = "只看你给题材相近的作品打了多少分，不再参考作品口碑：更容易发现社区评价一般、但很合你口味的作品；" +
-            "整体准确度会低一些，口碑好的作品分数也可能变低",
-        checked = card.tasteMatchBold,
-        enabled = true,
-        onCheckedChange = { actions.onToggleChange(ToggleKeys.TASTE_MATCH_BOLD, it) },
-    )
-    ToggleRow(
         label = "自动补充其它平台评分",
         description = "联网且电量不低时，约每 6 小时在后台为只有一个平台评分的作品去 AniList、MAL 等补查评分，" +
             "每次最多 20 部，按各平台的速率上限排队；打开「发现 → 评分差异」时也会补一批",
@@ -1378,7 +1437,6 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
 
 @Composable
 private fun DataManagementActions(actions: SettingsActions) {
-    Text(text = "数据管理", style = MaterialTheme.typography.titleSmall)
     FilledTonalButton(onClick = actions.onExport, modifier = Modifier.fillMaxWidth()) {
         Text("导出备份（默认不含 key）")
     }
