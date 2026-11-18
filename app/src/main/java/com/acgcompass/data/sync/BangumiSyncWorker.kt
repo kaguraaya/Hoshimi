@@ -13,8 +13,10 @@ import dagger.assisted.AssistedInject
  * [BangumiSyncManager.syncCollections] 拉取最新 Bangumi 收藏到本地。
  *
  * 韧性：
- * - 未配置凭据 / 非官方 API 未确认时同步返回 Failure → 视为「已处理」（[Result.success]），不重试刷屏。
- * - 网络 / 超时类失败 → [Result.retry]，由 WorkManager 退避重试。
+ * - 未配置凭据时直接成功结束。
+ * - 网络、超时、服务端错误、限流（[isTransient]）→ [Result.retry]，由 WorkManager 退避重试，最多 [MAX_ATTEMPTS] 次，
+ *   之后等下一个周期。
+ * - 鉴权失效、非官方 API 未确认等再试也不会成功的失败 → [Result.success]，结果已写进同步状态，不反复重试。
  * - 任何异常都被兜底，绝不让进程崩溃。
  */
 @HiltWorker
@@ -27,14 +29,17 @@ class BangumiSyncWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = runCatching {
         // 未配置时不重试（用户尚未登录 Bangumi），直接成功结束。
         if (!syncManager.isConfigured()) return Result.success()
-        when (syncManager.syncCollections()) {
+        when (val result = syncManager.syncCollections()) {
             is AppResult.Success -> Result.success()
-            // 失败大多为网络/限流/鉴权过期；交给 WorkManager 退避重试。
-            is AppResult.Failure -> Result.retry()
+            is AppResult.Failure ->
+                if (result.error.isTransient() && runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
         }
-    }.getOrElse { Result.retry() }
+    }.getOrElse { if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success() }
 
     companion object {
         const val UNIQUE_WORK_NAME = "bangumi_auto_sync"
+
+        /** 同一个周期内最多重试的次数。 */
+        private const val MAX_ATTEMPTS = 3
     }
 }

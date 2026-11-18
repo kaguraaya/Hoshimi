@@ -63,6 +63,9 @@ object HttpClientFactory {
             .writeTimeout(timeouts.writeSeconds, TimeUnit.SECONDS)
             .callTimeout(timeouts.callSeconds, TimeUnit.SECONDS)
             .retryOnConnectionFailure(retryOnConnectionFailure)
+            // HTTP/2 心跳：复用的长连接被中途静默掐断时（经 CDN 的跨境线路常见），心跳失败即关闭这条连接，
+            // 后续请求新建连接，而不是一直卡在死连接上等到超时。
+            .pingInterval(HTTP2_PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
             // IPv4 优先：避免双栈域名在 IPv6 不通的网络上每次都先卡满连接超时（见 [Ipv4FirstDns]）。
             .dns(Ipv4FirstDns())
 
@@ -74,4 +77,6 @@ object HttpClientFactory {
 
         return builder.build()
     }
+
+    private const val HTTP2_PING_INTERVAL_SECONDS = 15L
 }

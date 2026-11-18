@@ -30,7 +30,25 @@
 首页的放送数据缓存 30 分钟，周视图 6 小时，Tenrai 本季结果在进程内缓存 6 小时（`BroadcastScheduleRepositoryImpl`）。
 缺少精确时刻时显示 Bangumi 的星期信息。
 
-## 4. 缓存与失败处理
+## 4. Bangumi 收藏同步
+
+`BangumiSyncManager.syncCollections`：
+
+- 首页、我的、时光机、口味分析和后台自动同步（`BangumiSyncWorker`）可能同时触发，同一时间只跑一次，后来的调用共享正在进行的那次结果；
+  同步在管理器自己的作用域里运行，发起页面离开不会中断它。
+- 开始前按需续期 OAuth token（`BangumiTokenRefresher`，剩余少于 3 天时续期），后台自动同步也能保持登录。
+- 分页拉取全部收藏（每页 50 条，最多 1 万条）；`getMe` 和每一页遇到网络、超时、服务端错误或限流时，间隔 2 秒、5 秒各重试一次。
+- 网络类失败的提示会说明 API 与网页走不同线路，并指向「设置 → 数据源 → Bangumi → API 地址」。
+- 自动同步默认关闭，在「设置 → 同步」选择间隔（WorkManager 下限 15 分钟，需联网）；
+  临时失败最多重试 3 次，鉴权失效等再试也不会成功的失败不重试，等下一个周期。
+- 收藏在 Bangumi 上删除后，本地记录目前不会随之删除。
+
+**线路**：Bangumi 官方 API 只有 `api.bgm.tv` 一个生产域名（经 Cloudflare），没有官方备用线路；`api.bgm38.tv` 是数据会重置的开发环境，
+`next.bgm.tv` 是新版网页的私有接口，没有兼容性保证。网页 `bangumi.tv` 不经 Cloudflare、也不提供 API，所以会出现网页能打开而 API 连不上的情况。
+应用支持在设置里换成社区反代或自定义地址；非官方地址默认不发送个人 Token，需要用户确认风险。
+HTTP 客户端开启了 15 秒一次的 HTTP/2 心跳，长连接被中途掐断时会关闭重建，避免请求一直卡在死连接上。
+
+## 5. 缓存与失败处理
 
 - HTTP 缓存在 OkHttp 层，限流拦截器排在缓存之后（`NetworkModule.networkInterceptors`），命中缓存的请求不占限流额度。
 - 收到 `429` / `503` 后，同一数据源的全部请求按 `Retry-After` 一起退避，不重试同一个请求。
@@ -38,7 +56,7 @@
 - 补充源不可用时，详情页保留 Bangumi、AniList 和本地缓存，渐进展示，不自动换用 Jikan。
 - 作品资料（`work_features`）长期保存，「缓存管理」里的清理不会删除；它是口味算法的输入，见 [taste-algorithm.md](taste-algorithm.md) §2。
 
-## 5. 后台任务
+## 6. 后台任务
 
 都用 WorkManager，执行时间由系统决定；请求都标为 `RequestPriority.BACKGROUND`，给前台让路。
 
@@ -50,7 +68,7 @@
 | 公共缓存补充 | 从榜单分页补充公共作品缓存（可在缓存管理里关闭） | 分页，受限流约束 |
 | `TasteProfileAutoUpdater` | 收藏变化后只读缓存重建口味画像，缺资料的作品后台补齐 | 每批 40 部 |
 
-## 6. Jikan 与 Tenrai 的选择依据
+## 7. Jikan 与 Tenrai 的选择依据
 
 2026-08-09 在同一网络下以只读请求实测：
 

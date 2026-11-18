@@ -11,12 +11,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Bangumi OAuth token **启动期自动续期器**。
+ * Bangumi OAuth token **自动续期器**。
  *
- * 在应用启动时调用 [refreshIfNeeded]：当本地存有 OAuth `refresh_token`，且 access token 已过期
- * 或将在 [REFRESH_THRESHOLD_MS] 内过期时，用 `refresh_token` 静默换取新 token 并写回加密存储。
+ * 在应用启动时和每次收藏同步前（[com.acgcompass.data.sync.BangumiSyncManager]）调用 [refreshIfNeeded]：
+ * 当本地存有 OAuth `refresh_token`，且 access token 已过期或将在 [REFRESH_THRESHOLD_MS] 内过期时，
+ * 用 `refresh_token` 静默换取新 token 并写回加密存储。
  *
- * 纯客户端方案（无后端中转）：依赖用户已通过 [com.acgcompass.feature.auth.BangumiOAuthViewModel]
+ * 依赖用户已通过 [com.acgcompass.feature.auth.BangumiOAuthViewModel]
  * 完成一次 OAuth 登录、拿到 `refresh_token`。手动粘贴的 PAT（无 `refresh_token`）不受影响、原样保留。
  *
  * **安全**：token 仅在内存流转并写入加密存储，绝不记录日志。失败静默——续期失败不影响
@@ -36,11 +37,9 @@ class BangumiTokenRefresher @Inject constructor(
         val refreshToken = secret.refreshToken?.takeIf { it.isNotBlank() } ?: return@withLock
         val expiresAt = secret.tokenExpiresAt
         val now = System.currentTimeMillis()
-        // 纯客户端「打开即续期」模型下，Bangumi OAuth access token 固定 7 天、无法申请更长时长，
-        // 只能靠 refresh_token 在用户打开应用时续期。为把有效期窗口拉到最长——只要 token 已超过约 1 天
-        // （剩余 < REFRESH_THRESHOLD_MS）就在本次打开续期，使每次打开近乎必续、每天最多续一次（当天再开时
-        // token 已刷新回 7 天、剩余 > 阈值即跳过）。如此只要用户在任意 7 天窗口内打开过一次，token 就不过期。
-        // 未知过期时刻一律尝试续期。
+        // Bangumi OAuth access token 固定 7 天、无法申请更长时长，只能靠 refresh_token 续期。
+        // 剩余寿命少于 REFRESH_THRESHOLD_MS（3 天）时续期；应用启动和每次收藏同步（含后台自动同步）前都会调用，
+        // 所以只要 7 天内打开过应用或跑过一次自动同步，token 就不会过期。未知过期时刻一律尝试续期。
         if (expiresAt != null && expiresAt - now > REFRESH_THRESHOLD_MS) return@withLock
         val gate = settingsDataStore.bangumiOAuthRefreshGate.first()
         if (gate.attemptedExpiresAt == expiresAt && gate.retryAt > now) return@withLock

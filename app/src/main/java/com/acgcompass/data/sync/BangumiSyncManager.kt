@@ -11,6 +11,7 @@ import com.acgcompass.data.local.dao.WorkDao
 import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.data.local.mapper.toEntity
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
+import com.acgcompass.data.remote.bangumi.BangumiTokenRefresher
 import com.acgcompass.data.remote.bangumi.BangumiUserSubjectCollectionDto
 import com.acgcompass.data.remote.bangumi.toBasicWorkFeature
 import com.acgcompass.data.remote.bangumi.toWork
@@ -20,8 +21,13 @@ import com.acgcompass.domain.taste.WorkFeatureCompleteness
 import com.acgcompass.domain.taste.WorkFeatureRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** 一次 Bangumi 同步的结果统计。 */
 data class SyncReport(
@@ -40,8 +46,12 @@ data class SyncReport(
  * [UserCollectionDao]），供我的页统计 / 详情页我的记录 / 口味画像 / 时光机消费。
  *
  * 凭据门控：未配置 Token 时返回 [AppResult.Failure]（Unauthorized），不发请求。
- * 错误处理：getMe / 分页失败均映射为带可读原因的 [AppError]（401/403/网络/超时/解析）。
+ * 错误处理：getMe / 分页失败均映射为带可读原因的 [AppError]（401/403/网络/超时/解析）；
+ * 单个请求遇到网络、超时、服务端错误时短暂重试（[retryTransient]）。
  * 写入为 best-effort 幂等：以 `BANGUMI:<subjectId>` 为主键 upsert，重复同步只更新不重复。
+ *
+ * 同一时间只跑一次同步：首页、我的、时光机、口味分析和后台任务同时触发时，后来的调用等待并共享
+ * 正在进行的那一次的结果。同步开始前先按需续期 OAuth token（后台任务可能在用户多天没打开应用时运行）。
  */
 @Singleton
 @Suppress("LongParameterList")
@@ -56,8 +66,13 @@ class BangumiSyncManager @Inject constructor(
     private val syncStatusRepository: SyncStatusRepository,
     private val workFeatureRepository: WorkFeatureRepository,
     private val featureEnrichmentScheduler: WorkFeatureEnrichmentScheduler,
+    private val tokenRefresher: BangumiTokenRefresher,
     private val dispatchers: DispatcherProvider,
 ) {
+    /** 同步在自己的作用域里跑：发起同步的页面离开时，同步本身不会被取消。 */
+    private val syncScope = CoroutineScope(SupervisorJob() + dispatchers.io)
+    private val inFlightLock = Mutex()
+    private var inFlight: Deferred<AppResult<SyncReport>>? = null
 
     /** 是否已配置 Bangumi 凭据（个人同步前置条件）。 */
     suspend fun isConfigured(): Boolean =
@@ -70,13 +85,24 @@ class BangumiSyncManager @Inject constructor(
      * 无论成功或失败，结果都会写入 [SyncStatusRepository]，使各页（首页/我的/时光机/口味）
      * 读取到同一份同步状态，且重启后仍可见。
      */
-    suspend fun syncCollections(): AppResult<SyncReport> = withContext(dispatchers.io) {
-        val result = runSyncInternal()
+    suspend fun syncCollections(): AppResult<SyncReport> {
+        val run = inFlightLock.withLock {
+            inFlight?.takeIf { it.isActive } ?: syncScope.async { syncAndRecord() }.also { inFlight = it }
+        }
+        return run.await()
+    }
+
+    private suspend fun syncAndRecord(): AppResult<SyncReport> {
+        runCatching { tokenRefresher.refreshIfNeeded() }
+        val result = when (val raw = runSyncInternal()) {
+            is AppResult.Failure -> AppResult.Failure(raw.error.withBangumiApiHint())
+            is AppResult.Success -> raw
+        }
         when (result) {
             is AppResult.Success -> syncStatusRepository.recordSuccess(result.data)
             is AppResult.Failure -> syncStatusRepository.recordFailure(result.error.cause)
         }
-        result
+        return result
     }
 
     private suspend fun runSyncInternal(): AppResult<SyncReport> {
@@ -94,7 +120,7 @@ class BangumiSyncManager @Inject constructor(
                 ),
             )
         }
-        val username = when (val me = bangumi.getMe()) {
+        val username = when (val me = retryTransient { bangumi.getMe() }) {
             is AppResult.Failure -> return AppResult.Failure(me.error)
             is AppResult.Success -> me.data.username.ifBlank { me.data.nickname }
         }
@@ -120,7 +146,10 @@ class BangumiSyncManager @Inject constructor(
         val lightweightFeatures = mutableListOf<WorkFeature>()
 
         while (pages < MAX_PAGES) {
-            when (val page = bangumi.getUserCollections(username = username, limit = PAGE_SIZE, offset = offset)) {
+            val page = retryTransient {
+                bangumi.getUserCollections(username = username, limit = PAGE_SIZE, offset = offset)
+            }
+            when (page) {
                 is AppResult.Failure -> {
                     // 首页就失败 → 整体失败；后续页失败 → 计入 failed 并停止。
                     if (offset == 0) return AppResult.Failure(page.error)
@@ -218,7 +247,9 @@ class BangumiSyncManager @Inject constructor(
 
     private companion object {
         const val PAGE_SIZE = 50
-        const val MAX_PAGES = 40
+
+        /** 最多 200 页（1 万条收藏）。 */
+        const val MAX_PAGES = 200
 
         /** Bangumi 收藏 type：1 想看 / 2 看过 / 3 在看 / 4 搁置 / 5 抛弃。 */
         fun mapStatus(type: Int?): String? = when (type) {
