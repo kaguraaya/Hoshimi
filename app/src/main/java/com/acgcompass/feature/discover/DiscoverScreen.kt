@@ -1197,17 +1197,10 @@ private fun SourceHeader(label: String) {
     )
 }
 
+/** 榜单条目：名次放在卡片封面的角标里，卡片之间不插单独的名次行。 */
 @Composable
 private fun RankedWorkCard(rank: Int, card: WorkCardUiModel, onClick: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = "#$rank",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        WorkCard(model = card, onClick = onClick)
-    }
+    WorkCard(model = card, rank = rank, onClick = onClick)
 }
 
 /** 公共发现池加载状态行（加载中 / 错误+重试 / 提示）。 */

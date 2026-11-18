@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.CardDefaults
@@ -25,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,6 +49,7 @@ import coil.request.ImageRequest
  * - 所有颜色取自 [MaterialTheme]，深色模式与动态取色自动适配。
  *
  * @param model   卡片展示数据。
+ * @param rank    榜单名次；不为空时在封面左上角显示名次角标。
  * @param onClick 卡片点击回调（如进入详情）。
  *
  */
@@ -56,6 +60,7 @@ fun WorkCard(
     model: WorkCardUiModel,
     modifier: Modifier = Modifier,
     containerColor: Color = Color.Unspecified,
+    rank: Int? = null,
     onClick: () -> Unit = {},
 ) {
     // 列表卡片：无描边无投影，取比所在表面深一级的填充色，圆角 24；封面与卡片同心（24 − 内边距 12）。
@@ -74,10 +79,13 @@ fun WorkCard(
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            CoverImage(
-                coverUrl = model.coverUrl,
-                contentDescription = model.title,
-            )
+            Box {
+                CoverImage(
+                    coverUrl = model.coverUrl,
+                    contentDescription = model.title,
+                )
+                if (rank != null) RankBadge(rank = rank, modifier = Modifier.align(Alignment.TopStart))
+            }
 
             Column(
                 modifier = Modifier
@@ -177,6 +185,31 @@ private fun CoverImage(coverUrl: String?, contentDescription: String, modifier: 
         }
     }
 }
+
+/**
+ * 榜单名次：贴在封面左上角，外圆角与封面同心、内角取徽章圆角。
+ * 中性底色 + 加粗数字，只做标识，不用主色（数值不染主色）。
+ */
+@Composable
+private fun RankBadge(rank: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RANK_BADGE_SHAPE)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = RANK_BADGE_ALPHA))
+            .semantics { contentDescription = "第 $rank 名" }
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = rank.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+private val RANK_BADGE_SHAPE = RoundedCornerShape(topStart = 12.dp, bottomEnd = 8.dp)
+private const val RANK_BADGE_ALPHA = 0.92f
 
 /** 封面缺失占位：在 surfaceVariant 背景上居中显示破图图标。 */
 @Composable
