@@ -4,93 +4,78 @@
 
 # Hoshimi · 多源 ACG 口味罗盘
 
-**跨源聚合 · 口味匹配 · 个性化推荐 · 无剧透 AI 评价**
+**跨源聚合 · 口味匹配 · 预计评分 · 无剧透 AI 评价**
 
-[![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84?logo=android&logoColor=white)](#environment)
-[![Language](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](#tech-stack)
-[![UI](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)](#tech-stack)
+[![Platform](https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84?logo=android&logoColor=white)](#运行环境)
+[![Language](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)](#技术栈)
+[![UI](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)](#技术栈)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 </div>
 
-**Hoshimi**（星見）是一款多源 ACG（动画 / 游戏 / 视觉小说）发现与「口味匹配」Android 应用。聚合 Bangumi、AniList、Jikan(MyAnimeList)、VNDB 等数据源，跨源匹配同一作品，并基于用户长期口味提供个性化推荐与无剧透 AI 评价。
+**Hoshimi**（星見）是一款 Android 上的 ACG（动画 / 视觉小说）发现与口味匹配应用。它以 Bangumi 为主数据源，
+同时聚合 AniList、MyAnimeList（经 Tenrai 或官方 API）与 VNDB 的评分，根据你自己的评分历史给出「口味匹配度」和「预计你会打几分」，
+并用这两个数字驱动推荐。
 
-> **English** — Hoshimi is a multi-source anime / visual-novel discovery app for Android. It aggregates Bangumi, AniList, Jikan (MyAnimeList) and VNDB, performs cross-source matching, and produces personalized, taste-aware recommendations with spoiler-free AI analysis. All credentials stay encrypted on-device; nothing is uploaded to any first-party server.
+> **English** — Hoshimi is an Android app for discovering anime and visual novels. It uses Bangumi as the primary source,
+> aggregates ratings from AniList, MyAnimeList (via Tenrai or the official API) and VNDB, and predicts how well an
+> unseen title fits your taste from your own rating history. Credentials stay encrypted on the device; there is no
+> first-party server.
 
 ---
 
 ## 目录
 
-- [功能特性](#功能特性)
-- [核心算法：口味匹配](#核心算法口味匹配)
-- [快速开始（用户）](#快速开始用户)
-- [运行环境](#environment)
-- [从源码构建（开发者）](#从源码构建开发者)
-- [配置 AI 与数据源](#配置-ai-与数据源)
-- [项目架构](#项目架构)
-- [技术栈](#tech-stack)
+- [功能](#功能)
+- [口味算法概览](#口味算法概览)
+- [运行环境](#运行环境)
+- [从源码构建](#从源码构建)
+- [配置 Bangumi 与 AI](#配置-bangumi-与-ai)
+- [项目结构](#项目结构)
+- [开发约定](#开发约定)
+- [文档索引](#文档索引)
+- [技术栈](#技术栈)
 - [隐私与安全](#隐私与安全)
-- [参与贡献](#参与贡献)
-- [致谢与参考项目](#致谢与参考项目)
+- [致谢](#致谢)
 - [许可证](#许可证)
 
 ---
 
-## 功能特性
+## 功能
 
-- **多源聚合与跨源匹配** — 同一作品在 Bangumi / AniList / MAL / VNDB 的条目自动聚类；按媒介类型（动画 / 漫画 / 游戏）、可信度与评分人数选取代表条目，避免「同名小说 / 视觉小说」抢占动画评分。
-- **口味画像** — 从你评价过的作品构建长期正 / 负向偏好，**仅采用作品自身的 Bangumi 社区标签**并过滤年份 / 媒介格式等噪声标签。
-- **口味匹配度** — 详情页给出「这部作品与我的口味有多契合」，以长期口味为主、平台评分为辅，可解释，数据不足时显式标注低置信。
-- **今晚看什么** — 按当前心情 / 接受程度进行**硬性标签筛选**（排除冲突题材），再结合长期口味与社区口碑排序；无合适候选时引导放宽条件。
-- **探索队列** — 卡片式逐部探索「还没接触」的新作品：单击卡片翻面看简介，左滑略过 / 右滑加入待补池，冷却机制避免重复推荐。
-- **无剧透 AI 评价雷达 / 评论摘要** — 聚合社区评论，输出亮点 / 雷点 / 制作 / 节奏，全程剧透过滤。
-- **榜单与发现** — 公共榜单、跨平台评分差异、题材筛选。
-- **收藏与进度同步** — 与 Bangumi 收藏 / 观看状态双向同步。
+- **跨源聚合** — 同一作品在 Bangumi / AniList / MAL / VNDB 的条目按标题与媒介类型聚类，详情页并排展示各平台评分；
+  「评分差异」页列出各平台分歧较大的作品。后台会自动补齐只有一个平台评分的作品（默认开启，可以在设置里关闭）。
+- **口味匹配度与预计评分** — 详情页给出这部作品和你口味的契合度（百分比）以及预计你会打的分数，并列出理由和你评过的相近作品。
+  匹配度有三种算法分支（常规 / 保守 / 激进），在「设置 → 推荐与口味」中切换。
+- **口味画像** — 汇总你的打分习惯、偏好与回避的题材、与大众的分歧；可选用 AI 把社区标签细分到更精确的维度。
+- **今晚看什么** — 按可用时间、心情标签和接受程度选片，给出稳妥 / 探索 / 随机三档推荐。
+- **探索队列** — 逐张卡片浏览没接触过的作品，右滑加入待补池、左滑略过，排序会根据滑动反馈调整。
+- **待补池与补番优先级** — 综合口味匹配、预计评分和社区口碑给出优先级与理由；加入待补池的作品可以同步为 Bangumi「想看」（可关闭）。
+- **无剧透 AI 评价** — 聚合社区短评，输出亮点、雷点、制作与节奏；需要自行配置 AI 服务商。
+- **收藏同步与时光机** — 同步 Bangumi 收藏与评分，按时间回看自己的评分记录。
+- **本地作品库** — 浏览过的作品（标签、评分、封面、放送日期、Staff）长期保存在本地，清理缓存不会删除，用作匹配度参照。
+- **备份与导出** — 导出 / 导入完整备份，导出 CSV。
 
-## 核心算法：口味匹配
+## 口味算法概览
 
-「口味匹配度」是 Hoshimi 的核心。它回答一个问题：**这部我还没看的作品，和我的长期口味有多契合？** 与「直接展示社区高分」不同，它以**你个人的评分历史**为主构建画像，社区口碑仅作辅助。整条管线为纯 Kotlin 领域逻辑，无 Android / IO 依赖，可离线单元测试与回归验证。
+口味算法全部是纯 Kotlin 领域逻辑（`domain/taste`、`domain/recommend`），不依赖 Android，可以离线单元测试。详细说明见
+[docs/taste-algorithm.md](docs/taste-algorithm.md)，评测方法与结果见 [docs/algorithm-eval.md](docs/algorithm-eval.md)。
 
-**1. 十二维口味画像**
-从你评价过的作品中，按十二个维度提取正 / 负向偏好：题材、组合标签、XP（萌点）、载体、制作方、评论倾向、角色、原作来源、声优、年代、梗、社区共识。仅采用作品自身的社区标签，并过滤年份 / 媒介格式等噪声。评分经**均值中心化**（以你个人均分为中性点）——「略低于自己平均线」不等于「讨厌」，避免高均分用户的常看题材被误判为负向。高频通用标签按 **IDF 逆频降权**，稀有的、有区分度的标签获得更高话语权。
+1. **预计评分**（`PersonalDivergenceModel`）：`预计评分 = 大众基线 + 个人分歧`。大众基线是社区评分按你的打分尺度换算的结果；
+   个人分歧学习「你的评分 − 基线」的残差，由标签岭回归、同系列前作、取向（热门程度 / 年代 / 篇幅）三部分组成，每一部分都可以还原成理由。
+   在 Bangumi15M 抽样的 750 位用户上做 5 折盲测，Spearman 0.603、Top10 命中率 0.740（只用社区评分为 0.547 / 0.693）。
+2. **相似作品类比**（`TasteAnalogy`）：找出你评过的、标签最相近的 8 部作品，用它们的标准化评分估计你对新作品的态度。
+3. **口味匹配度**（`HeadlineFormula`）：把预计评分、类比结果和题材相似度按所选分支的权重合成原始分 z，再用固定刻度映射到 5–97%：
+   z ≥ 0 时平滑接近上限，z < 0 时线性下降。三个分支只在权重上不同：
+   - **常规**：以类比为主（高低对等），预计评分占一半；
+   - **保守**：只看预计评分；
+   - **激进**：以预计评分为底，类比偏高时加倍上推、偏低时只轻扣。
+4. **推荐排序**：今晚看什么（`TonightRanker`）按预计满意度、当晚意图匹配、时间拟合、社区口碑、新鲜度等加权，再用 MMR 去同质化；
+   探索队列（`ExploreRanker`）在满意度上叠加滑动反馈，并留约三成名额给口碑好但你不熟悉的跨界作品。
 
-**2. rawZ 融合与温度校准**
-候选作品在各维度上与画像做加权点积，得到原始契合度 `rawZ`；再经**温度化 logistic 校准**映射到 0–100 的匹配分。温度随样本量自适应（样本足够时用保序回归 isotonic，不足时回退 logistic 并设温度地板），保证冷启动不崩、样本充足时分数拉得开。
+算法的全部可调参数有统一的模板格式（`hoshimi-taste-algorithm`），见 [docs/algorithm-template.md](docs/algorithm-template.md)。
 
-**3. 评分锚定（已评分作品）**
-对你已经打过分的作品，以你的**显式评分**为主锚（如 10 分→稳定 90+、8 分→80+），长期画像仅做小幅修正，避免「小众挚爱与画像整体重合少」时被拉低。
-
-**4. 口味门控社区融合**
-纯内容 / 标签信号有天花板——对「品质 / 共识驱动 + 跨题材」型用户尤其明显（例：同一制作组的两部催泪番，你可能一部打 10、一部打 5，纯标签无从区分）。为此引入**口味门控**：当画像对某作**有明确立场**（匹配分远离中性 50）时，几乎完全由口味主导；仅当画像**没什么话说**（分数接近中性）时，才按社区口碑与其**票数置信度**补位。门控公式 `w_c = w_c^max · (1 − |p − 50| / 50)^γ · votesConf`，既补齐了口味无法判断的盲区，又保证强命中 / 强反口味不会被社区分带偏。
-
-**5. 离线验证（LOO）**
-用**留一交叉验证**（Leave-One-Out）在真实评分数据上度量预测分与真实评分的 **Spearman 排序相关**（`TasteLooValidationTest`，读本地 `app/build/loo/dataset.json`）；无真实数据的环境另有合成用户 LOO（`TasteSyntheticLooTest`）做方向性防退化。门控融合上线后，真实数据集的 LOO Spearman 从基线 0.29 提升到 **0.54**，高 / 中 / 低分档的预测分呈健康单调分布。所有阈值与关系型断言由守卫测试固化，防止回归。
-
-**6. 匹配度与满意度是两个问题（v4 / v5）**
-- **口味匹配度**（显示用）回答「这部像不像你的口味」：画像分为主，门控社区融合只在画像没立场时补位。社区分经 `50 + 45·tanh((score − 6.6)/1.3)` 映射到同一量纲；没有标签的作品向中性收缩并下调置信度（「没有信息」不等于「不喜欢」）；画像样本上限 120，并为中间分作品保留名额。
-- **预计评分**（推荐排序用）回答「你看完会打几分」：`预计评分 = 大众基线 + 个人分歧`。大众基线是社区评分按你的打分尺度换算的结果；个人分歧只学「你的评分 − 基线」的残差，由三部分相加——残差对标签的岭回归、同系列前作的评分习惯、热门程度 / 年代 / 篇幅上的取向。每一分的偏离都能还原成原因（「悬疑 +0.4」「小众冷门作 +0.1」），详情页和口味画像页会展示出来。
-- 结构和系数来自真实数据：在公开数据集 Bangumi15M 抽样的 750 位用户上做 5 折盲测，Spearman **0.603**、Top10 命中率 **0.740**（只用社区分 0.547 / 0.693）；预测与真实评分相差 1 分以内的占 77%。模型说明见 [docs/algorithm-v6-divergence.md](docs/algorithm-v6-divergence.md)，评测方法与「试过但没采用的方案」见 [docs/algorithm-eval.md](docs/algorithm-eval.md)。
-- **兴趣信号**：想看 / 抛弃等收藏状态与探索队列的左右滑不进评分预测（真实数据上没有增益——它们反映的是想不想看，不是看完满不满意），而是以很小的权重进入匹配度的画像。
-
-**7. 推荐排序（今晚看什么 / 探索队列）**
-排序逻辑为纯 Kotlin 领域对象（`domain/recommend`），可离线单测：
-- **当晚意图匹配**（`intent/IntentMatcher`）：用户选的标签先映射成意图包（等价 / 近义 / 沾边 / 冲突标签），再按标签在作品里的**代表性**（标注人数份额 + 名次，长篇作品的情绪类标签稀释）判断是不是「这一类」；多个标签按 soft-AND 处理（算术 + 几何覆盖、命中数不足与关键意图缺失惩罚、组合模板、主气质冲突），意图基本不符的作品今晚分封顶。回归用例用的是 Bangumi 真实标签：选「催泪」不出《航海王》，选「校园 + 恋爱 + 日常 + 搞笑」出《樱花庄》而不出《灵能百分百》。
-- **今晚看什么**（`TonightRanker`）：今晚分 = 预计满意度 0.34 + 意图契合 0.32 + 时间拟合 0.10 + 社区口碑 0.07 + 未曝光 0.06 + 新鲜度 0.06 + 补完轻松度 0.05 − 重复推荐惩罚 − 主气质冲突惩罚。三档分工：稳妥 = 最高分；探索 = MMR（λ=0.78）与稳妥题材错开；随机 = 高分段 softmax 抽样。同系列至多一部。
-- **探索队列**（`ExploreRanker`）：效用 = 满意度 + 左右滑反馈修正（标签级 Beta 平滑加入率，「暂不」按半次计，±12 分封顶）；MMR 去同质化；约三成名额给「社区 ≥ 7.2、画像熟悉度低」的跨界候选；每次滑动后重排尚未看到的卡片。
-
-> 设计原则：**可解释、不伪造、不过拟合**。每个匹配分都能追溯到具体维度的正负贡献；数据不足时显式标注低置信而非编造；门控设计确保社区分只在口味无法判断处起作用，避免退化成「社区高分复读机」。
-
-## 快速开始（用户）
-
-1. 在 [Releases](../../releases) 下载最新 `app-release.apk`（或参考下文自行构建 Debug 包）。
-2. 在设备上允许「安装未知来源应用」，安装 APK。
-3. 首次启动可直接浏览公共榜单；如需个性化功能：
-   - **口味画像 / 收藏同步**：在「设置 → Bangumi」登录并同步收藏。
-   - **AI 评价 / 口味分析**：在「设置 → AI」填入你自己的 API Key（见 [配置](#配置-ai-与数据源)）。
-
-> 说明：本项目为个人 / 学习用途，所有第三方数据归各平台所有，请遵守对应平台的使用条款。
-
-## <a id="environment"></a>运行环境
+## 运行环境
 
 | 项目 | 要求 |
 | --- | --- |
@@ -98,120 +83,154 @@
 | 目标系统 | Android 14（API 34） |
 | 架构 | 通用（纯 Kotlin / Compose，无 NDK） |
 
-## 从源码构建（开发者）
+## 从源码构建
 
-**前置要求**：JDK 17、Android SDK（compileSdk 34）。无需单独安装 Gradle，使用仓库内置 Wrapper。
+**前置要求**：JDK 17 或更高（构建脚本以 Java 17 为目标，JDK 21 也可以）、Android SDK（compileSdk 34、build-tools 34）。
+使用仓库内置的 Gradle Wrapper，不需要单独安装 Gradle。
 
 ```bash
-# 克隆
 git clone https://github.com/kaguraaya/Hoshimi.git
 cd Hoshimi
+echo "sdk.dir=/path/to/android-sdk" > local.properties
 
-# 构建 Debug APK
-./gradlew assembleDebug          # Windows: .\gradlew.bat assembleDebug
-
-# 仅编译校验（更快）
-./gradlew :app:compileDebugKotlin
-
-# 运行单元测试
-./gradlew testDebugUnitTest
+./gradlew :app:assembleDebug            # Debug 包：app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:compileDebugKotlin       # 只编译，最快
+./gradlew :app:testDebugUnitTest        # 单元测试（含 Robolectric 界面走查与截图测试）
+./gradlew :app:ktlintCheck :app:detekt  # 代码风格与静态检查
 ```
 
-- 产物：`app/build/outputs/apk/debug/app-debug.apk`
-- 若工程路径包含非 ASCII 字符（如中文目录），`gradle.properties` 中需保留：`android.overridePathCheck=true`
+- Windows 用 `.\gradlew.bat`；工程路径含非 ASCII 字符时，`gradle.properties` 里要保留 `android.overridePathCheck=true`。
+- 截图测试的输出在 `app/build/outputs/roborazzi/`。
 
-## 配置 AI 与数据源
+### Release 构建
 
-应用内「设置」页支持配置：
-
-- **AI 服务商**：OpenAI 兼容 / Gemini / DeepSeek / OpenRouter 等。填写 `baseUrl` + `API Key` + 模型名即可；支持推理模型（Kimi、DeepSeek-R 等）。
-- **Bangumi**：用于登录、收藏同步、口味画像。
-
-Bangumi OAuth 应用凭据不会提交到仓库。Debug 构建可在根目录 `local.properties` 配置：
+Release 必须签名。签名配置放在仓库根目录的 `keystore.properties`（已被 `.gitignore` 忽略），密钥文件放在仓库外：
 
 ```properties
-bangumi.clientId=
-bangumi.clientSecret=
-bangumi.oauthProxyBaseUrl=
+storeFile=/absolute/path/to/release.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
 ```
 
-Bangumi OAuth 回调地址固定为 `hoshimi://oauth/bangumi/callback`。OAuth 配置仅从未跟踪的本地文件或 CI 安全变量读取；缺少配置时按钮会保持禁用。
-私有 OAuth 代理地址为可选构建注入项，只用于换取和刷新令牌；不代理公共 Bangumi API。未配置应用凭据时源码构建仍可完成，一键登录入口保持禁用。
-被 Git 忽略的 `keystore.properties`，其 `storeFile` 指向仓库外的正式密钥；缺少有效签名配置时 Release 任务会直接失败，避免误发不可升级的安装包。
+缺少有效的签名配置时，Release 任务会直接失败，避免产出无法覆盖升级的安装包。
 
-CI/发布构建也可使用 `BANGUMI_CLIENT_ID`、`BANGUMI_CLIENT_SECRET` 与 `BANGUMI_OAUTH_PROXY_BASE_URL` 环境变量。纯客户端构建中的 `client_secret` 仍可能被逆向提取，发布前应使用专用 OAuth 应用并定期轮换。
+```bash
+./gradlew :app:assembleRelease                         # 不压缩
+./gradlew :app:assembleRelease -Phoshimi.minify=true   # 开启 R8 与资源压缩，体积约为五分之一
+```
 
-> **安全提示**：所有 API Key 与 Token 仅通过 `EncryptedSharedPreferences` 保存在**设备本地加密存储**中，绝不上传、绝不写入仓库。请勿在 issue / PR 中粘贴你的密钥。
+可选参数：
 
-## 项目架构
+| 参数 | 作用 |
+| --- | --- |
+| `-Phoshimi.minify=true` | 开启代码与资源压缩。压缩包发布前要在真机上完整回归 |
+| `-Phoshimi.applicationIdSuffix=.preview` | 给包名加后缀，可以和正式版同时安装 |
+| `-Phoshimi.versionNameSuffix=-preview` | 给版本名加后缀 |
 
-分层（Clean Architecture 思路）+ 按功能划分模块：
+覆盖安装要求包名相同、签名证书相同、versionCode 不低于已安装版本。
+
+## 配置 Bangumi 与 AI
+
+**Bangumi 一键登录**需要构建时注入 OAuth 应用凭据。它们不进入仓库，按以下顺序读取（取第一个非空值）：
+
+1. 根目录 `local.properties`：
+   ```properties
+   bangumi.clientId=
+   bangumi.clientSecret=
+   bangumi.oauthProxyBaseUrl=
+   ```
+2. Gradle 属性：`bangumiClientId`、`bangumiClientSecret`、`bangumiOauthProxyBaseUrl`；
+3. 环境变量：`BANGUMI_CLIENT_ID`、`BANGUMI_CLIENT_SECRET`、`BANGUMI_OAUTH_PROXY_BASE_URL`。
+
+- 回调地址固定为 `hoshimi://oauth/bangumi/callback`。
+- 配置了 `oauthProxyBaseUrl` 时，令牌的换取和刷新由代理完成，`client_secret` 不会打进安装包；
+  没有代理时 `client_secret` 会进入 BuildConfig，纯客户端应用里的密钥可能被逆向提取，发布时应使用专用 OAuth 应用并定期轮换。
+- 没有凭据也能构建，一键登录入口保持禁用，用户可以在设置里手动填写 Access Token。
+
+**AI 服务商**在应用内「设置」配置：OpenAI、Google Gemini、DeepSeek、OpenRouter，或任意 OpenAI 兼容接口（填 Base URL、API Key 与模型名）。
+**MyAnimeList 官方 API** 需要用户自己的 Client ID；不填时 MAL 评分由 Tenrai 提供。
+
+## 项目结构
 
 ```
 app/src/main/java/com/acgcompass/
-├── core/         # 通用基础：AppResult/AppError、设计系统(Compose 主题/组件)、UiState
-├── domain/       # 领域层（纯 Kotlin）：model、repository 接口、usecase、ai 抽象、matching 跨源匹配
-├── data/         # 数据层：Room(local)、Retrofit(remote: bangumi/anilist/jikan/mal/vndb/ai)、
-│                 #         repository 实现、sync 同步、mapper 映射
-└── feature/      # 表现层：按功能分包（detail / recommender / taste / settings / ranking ...），
-                  #         每个功能含 Compose Screen + ViewModel + Contract（MVVM + StateFlow）
+├── app/       # Application、MainActivity、导航与底栏
+├── core/      # 设计系统（core/designsystem）、网络（限流、DNS、错误映射）、通用工具
+├── domain/    # 纯 Kotlin：模型、仓库接口、用例、口味算法（taste）、推荐排序（recommend）、跨源匹配（matching）、AI 抽象
+├── data/      # Room（local）、Retrofit 远端（remote：bangumi / anilist / tenrai / mal / vndb / jikan / ai）、
+│              # 仓库实现、DataStore、后台任务（sync）、口味引擎（taste）、备份
+└── feature/   # 页面：home / discover / explore / recommender / detail / library / backlog / taste /
+               # timemachine / visualnovel / imports / settings / mine 等，每个页面是 Compose Screen + ViewModel + Contract
 ```
 
-- **数据流**：`Remote/Local → Repository → UseCase → ViewModel(StateFlow) → Compose Screen`
-- **跨源匹配**：`domain/matching` 按规范化标题聚类，按媒介类型 / 可信度 / 评分人数选代表条目。
-- **AI 管线**：`AiEngine` 组装提示词 + schema → Provider 调用 → 校验 / 修复 / 低置信兜底 → 剧透过滤；失败时回退本地规则，页面绝不无响应。
-- **绝不伪造**：数据缺失统一以「暂无数据」占位，不编造评分 / 评价 / 观看顺序。
+- 数据流：`Remote / Local → Repository → UseCase → ViewModel（StateFlow）→ Compose Screen`。
+- 依赖方向由 `DependencyRulesTest` 检查：feature 层不能新增对 `data.local` 与 `data.remote` 的引用（已有的少数例外记录在 `app/config/architecture-baseline.txt`）。
+- 数据库是 Room，结构文件导出到 `app/schemas/`；每次升级版本都要写迁移（`data/local/migration/AcgMigrations.kt`），不使用破坏性迁移。
+- 后台任务用 WorkManager：作品资料补齐（`WorkFeatureEnrichmentWorker`）、补充其它平台评分（`RatingBackfillWorker`）、
+  「想看」同步（`BangumiWishSyncWorker`）、口味画像自动更新（`TasteProfileAutoUpdater`）。
 
-## <a id="tech-stack"></a>技术栈
+## 开发约定
 
-- **语言 / UI**：Kotlin · Jetpack Compose · Material 3
+- 提交说明使用 [Conventional Commits](https://www.conventionalcommits.org/)，例如 `fix(画像): ...`、`feat(口味): ...`。
+- 每个版本同时修改 `app/build.gradle.kts` 的 `versionName` / `versionCode`，并在 `CHANGELOG.md` 顶部写 `## x.y.z - YYYY-MM-DD` 段落。
+- 提交前运行 `./gradlew :app:testDebugUnitTest :app:ktlintCheck :app:detekt`。
+  - ktlint：行宽 120，import 按字母序；
+  - detekt：方法长度 60 行、复杂度 15，基线在 `app/config/detekt-baseline.xml`。
+- 单元测试方法名使用 ASCII。
+- 界面遵循 [docs/design-system.md](docs/design-system.md)；各页面的间距互相独立，改一个页面不要影响其它页面。
+- 网络请求遵守 [docs/rate-limits.md](docs/rate-limits.md) 中的限流；后台请求使用 `RequestPriority.BACKGROUND`，给前台让路。
+- 改动口味算法前先跑 [docs/algorithm-eval.md](docs/algorithm-eval.md) 中的评测。
+
+## 文档索引
+
+| 文档 | 内容 |
+| --- | --- |
+| [docs/taste-algorithm.md](docs/taste-algorithm.md) | 口味算法：预计评分、相似作品类比、匹配度分支、推荐排序、代码位置 |
+| [docs/algorithm-eval.md](docs/algorithm-eval.md) | 离线评测：Bangumi15M 盲测、个人数据 LOO、合成用户 LOO，以及试过但没有采用的方案 |
+| [docs/algorithm-template.md](docs/algorithm-template.md) | 算法模板格式与每个参数的说明（`docs/algorithm-template.json` 由代码导出） |
+| [docs/data-sources.md](docs/data-sources.md) | 各数据源的用途、回退与缓存策略 |
+| [docs/rate-limits.md](docs/rate-limits.md) | 各数据源的官方速率上限与本应用的限流设置 |
+| [docs/design-system.md](docs/design-system.md) | 界面设计规范（表面层级、描边、选中态、尺寸） |
+| [CHANGELOG.md](CHANGELOG.md) | 版本记录 |
+
+## 技术栈
+
+- **语言 / UI**：Kotlin 2.0 · Jetpack Compose · Material 3 · Haze（底栏毛玻璃）
 - **异步**：Coroutines / Flow
 - **依赖注入**：Hilt
-- **持久化**：Room（含 schema 导出与迁移测试）· DataStore
+- **持久化**：Room · DataStore · EncryptedSharedPreferences
 - **网络**：Retrofit / OkHttp · kotlinx.serialization
-- **安全**：EncryptedSharedPreferences（凭据本地加密）
-- **构建**：Gradle（Kotlin DSL）· KSP · JDK 17
+- **后台**：WorkManager
+- **测试**：JUnit · Robolectric · Compose UI Test · Roborazzi
+- **构建**：Gradle（Kotlin DSL）· KSP · ktlint · detekt
 
 ## 隐私与安全
 
-- 不收集用户数据；所有凭据与同步 Token 仅存于本地加密存储。
-- AI 请求仅发往你自行配置的服务商。
+- 没有自有服务器，不收集用户数据。API Key 与 Token 只保存在设备本地加密存储（`EncryptedSharedPreferences`）。
+- AI 请求只发往你配置的服务商；是否把短评发给 AI 可以在「设置 → 隐私」关闭。
+- 不要在 Issue / PR 里粘贴任何密钥。签名文件、`keystore.properties`、`local.properties` 都在 `.gitignore` 中，不要提交。
 
-## 参与贡献
+## 致谢
 
-欢迎 Issue 与 PR：
+数据与商标归各自平台所有；本项目仅用于个人 / 学习用途，请遵守各平台的使用条款。
 
-1. Fork 并基于 `main` 创建特性分支：`git checkout -b feat/xxx`
-2. 提交信息建议遵循 [Conventional Commits](https://www.conventionalcommits.org/)（如 `fix(rating): ...`）。
-3. 提交前请确保 `./gradlew :app:compileDebugKotlin` 与单元测试通过。
-4. 发起 PR 并简要描述动机与改动点。
+- **数据源**：[Bangumi](https://bgm.tv/) · [AniList](https://anilist.co/) · [Tenrai](https://api.tenrai.org/documentation) ·
+  [MyAnimeList](https://myanimelist.net/) · [VNDB](https://vndb.org/) · [Jikan](https://jikan.moe/)（只用于连接测试）
+- **离线评测数据**：[Bangumi15M](https://www.kaggle.com/datasets/klion23/bangumi15m)（不随应用分发）
+- **界面设计参考**：[FlClash](https://github.com/chen08209/FlClash)（GPL-3.0，未包含其源代码）
+- **借鉴过设计思路的开源项目**（源码未包含在本仓库，代码为独立实现）：
 
-## 致谢与参考项目
+| 项目 | 借鉴点 |
+| --- | --- |
+| [xiaoyvyv/bangumi](https://github.com/xiaoyvyv/bangumi) | Bangumi 原生客户端的条目 / 搜索 / 收藏同步页面结构 |
+| [animeko (Ani)](https://github.com/open-ani/animeko) | 数据层、Room 缓存与 Repository / UseCase 分层 |
+| [czy0729/Bangumi](https://github.com/czy0729/Bangumi) | 时光机、条目详情、排行与每日放送等页面的功能设计 |
+| [MZZB Score](https://github.com/kisekinoumi/mzzbscore) | 跨站评分聚合与差异对比 |
+| [Kotatsu](https://github.com/KotatsuApp/Kotatsu) | 自适应图标与胶囊搜索栏的设计语言 |
 
-数据、商标归各自平台所有；本项目仅用于个人 / 学习用途。
-
-### 数据源
-
-[Bangumi](https://bgm.tv/) · [AniList](https://anilist.co/) · [Jikan](https://jikan.moe/)（非官方 MyAnimeList API）· [MyAnimeList](https://myanimelist.net/) 官方 API · [VNDB](https://vndb.org/)。
-
-### 核心开源技术
-
-Jetpack Compose · Material 3 · Hilt · Room · Retrofit / OkHttp · kotlinx.serialization · Kotlin Coroutines / Flow。
-
-### 学习参考的开源项目
-
-开发过程中研读了以下开源项目并借鉴其设计思路。**这些项目的源码仅在本地作研究用途，未包含在本仓库**（未包含在公开仓库中）；其著作权归各自作者所有，在此致谢。
-
-| 项目 | 类型 | 本项目主要借鉴点 |
-| --- | --- | --- |
-| [xiaoyvyv/bangumi](https://github.com/xiaoyvyv/bangumi) | Kotlin 安卓原生 Bangumi 客户端 | Bangumi 原生客户端结构、条目 / 搜索 / 收藏同步的页面信息架构 |
-| [animeko (Ani)](https://github.com/open-ani/animeko) | Kotlin / Compose Multiplatform 追番客户端 | 数据层 / Room 缓存 / Repository·UseCase 分层、榜单与 Compose 表现层架构 |
-| [czy0729/Bangumi](https://github.com/czy0729/Bangumi) | React Native Bangumi 客户端（页面覆盖完整） | 时光机、条目详情、排行 / 索引 / 每日放送等完整页面的功能设计 |
-| [MZZB Score](https://github.com/kisekinoumi/mzzbscore) | 多站动画评分聚合工具（Bangumi / MAL / AniList / Filmarks） | 跨源评分聚合、标准化与差异对比的数据流程 |
-| [Kotatsu](https://github.com/KotatsuApp/Kotatsu) | 开源 Android 漫画阅读器（Material 3） | 自适应桌面图标随系统明暗切换的实现思路、圆角胶囊搜索栏的设计语言 |
-
-> 借鉴均限于**公开的设计思路与接口用法**，Hoshimi 的代码为独立实现（Kotlin / Jetpack Compose）。若有作者认为引用不当，欢迎通过 Issue 联系修正。
+应用内「我的 → 关于」中的开源许可清单由构建时的实际依赖自动生成。
 
 ## 许可证
 
-本项目以 [MIT License](LICENSE) 开源，可自由使用、修改与分发，但需保留版权与许可声明。第三方数据 / 商标归各自平台所有。
+本项目以 [MIT License](LICENSE) 开源。第三方数据与商标归各自平台所有。

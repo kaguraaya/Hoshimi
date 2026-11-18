@@ -32,8 +32,8 @@ z = ratingWeight·预计评分标准分 + analogyUpWeight·max(0, 类比标准�
 z ≥ 0：匹配度 = center + (cap − center)·(1 − e^(−rise·z))     平滑接近上限
 z < 0：匹配度 = center + fall·z                                  不低于 floor
 ```
-- 预计评分标准分 = (预计评分 − 你的平均分) / 你的评分标准差（至少 0.6）。
-- 类比标准分：你给题材最接近的几部作品打的分相对你平均分的高低（§4）。
+- 预计评分标准分 = (预计评分 − 用户均分) / 用户评分标准差（至少 0.6）。
+- 类比标准分：用户给题材最接近的几部作品打的分相对用户均分的高低（§4）。
 - 题材相似度标准分 = (十二维画像匹配分 − 50) / 20，限制在 ±2。
 
 | 分支 | ratingWeight | analogyUp | analogyDown | similarity | center | rise | fall | 含义 |
