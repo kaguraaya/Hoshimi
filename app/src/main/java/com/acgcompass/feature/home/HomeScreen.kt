@@ -451,6 +451,7 @@ private fun DailyDrawCard(draw: DailyDraw) {
     FlatCard(title = "今日补番签", icon = Icons.Outlined.AutoAwesome) {
         DrawLine("宜", draw.shouldText)
         DrawLine("忌", draw.shouldNotText)
+        if (draw.byAi) HintText("由 AI 结合你的待补池生成")
     }
 }
 

@@ -4,16 +4,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.network.NetworkJson
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.credential.CredentialStore
+import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.data.sync.BangumiSyncManager
 import com.acgcompass.data.sync.SyncStatusRepository
+import com.acgcompass.domain.ai.AiEngine
+import com.acgcompass.domain.ai.AiRunOptions
+import com.acgcompass.domain.ai.AiRunResult
+import com.acgcompass.domain.ai.AiTask
+import com.acgcompass.domain.ai.DailyDrawOutput
+import com.acgcompass.domain.model.AiTaskType
+import com.acgcompass.domain.repository.AiRepository
 import com.acgcompass.domain.repository.BacklogFilter
 import com.acgcompass.domain.repository.BacklogRepository
 import com.acgcompass.domain.repository.BacklogSort
 import com.acgcompass.domain.repository.WorkRepository
 import com.acgcompass.domain.schedule.BroadcastScheduleRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.time.LocalDate
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +31,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -34,7 +48,8 @@ import kotlinx.coroutines.launch
  *
  * 待补池为空时发射 [UiState.Empty]（携带导入引导 CTA）。
  * 同步提醒由 [CredentialStore.observeStatus] 折叠（仅元数据，无明文）；今日补番签
- * 由纯函数 [buildDailyDraw] 依当日日期 + 待补池规模确定性生成。
+ * 由纯函数 [buildDailyDraw] 依当日日期 + 待补池规模确定性生成。打开「今日补番签由 AI 生成」且配置了 AI 时，
+ * 每天用 AI 结合待补池生成一次（按日期缓存），失败时仍显示内置的签。
  *
  * 韧性：列表流异常兜底为 [UiState.Error]，绝不崩溃。
  */
@@ -49,7 +64,12 @@ class HomeViewModel @Inject constructor(
     private val settingsDataStore: com.acgcompass.data.datastore.SettingsDataStore,
     private val userCollectionDao: com.acgcompass.data.local.dao.UserCollectionDao,
     private val scheduleRepository: BroadcastScheduleRepository,
+    private val aiEngine: AiEngine,
+    private val aiRepository: AiRepository,
 ) : ViewModel() {
+
+    /** AI 生成的今日补番签；为 null 时用内置的签。 */
+    private val aiDraw = MutableStateFlow<DailyDraw?>(null)
 
     private val scheduleRefreshState = MutableStateFlow(HomeScheduleRefreshState(refreshing = true))
 
@@ -61,6 +81,57 @@ class HomeViewModel @Inject constructor(
         // 首页公共模块进入时按需加载一次；失败时保留本地缓存并显示中性提示。
         viewModelScope.launch { runCatching { workRepository.loadPublicDiscovery(background = true) } }
         onHomeVisible()
+        viewModelScope.launch {
+            combine(
+                settingsDataStore.aiDailyDraw,
+                credentialStore.observeStatus().map { it[CredentialSourceId.AI_PROVIDER]?.configured == true },
+            ) { enabled, configured -> enabled && configured }
+                .distinctUntilChanged()
+                .collectLatest { on -> aiDraw.value = if (on) runCatching { loadAiDraw() }.getOrNull() else null }
+        }
+    }
+
+    /** 读当天的缓存；没有就用 AI 生成一次并缓存。待补池为空或失败时返回 null。 */
+    private suspend fun loadAiDraw(): DailyDraw? {
+        val today = LocalDate.now()
+        val fingerprint = aiDailyDrawFingerprint(today)
+        val cached = (aiRepository.getCached(AiTask.GLOBAL_WORK_ID, AiTaskType.DAILY_DRAW) as? AppResult.Success)?.data
+        val reusable = cached?.takeIf {
+            it.inputFingerprint == fingerprint && it.promptVersion == AI_DAILY_DRAW_PROMPT_VERSION
+        }
+        return if (reusable != null) parseAiDraw(reusable.payloadJson) else generateAiDraw(today, fingerprint)
+    }
+
+    private suspend fun generateAiDraw(today: LocalDate, fingerprint: String): DailyDraw? {
+        val items = backlogRepository.observeBacklog(BacklogFilter.NONE, BacklogSort.ADDED_DESC).first()
+        val worksById = workRepository.observeWorks().first().associateBy { it.id }
+        val entries = items.map { HomeBacklogEntry(it, worksById[it.workId]) }
+        val result = if (entries.any { it.work != null }) {
+            aiEngine.run(
+                AiTask.DailyDraw(buildAiDailyDrawInput(today, entries, System.currentTimeMillis())),
+                AiRunOptions(confirmed = true, temperature = AI_DRAW_TEMPERATURE),
+            )
+        } else {
+            null
+        }
+        val success = result as? AiRunResult.Success
+        val draw = success?.payload?.toDailyDraw()
+        if (success != null && draw != null) {
+            aiRepository.put(
+                success.result.copy(inputFingerprint = fingerprint, promptVersion = AI_DAILY_DRAW_PROMPT_VERSION),
+            )
+        }
+        return draw
+    }
+
+    private fun parseAiDraw(payloadJson: String): DailyDraw? = runCatching {
+        NetworkJson.instance.decodeFromString(DailyDrawOutput.serializer(), payloadJson)
+    }.getOrNull()?.toDailyDraw()
+
+    private fun DailyDrawOutput.toDailyDraw(): DailyDraw? {
+        val yes = should.trim().removePrefix("宜").trim(' ', '：', ':')
+        val no = shouldNot.trim().removePrefix("忌").trim(' ', '：', ':')
+        return if (yes.isBlank() || no.isBlank()) null else DailyDraw(yes, no, byAi = true)
     }
 
     private val _syncMessage = MutableStateFlow<String?>(null)
@@ -76,7 +147,8 @@ class HomeViewModel @Inject constructor(
     private val scheduleFlow = combine(
         scheduleRepository.observeUpcoming(limit = 6),
         scheduleRefreshState,
-    ) { upcoming, refresh -> upcoming to refresh }
+        aiDraw,
+    ) { upcoming, refresh, draw -> Triple(upcoming, refresh, draw) }
 
     val uiState: StateFlow<UiState<HomeUiState>> =
         combine(
@@ -92,6 +164,7 @@ class HomeViewModel @Inject constructor(
         ) { items, works, statuses, syncModulesCollections, schedule ->
             val upcoming = schedule.first
             val scheduleState = schedule.second
+            val aiDailyDraw = schedule.third
             val syncStatus = syncModulesCollections.first
             val enabledModules = syncModulesCollections.second
             val collections = syncModulesCollections.third
@@ -102,7 +175,7 @@ class HomeViewModel @Inject constructor(
                     continueItems = buildContinueItems(collections, worksById),
                     backlogSummary = buildBacklogSummary(entries),
                     syncReminder = buildSyncReminder(statuses, System.currentTimeMillis(), syncStatus),
-                    dailyDraw = buildDailyDraw(backlogSize = entries.size),
+                    dailyDraw = aiDailyDraw ?: buildDailyDraw(backlogSize = entries.size),
                     moods = buildMoodSuggestions(
                         collections.map { MoodSignal(it.localWorkId, it.status, it.rating, it.updatedAt) },
                         worksById,
@@ -182,6 +255,9 @@ class HomeViewModel @Inject constructor(
 
     private companion object {
         const val STOP_TIMEOUT_MS = 5_000L
+
+        /** AI 补番签的采样温度：比结构化任务高一点，让每天的签有些变化。 */
+        const val AI_DRAW_TEMPERATURE = 0.8
         const val SCHEDULE_RETRY_GUARD_MS = 15_000L
     }
 }

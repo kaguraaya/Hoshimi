@@ -167,6 +167,13 @@ data class TagDimensionAssignment(
     val dimension: String = "",
 )
 
+/** 今日补番签：当天「宜」「忌」各一句。 */
+@Serializable
+data class DailyDrawOutput(
+    val should: String = "",
+    val shouldNot: String = "",
+)
+
 /** VNDB 原文简介的简体中文翻译；只承载忠实译文与资料充分度。 */
 @Serializable
 data class VndbTranslationOutput(

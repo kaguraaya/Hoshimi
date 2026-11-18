@@ -465,6 +465,13 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it[Keys.SCORE_DIFF_AUTO_BACKFILL] = enabled }
     }
 
+    /** 首页「今日补番签」是否用 AI 生成。 */
+    val aiDailyDraw: Flow<Boolean> = dataStore.data.map { it[Keys.AI_DAILY_DRAW] ?: false }
+
+    suspend fun setAiDailyDraw(enabled: Boolean) {
+        dataStore.edit { it[Keys.AI_DAILY_DRAW] = enabled }
+    }
+
     /** 设置是否记录本地时光机快照。 */
     suspend fun setRecordTimeMachineSnapshots(enabled: Boolean) {
         dataStore.edit { it[Keys.RECORD_TIME_MACHINE_SNAPSHOTS] = enabled }
@@ -539,6 +546,7 @@ class SettingsDataStore @Inject constructor(
         allowAiAnalyzeReviews = this[Keys.ALLOW_AI_ANALYZE_REVIEWS] ?: SettingsState.DEFAULT_ALLOW_AI_ANALYZE_REVIEWS,
         scoreDiffAutoBackfill = this[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true,
         syncBacklogToBangumi = this[Keys.SYNC_BACKLOG_TO_BANGUMI] ?: true,
+        aiDailyDraw = this[Keys.AI_DAILY_DRAW] ?: false,
         tasteMatchBranch = this[Keys.TASTE_MATCH_BRANCH] ?: DEFAULT_MATCH_BRANCH,
         recordTimeMachineSnapshots =
         this[Keys.RECORD_TIME_MACHINE_SNAPSHOTS]
@@ -595,6 +603,7 @@ class SettingsDataStore @Inject constructor(
     private object Keys {
         val ALLOW_AI_ANALYZE_REVIEWS = booleanPreferencesKey("allow_ai_analyze_reviews")
         val SCORE_DIFF_AUTO_BACKFILL = booleanPreferencesKey("score_diff_auto_backfill")
+        val AI_DAILY_DRAW = booleanPreferencesKey("ai_daily_draw")
         val SYNC_BACKLOG_TO_BANGUMI = booleanPreferencesKey("sync_backlog_to_bangumi")
         val TASTE_MATCH_BRANCH = stringPreferencesKey("taste_match_branch")
         val RATING_BACKFILL_ATTEMPTS = stringSetPreferencesKey("rating_backfill_attempts")

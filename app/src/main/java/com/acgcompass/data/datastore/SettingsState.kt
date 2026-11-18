@@ -52,6 +52,8 @@ data class SettingsState(
     val scoreDiffAutoBackfill: Boolean = true,
     /** 加入待补池时同步为 Bangumi「想看」。 */
     val syncBacklogToBangumi: Boolean = true,
+    /** 首页「今日补番签」用 AI 结合待补池生成（需配置 AI 提供商）。 */
+    val aiDailyDraw: Boolean = false,
     /** 口味匹配度分支：standard（常规）/ conservative（保守）/ aggressive（激进）。 */
     val tasteMatchBranch: String = "standard",
     val bangumiEnabled: Boolean = DEFAULT_BANGUMI_ENABLED,

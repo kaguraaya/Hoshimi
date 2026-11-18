@@ -227,6 +227,10 @@ data class PrivacyCardState(
     val scoreDiffAutoBackfill: Boolean = true,
     /** 加入待补池时同步为 Bangumi「想看」。 */
     val syncBacklogToBangumi: Boolean = true,
+    /** 首页「今日补番签」用 AI 生成。 */
+    val aiDailyDraw: Boolean = false,
+    /** 是否已配置 AI 提供商：未配置时 [aiDailyDraw] 不能打开。 */
+    val aiConfigured: Boolean = false,
     /** 口味匹配度分支（[com.acgcompass.domain.taste.TasteMatchBranch.key]）。 */
     val tasteMatchBranch: String = "standard",
 )

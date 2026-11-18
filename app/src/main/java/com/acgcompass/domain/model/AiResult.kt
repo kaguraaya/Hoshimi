@@ -13,6 +13,9 @@ enum class AiTaskType {
     /** 社区标签 → 口味维度（[com.acgcompass.domain.taste.TasteCategory]）批量分类，结果缓存供画像/评分复用。 */
     TAG_CLASSIFY,
     VNDB_TRANSLATION,
+
+    /** 首页「今日补番签」：结合待补池生成当天的宜 / 忌。 */
+    DAILY_DRAW,
     UNKNOWN,
     ;
 

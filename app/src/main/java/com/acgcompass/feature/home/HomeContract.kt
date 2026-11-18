@@ -147,10 +147,11 @@ data class SyncReminderLine(
     val failed: Boolean,
 )
 
-/** 今日补番签：今日宜 / 忌建议。 */
+/** 今日补番签：今日宜 / 忌建议。[byAi] 为 true 表示由 AI 结合待补池生成。 */
 data class DailyDraw(
     val shouldText: String,
     val shouldNotText: String,
+    val byAi: Boolean = false,
 )
 
 /**
@@ -503,6 +504,44 @@ internal fun buildDailyDraw(date: LocalDate = LocalDate.now(), backlogSize: Int 
     )
 }
 
-/** （保留）星期偏好可在未来扩展更细的宜 / 忌规则。 */
-@Suppress("unused")
+/** AI 补番签每天生成一次：缓存按日期判断能否复用。 */
+internal fun aiDailyDrawFingerprint(date: LocalDate): String = "daily-draw:$date"
+
+/** AI 补番签的提示词版本；提示词改动后提高它，让当天的缓存失效。 */
+internal const val AI_DAILY_DRAW_PROMPT_VERSION = 1
+
+private const val AI_DRAW_MAX_ENTRIES = 12
+private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+
+/**
+ * AI 补番签的输入：日期、星期是否周末，以及待补池里最多 [AI_DRAW_MAX_ENTRIES] 部作品（作品名、集数、加入天数）。
+ * 先列加入最久的，让「宜」有机会点到吃灰的作品。只包含作品名和集数，不含评分、短评等个人记录。
+ */
+@VisibleForTesting
+internal fun buildAiDailyDrawInput(date: LocalDate, entries: List<HomeBacklogEntry>, nowMillis: Long): String =
+    buildString {
+        val weekday = date.dayOfWeek
+        appendLine("日期：$date（${weekdayLabel(weekday)}，${if (weekday.isWeekend()) "周末" else "工作日"}）")
+        val named = entries.filter { it.work != null }.sortedBy { it.item.addedAt }.take(AI_DRAW_MAX_ENTRIES)
+        appendLine("待补池共 ${entries.size} 部，以下是其中 ${named.size} 部：")
+        named.forEach { entry ->
+            val work = entry.work ?: return@forEach
+            val title = work.titles.cn ?: work.titles.canonical
+            val episodes = work.units.episodes?.let { "，$it 集" }.orEmpty()
+            val days = ((nowMillis - entry.item.addedAt) / MILLIS_PER_DAY).coerceAtLeast(0)
+            appendLine("- $title$episodes，加入 $days 天")
+        }
+    }
+
+private fun weekdayLabel(day: DayOfWeek): String = when (day) {
+    DayOfWeek.MONDAY -> "星期一"
+    DayOfWeek.TUESDAY -> "星期二"
+    DayOfWeek.WEDNESDAY -> "星期三"
+    DayOfWeek.THURSDAY -> "星期四"
+    DayOfWeek.FRIDAY -> "星期五"
+    DayOfWeek.SATURDAY -> "星期六"
+    DayOfWeek.SUNDAY -> "星期日"
+}
+
+/** 是否周末。 */
 private fun DayOfWeek.isWeekend(): Boolean = this == DayOfWeek.SATURDAY || this == DayOfWeek.SUNDAY

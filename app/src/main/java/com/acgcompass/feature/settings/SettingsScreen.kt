@@ -1433,6 +1433,24 @@ private fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActi
         enabled = true,
         onCheckedChange = { actions.onToggleChange(ToggleKeys.SCORE_DIFF_AUTO_BACKFILL, it) },
     )
+    AiDailyDrawToggle(card, actions)
+}
+
+/** 首页「今日补番签」由 AI 生成：配置了 AI 提供商之后才能打开。 */
+@Composable
+private fun AiDailyDrawToggle(card: PrivacyCardState, actions: SettingsActions) {
+    ToggleRow(
+        label = "今日补番签由 AI 生成",
+        description = if (card.aiConfigured) {
+            "每天一次，把待补池里的作品名和集数发给你配置的 AI 提供商，生成针对你待补池的「宜 / 忌」；" +
+                "失败时用内置的签"
+        } else {
+            "需要先在「数据源 → AI 提供商」里配置后才能打开"
+        },
+        checked = card.aiDailyDraw && card.aiConfigured,
+        enabled = card.aiConfigured,
+        onCheckedChange = { actions.onToggleChange(ToggleKeys.AI_DAILY_DRAW, it) },
+    )
 }
 
 @Composable

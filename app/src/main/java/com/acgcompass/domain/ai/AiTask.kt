@@ -158,6 +158,18 @@ sealed class AiTask<T>(
         requiredFields = listOf("items"),
     )
 
+    /** 首页「今日补番签」：输入是日期和待补池摘要，输出当天的宜 / 忌各一句。非作品维度任务。 */
+    class DailyDraw(
+        content: String,
+    ) : AiTask<DailyDrawOutput>(
+        type = AiTaskType.DAILY_DRAW,
+        workId = GLOBAL_WORK_ID,
+        userContent = content,
+        dataSources = listOf("待补池"),
+        serializer = DailyDrawOutput.serializer(),
+        requiredFields = listOf("should", "shouldNot"),
+    )
+
     class VndbTranslation(
         workId: String,
         content: String,

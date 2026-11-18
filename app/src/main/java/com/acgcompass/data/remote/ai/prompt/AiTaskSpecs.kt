@@ -77,6 +77,11 @@ object AiTaskSpecs {
             // 每标签一行 {tag,dimension}，一批数十标签约需千级 token；预留充足空间避免 JSON 被截断。
             maxOutputTokens = 2000,
         )
+        is AiTask.DailyDraw -> AiTaskSpec(
+            systemPrompt = dailyDrawPrompt(),
+            responseFormat = AiResponseFormat.JsonSchema("daily_draw", dailyDrawSchema()),
+            maxOutputTokens = 400,
+        )
         is AiTask.VndbTranslation -> AiTaskSpec(
             systemPrompt = vndbTranslationPrompt(),
             responseFormat = AiResponseFormat.JsonSchema("vndb_translation", vndbTranslationSchema()),
@@ -443,6 +448,27 @@ object AiTaskSpecs {
         required = listOf("items", "confidence"),
     )
 
+    private fun dailyDrawPrompt(): String = buildString {
+        appendLine("任务：为一位动画爱好者写今天的「补番签」，像求签一样给出今日宜、今日忌各一句。")
+        appendLine("输入给出今天的日期、星期，以及他待补池里的部分作品（作品名、集数、加入天数）。")
+        appendLine("要求：")
+        appendLine("- 每句不超过 24 个汉字，口语、轻松、有一点俏皮，不说教。")
+        appendLine("- 「宜」尽量点名待补池里的一部具体作品，并结合集数或今天是工作日 / 周末给出理由。")
+        appendLine("- 「忌」是轻松的提醒，可以和「宜」呼应，但不要重复同一部作品。")
+        appendLine("- 只用输入里出现的作品名，不要编造作品、剧情、角色或评分。")
+        appendLine("输出 JSON：should 为今日宜，shouldNot 为今日忌，都不带「宜」「忌」前缀。")
+        appendLine()
+        append(SpoilerGuard.SYSTEM_PROMPT_RULES)
+    }
+
+    private fun dailyDrawSchema(): JsonObject = objectSchema(
+        properties = buildJsonObject {
+            putJsonObject("should") { put("type", "string") }
+            putJsonObject("shouldNot") { put("type", "string") }
+        },
+        required = listOf("should", "shouldNot"),
+    )
+
     private fun vndbTranslationSchema(): JsonObject = objectSchema(
         properties = buildJsonObject {
             putJsonObject("text") { put("type", "string") }
@@ -460,6 +486,7 @@ object AiTaskSpecs {
         AiTaskType.TASTE_MATCH -> "口味匹配"
         AiTaskType.TAG_CLASSIFY -> "AI 标签细分"
         AiTaskType.VNDB_TRANSLATION -> "VNDB 简介翻译"
+        AiTaskType.DAILY_DRAW -> "今日补番签"
         AiTaskType.UNKNOWN -> "未知任务"
     }
 }
