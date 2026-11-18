@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -54,18 +53,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,7 +80,8 @@ import com.acgcompass.core.designsystem.TagPill
 import com.acgcompass.core.designsystem.TagPillRow
 import com.acgcompass.core.designsystem.TagPillTone
 import com.acgcompass.core.ui.AcgTopBarHeight
-import kotlin.math.roundToInt
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlinx.coroutines.launch
 
 /** 探索队列路由（续 / 算法文档「探索队列」）。route 无参。 */
@@ -254,6 +257,8 @@ private fun ReadyContent(
     val rotation = remember(card.workId) { Animatable(0f) }
     // 飞出动画进行中：忽略重复点击 / 拖动，防止同一张卡被处理两次。
     var committing by remember(card.workId) { mutableStateOf(false) }
+    // 卡片的实际尺寸：倾斜的旋转中心按它计算，不依赖图层自己的尺寸。
+    var cardSize by remember { mutableStateOf(IntSize.Zero) }
 
     LaunchedEffect(card.workId) { appear.animateTo(1f, tween(durationMillis = 220)) }
     LaunchedEffect(card.workId, flipped) {
@@ -286,10 +291,14 @@ private fun ReadyContent(
             PrismCard(
                 modifier = Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                    .onSizeChanged { cardSize = it }
+                    .graphicsLayer {
+                        val tilt = (offsetX.value / swipeThreshold).coerceIn(-MAX_TILT_PROGRESS, MAX_TILT_PROGRESS) *
+                            MAX_TILT_DEGREES
+                        applySwipeTransform(offsetX.value, tilt, cardSize)
+                    }
                     .graphicsLayer {
                         rotationY = rotation.value
-                        rotationZ = dragProgress * MAX_TILT_DEGREES
                         val scale = APPEAR_START_SCALE + (1f - APPEAR_START_SCALE) * appear.value
                         scaleX = scale
                         scaleY = scale
@@ -331,6 +340,24 @@ private fun ReadyContent(
         SwipeActions(onSkip = { commit(like = false) }, onLike = { commit(like = true) })
         Spacer(Modifier.height(8.dp))
     }
+}
+
+/**
+ * 拖动时的位移与倾斜：卡片底边中点跟着手指平移，以它为圆心转动，越往上偏得越多。
+ *
+ * 旋转中心固定在图层原点，再用平移把它挪到底边中点：对任意点 P，结果是 R·(P − C) + C + (dx, 0)，
+ * 其中 C 是按 [size] 算出的底边中点。不依赖图层的 transformOrigin 和图层尺寸。
+ */
+private fun GraphicsLayerScope.applySwipeTransform(dx: Float, degrees: Float, size: IntSize) {
+    val radians = Math.toRadians(degrees.toDouble())
+    val cos = cos(radians).toFloat()
+    val sin = sin(radians).toFloat()
+    val pivotX = size.width / 2f
+    val pivotY = size.height * SWIPE_PIVOT_Y
+    transformOrigin = TransformOrigin(0f, 0f)
+    rotationZ = degrees
+    translationX = dx + pivotX - (pivotX * cos - pivotY * sin)
+    translationY = pivotY - (pivotX * sin + pivotY * cos)
 }
 
 /** 批次进度：进度条 + 「第几张 / 共几张」。 */
@@ -682,8 +709,12 @@ private val SWIPE_THRESHOLD = 96.dp
 /** 飞出距离 = 屏宽 × 此系数（确保倾斜的卡片完全离开屏幕）。 */
 private const val FLY_OUT_FACTOR = 1.3f
 
-/** 拖到阈值时卡片的最大倾斜角。 */
-private const val MAX_TILT_DEGREES = 6f
+/** 拖到阈值时卡片的倾斜角；越过阈值后继续加大，最多到 [MAX_TILT_PROGRESS] 倍。 */
+private const val MAX_TILT_DEGREES = 8f
+private const val MAX_TILT_PROGRESS = 1.5f
+
+/** 倾斜的旋转中心：卡片底边（高度的比例）。 */
+private const val SWIPE_PIVOT_Y = 1f
 
 /** 翻面动画：转过半圈后切换到背面内容。 */
 private const val HALF_FLIP_DEGREES = 90f

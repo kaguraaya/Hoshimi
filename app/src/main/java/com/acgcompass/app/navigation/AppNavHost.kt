@@ -130,7 +130,9 @@ fun AcgApp(
                         .fillMaxSize()
                         .padding(innerPadding.withoutTop())
                         .consumeWindowInsets(innerPadding.withoutTop())
-                        .topBarBlurSource(dockHaze),
+                        // 只有显示底栏的页面才需要取样：取样会把整页录进一个图层再画，
+                        // 没有底栏的页面（探索队列等带拖动变换的页面）直接绘制。
+                        .then(if (showDock) Modifier.topBarBlurSource(dockHaze) else Modifier),
                 )
             }
             if (showDock) {
