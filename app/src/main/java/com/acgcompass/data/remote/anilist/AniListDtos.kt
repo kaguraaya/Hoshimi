@@ -156,6 +156,7 @@ object AniListMediaType {
 /** AniList `MediaFormat` 关注的取值常量（用于区分小说 / 漫画）。 */
 object AniListMediaFormat {
     const val NOVEL: String = "NOVEL"
+    const val MUSIC: String = "MUSIC"
 }
 
 /** AniList `MediaRankType` 取值常量。 */

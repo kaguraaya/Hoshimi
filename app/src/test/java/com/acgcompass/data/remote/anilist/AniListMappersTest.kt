@@ -18,6 +18,7 @@ class AniListMappersTest : StringSpec({
         mapAniListMediaType("MANGA", "NOVEL") shouldBe MediaType.NOVEL
         mapAniListMediaType(null, null) shouldBe MediaType.ANIME
         mapAniListMediaType("GARBAGE", "X") shouldBe MediaType.ANIME
+        mapAniListMediaType("ANIME", "MUSIC") shouldBe MediaType.OTHER
     }
 
     "mapAniListStatus maps known statuses and falls back to UNKNOWN" {

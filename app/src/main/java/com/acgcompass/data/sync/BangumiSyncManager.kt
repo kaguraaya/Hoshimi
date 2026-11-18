@@ -175,7 +175,15 @@ class BangumiSyncManager @Inject constructor(
                         // 写入对应 Work（详情页/统计可读）；保留既有 createdAt。
                         dto.subject?.toWork()?.let { work ->
                             val existingWork = workDao.getById(work.id)
-                            workDao.upsert(work.toEntity(createdAt = existingWork?.createdAt ?: now, updatedAt = now))
+                            // 收藏列表里的精简条目没有信息框（别名）；保留之前从搜索 / 详情写入的别名，跨源匹配要用。
+                            val entity = work.toEntity(createdAt = existingWork?.createdAt ?: now, updatedAt = now)
+                            workDao.upsert(
+                                if (entity.aliases.isEmpty() && existingWork != null) {
+                                    entity.copy(aliases = existingWork.aliases)
+                                } else {
+                                    entity
+                                },
+                            )
                             syncedWorks += work
                             if (nowWishOrWatching && !wasWishOrWatching) backlogWorks += work
                         }

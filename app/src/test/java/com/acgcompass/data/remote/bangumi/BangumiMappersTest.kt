@@ -80,6 +80,22 @@ class BangumiMappersTest : StringSpec({
         work.tags shouldBe emptyList()
     }
 
+    "toWork reads aliases from the infobox and skips names equal to the titles" {
+        val json = com.acgcompass.core.network.NetworkJson.instance
+        val dto = json.decodeFromString(
+            BangumiSubjectDto.serializer(),
+            """
+            {"id": 328609, "type": 2, "name": "ぼっち・ざ・ろっく！", "name_cn": "孤独摇滚！",
+             "infobox": [
+               {"key": "中文名", "value": "孤独摇滚！"},
+               {"key": "别名", "value": [{"v": "BTR"}, {"v": "Bocchi the Rock!"}, {"v": "孤独摇滚！"}]},
+               {"key": "放送开始", "value": "2022年10月8日"}
+             ]}
+            """.trimIndent(),
+        )
+        dto.toWork().titles.aliases shouldBe listOf("BTR", "Bocchi the Rock!")
+    }
+
     "toWork falls back to original name then id when Chinese name missing" {
         BangumiSubjectDto(id = 7, name = "Original Only").toWork().titles.canonical shouldBe "Original Only"
         BangumiSubjectDto(id = 7).toWork().titles.canonical shouldBe "7"

@@ -20,6 +20,13 @@ class JikanMappersTest : StringSpec({
         mapJikanMediaType("Unknown") shouldBe MediaType.ANIME
     }
 
+    "mapJikanMediaType puts theme song, PV and CM entries outside anime" {
+        mapJikanMediaType(JikanAnimeType.MUSIC) shouldBe MediaType.OTHER
+        mapJikanMediaType(JikanAnimeType.PV) shouldBe MediaType.OTHER
+        mapJikanMediaType(JikanAnimeType.CM) shouldBe MediaType.OTHER
+        mapJikanMediaType(JikanAnimeType.SPECIAL) shouldBe MediaType.ANIME
+    }
+
     "mapJikanStatus maps known statuses and falls back to UNKNOWN" {
         mapJikanStatus(JikanAnimeStatus.FINISHED) shouldBe ReleaseStatus.FINISHED
         mapJikanStatus(JikanAnimeStatus.AIRING) shouldBe ReleaseStatus.RELEASING

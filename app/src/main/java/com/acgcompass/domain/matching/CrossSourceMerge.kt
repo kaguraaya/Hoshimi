@@ -31,6 +31,13 @@ public fun Work.allTitleVariants(): List<String> = buildList {
     addAll(titles.aliases)
 }.filter { it.isNotBlank() }
 
+/**
+ * 正式标题（规范名 / 中文 / 日文 / 罗马音 / 英文），不含别名。季度序号和衍生标记只从这里取：别名里常有简称
+ * （如「OP」），拿来判断会把正片误认成主题曲。
+ */
+internal fun Work.formalTitleVariants(): List<String> =
+    listOfNotNull(titles.canonical, titles.cn, titles.ja, titles.romaji, titles.en).filter { it.isNotBlank() }
+
 private fun maxVariantSimilarity(a: List<String>, b: List<String>): Double {
     var best = 0.0
     for (x in a) for (y in b) {
@@ -53,8 +60,8 @@ private fun maxVariantSimilarity(a: List<String>, b: List<String>): Double {
 public fun sameWork(a: Work, b: Work): Boolean {
     if (a.id == b.id) return true
     // 明确的季度或衍生类型不一致时，不使用标题相似度强行合并。
-    if (seasonNumberOf(a.allTitleVariants()) != seasonNumberOf(b.allTitleVariants())) return false
-    if (editionMarkersOf(a.allTitleVariants()) != editionMarkersOf(b.allTitleVariants())) return false
+    if (seasonNumberOf(a.formalTitleVariants()) != seasonNumberOf(b.formalTitleVariants())) return false
+    if (editionMarkersOf(a.formalTitleVariants()) != editionMarkersOf(b.formalTitleVariants())) return false
     val yearConflict = a.year != null && b.year != null && a.year != b.year
     val typeConflict = mediaTypesConflict(a.mediaType, b.mediaType)
 
@@ -147,12 +154,25 @@ private fun commonSuffixLength(a: String, b: String, maxLength: Int): Int {
     return length
 }
 
+/**
+ * 衍生条目标记：两部作品的标记集合不同就不是同一作品。正片不带任何标记，所以主题曲、宣传片、迷你动画、
+ * 映像特典这类条目即使标题和正片几乎一样，也不会被合并到正片上。
+ */
 private val EDITION_MARKERS = linkedMapOf(
     "side_story" to Regex("外[伝传]|番外|side\\s*story|spin[ -]?off", RegexOption.IGNORE_CASE),
     "movie" to Regex("劇場版|剧场版|the\\s*movie|movie", RegexOption.IGNORE_CASE),
     "ova" to Regex("(?:^|[^a-z])(ova|oad)(?:$|[^a-z])", RegexOption.IGNORE_CASE),
     "special" to Regex("特別編|特别篇|special", RegexOption.IGNORE_CASE),
     "recap" to Regex("総集編|总集篇|recap", RegexOption.IGNORE_CASE),
+    "final" to Regex("完結編|完结篇|final\\s*season", RegexOption.IGNORE_CASE),
+    "music" to Regex(
+        "主題歌|主题曲|ノンクレジット|non[- ]?credit|キャラクターソング|character\\s*song|music\\s*video|" +
+            "(?:^|[^a-z])(?:nc)?(?:op|ed|mv)(?:$|[^a-z])",
+        RegexOption.IGNORE_CASE,
+    ),
+    "promo" to Regex("(?:^|[^a-z])(?:pv|cm)(?:$|[^a-z])|予告|ティザー|teaser|trailer|プロモーション", RegexOption.IGNORE_CASE),
+    "mini" to Regex("ミニアニメ|mini\\s*anime|ぷち|petit|chibi", RegexOption.IGNORE_CASE),
+    "bonus" to Regex("映像特典|特典映像|未放送|unaired|ピクチャードラマ|picture\\s*drama", RegexOption.IGNORE_CASE),
 )
 
 private fun editionMarkersOf(titles: List<String>): Set<String> = buildSet {
@@ -160,6 +180,42 @@ private fun editionMarkersOf(titles: List<String>): Set<String> = buildSet {
         EDITION_MARKERS.forEach { (marker, pattern) -> if (pattern.containsMatchIn(title)) add(marker) }
     }
 }
+
+/**
+ * 两部作品是否属于同一季、同一形式：季度序号一致、衍生条目标记一致、年份与媒介类型不冲突。
+ * 只看标题相似度挑候选的地方（如反查 Bangumi）先用它过滤，避免把续作、主题曲或衍生作品当成本作。
+ */
+public fun sameSeasonAndEdition(a: Work, b: Work): Boolean {
+    val ta = a.formalTitleVariants()
+    val tb = b.formalTitleVariants()
+    val yearConflict = a.year != null && b.year != null && a.year != b.year
+    return seasonNumberOf(ta) == seasonNumberOf(tb) &&
+        editionMarkersOf(ta) == editionMarkersOf(tb) &&
+        !yearConflict &&
+        !mediaTypesConflict(a.mediaType, b.mediaType)
+}
+
+/**
+ * 去外站（AniList / Tenrai / MAL）搜索时用的查询词，最多 [limit] 个。外站没有中文名，所以按有用程度排序：
+ * 原名（通常是日文）→ 罗马音 → 英文名 → 含拉丁字母的较长别名（Bangumi 信息框里的英文名、罗马音）→
+ * 非拉丁字母的别名；不用中文名（与原名相同时除外），也不用拉丁字母简称。
+ */
+public fun foreignSearchQueries(work: Work, limit: Int = FOREIGN_QUERY_LIMIT): List<String> {
+    val t = work.titles
+    val chinese = t.cn?.let(::normalizeTitle)
+    // 「BTR」这类拉丁字母简称搜出来的结果不可靠，不用；非拉丁字母的别名（日文的其它写法等）保留在后面。
+    val (latinAliases, otherAliases) = t.aliases.partition { alias -> alias.any { it in 'A'..'Z' || it in 'a'..'z' } }
+    val usableLatin = latinAliases.filter { it.length >= MIN_LATIN_ALIAS_LEN }
+    return (listOfNotNull(t.ja, t.romaji, t.en) + usableLatin + otherAliases + listOf(t.canonical))
+        .map(String::trim)
+        .filter { it.isNotEmpty() }
+        .filter { normalizeTitle(it) != chinese || normalizeTitle(it) == t.ja?.let(::normalizeTitle) }
+        .distinctBy { normalizeTitle(it) }
+        .take(limit)
+}
+
+private const val FOREIGN_QUERY_LIMIT = 3
+private const val MIN_LATIN_ALIAS_LEN = 5
 
 /**
  * 按置信度降序对疑似同一作品的候选进行贪心聚类。
@@ -228,8 +284,21 @@ public fun representativeOf(cluster: List<WorkMatch>): WorkMatch {
         ?: ranked.first()
 }
 
-/** 「第N期/第N季」（中日，N 支持阿拉伯、全角和二至九）识别正则。 */
-private val SEASON_CJK_REGEX = Regex("""第\s*([0-9０-９一二三四五六七八九]+)\s*[期季]""")
+/** 「第N期/第N季/第Nクール/第N部」与「N期」（中日，N 支持阿拉伯、全角和二至九）识别正则。 */
+private val SEASON_CJK_REGEX = Regex("""第?\s*([0-9０-９一二三四五六七八九]+)\s*(?:期|季|クール|部)""")
+
+/** 「2ndシーズン / シーズン2」。 */
+private val SEASON_KATAKANA_REGEX =
+    Regex("""([2-9])\s*(?:st|nd|rd|th)?\s*シーズン|シーズン\s*([2-9])""", RegexOption.IGNORE_CASE)
+
+/** 标题末尾或分隔符前的罗马数字 II–V（含Ⅱ–Ⅴ），如「Overlord II」「ダンまち Ⅲ」。区分大小写，避免误伤普通单词。 */
+private val SEASON_ROMAN_REGEX = Regex("""(?:^|[\s　:：・])(II|III|IV|V|Ⅱ|Ⅲ|Ⅳ|Ⅴ)(?=$|[\s　:：!！?？・])""")
+
+/** 「続」「續」「续」作为独立的词出现（「続・夏目友人帳」「やはり俺の青春ラブコメはまちがっている。続」）。 */
+private val SEQUEL_CJK_REGEX = Regex("""(?:^|[\s　・。!！?？])[続續续](?=$|[\s　・])""")
+
+/** 「S2」「cour 2」。 */
+private val SEASON_SHORT_EN_REGEX = Regex("""(?<![a-z0-9])(?:s|cour\s*)([2-9])(?![a-z0-9])""", RegexOption.IGNORE_CASE)
 
 /** 「Season N / Nnd Season / Part N」（英，N≥2）识别正则。 */
 private val SEASON_EN_REGEX = Regex(
@@ -249,12 +318,24 @@ internal fun seasonNumberOf(titles: List<String>): Int {
         SEASON_CJK_REGEX.findAll(raw).forEach { m ->
             cjkOrArabicNumber(m.groupValues[1])?.let { if (it in 2..20) max = maxOf(max, it) }
         }
-        SEASON_EN_REGEX.findAll(raw).forEach { m ->
-            m.groupValues.drop(1).firstOrNull { it.isNotEmpty() }?.toIntOrNull()
-                ?.let { if (it in 2..20) max = maxOf(max, it) }
+        listOf(SEASON_EN_REGEX, SEASON_KATAKANA_REGEX, SEASON_SHORT_EN_REGEX).forEach { regex ->
+            regex.findAll(raw).forEach { m ->
+                m.groupValues.drop(1).firstOrNull { it.isNotEmpty() }?.toIntOrNull()
+                    ?.let { if (it in 2..20) max = maxOf(max, it) }
+            }
         }
+        SEASON_ROMAN_REGEX.findAll(raw).forEach { m -> romanNumber(m.groupValues[1])?.let { max = maxOf(max, it) } }
+        if (SEQUEL_CJK_REGEX.containsMatchIn(raw)) max = maxOf(max, 2)
     }
     return max
+}
+
+private fun romanNumber(s: String): Int? = when (s) {
+    "II", "Ⅱ" -> 2
+    "III", "Ⅲ" -> 3
+    "IV", "Ⅳ" -> 4
+    "V", "Ⅴ" -> 5
+    else -> null
 }
 
 /** 解析阿拉伯 / 全角 / 简单中日数字（二~九）为整数；无法解析返回 null。 */

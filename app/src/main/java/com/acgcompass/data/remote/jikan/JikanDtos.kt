@@ -213,6 +213,8 @@ object JikanAnimeType {
     const val ONA: String = "ONA"
     const val SPECIAL: String = "Special"
     const val MUSIC: String = "Music"
+    const val PV: String = "PV"
+    const val CM: String = "CM"
 }
 
 /** Jikan 动画 `status` 取值（用于映射领域 [com.acgcompass.domain.model.ReleaseStatus]）。 */

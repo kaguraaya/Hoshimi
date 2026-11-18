@@ -95,7 +95,8 @@ private fun CompletionCost.label(): String = when (this) {
 fun BacklogCardItem.toWorkCardUiModel(): WorkCardUiModel {
     val w = work
     val subtitle = buildString {
-        val aliases = w?.titles?.aliases?.firstOrNull()
+        // 副标题：与主标题不同的原名优先，其次第一个别名。
+        val aliases = w?.titles?.ja?.takeIf { it != w.titles.canonical } ?: w?.titles?.aliases?.firstOrNull()
         if (!aliases.isNullOrBlank()) append(aliases)
         val year = w?.year
         if (year != null) {

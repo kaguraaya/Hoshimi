@@ -25,10 +25,11 @@ import com.acgcompass.domain.model.WorkMatch
  * AniList `type` + `format` → 领域 [MediaType]。
  *
  * AniList 用 `type`(ANIME/MANGA) 粗分，`format` 细分；轻小说在 `MANGA` 下以 `NOVEL` 表示。
+ * 动画下的 `MUSIC`（主题曲 MV 等）归为 [MediaType.OTHER]，不当作正片参与匹配和推荐。
  * 未知或缺失类型回退为 [MediaType.ANIME]。
  */
 fun mapAniListMediaType(type: String?, format: String?): MediaType = when (type) {
-    AniListMediaType.ANIME -> MediaType.ANIME
+    AniListMediaType.ANIME -> if (format == AniListMediaFormat.MUSIC) MediaType.OTHER else MediaType.ANIME
     AniListMediaType.MANGA ->
         if (format == AniListMediaFormat.NOVEL) MediaType.NOVEL else MediaType.MANGA
     else -> MediaType.ANIME

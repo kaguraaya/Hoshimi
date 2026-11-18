@@ -267,7 +267,8 @@ fun buildRecommendationUiModel(
     drawReason: String,
 ): RecommendationUiModel {
     val subtitle = buildString {
-        val alias = work?.titles?.aliases?.firstOrNull()
+        // 副标题：与主标题不同的原名优先，其次第一个别名。
+        val alias = work?.titles?.ja?.takeIf { it != work.titles.canonical } ?: work?.titles?.aliases?.firstOrNull()
         if (!alias.isNullOrBlank()) append(alias)
         val year = work?.year
         if (year != null) {

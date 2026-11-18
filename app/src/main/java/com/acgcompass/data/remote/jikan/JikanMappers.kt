@@ -22,13 +22,11 @@ import com.acgcompass.domain.model.WorkMatch
 
 /** Jikan 动画 `type` → 领域 [MediaType]；Jikan anime 端点只返回动画，未知 / 缺失回退 [MediaType.ANIME]。 */
 fun mapJikanMediaType(type: String?): MediaType = when (type) {
-    JikanAnimeType.TV,
-    JikanAnimeType.MOVIE,
-    JikanAnimeType.OVA,
-    JikanAnimeType.ONA,
-    JikanAnimeType.SPECIAL,
+    // 主题曲 MV、宣传片、广告是动画条目的衍生物，不能当作正片参与匹配和推荐。
     JikanAnimeType.MUSIC,
-    -> MediaType.ANIME
+    JikanAnimeType.PV,
+    JikanAnimeType.CM,
+    -> MediaType.OTHER
     else -> MediaType.ANIME
 }
 

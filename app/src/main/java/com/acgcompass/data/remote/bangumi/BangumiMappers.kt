@@ -1,5 +1,6 @@
 package com.acgcompass.data.remote.bangumi
 
+import com.acgcompass.domain.matching.normalizeTitle
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingEntry
 import com.acgcompass.domain.model.ReleaseStatus
@@ -14,6 +15,10 @@ import com.acgcompass.domain.taste.TagCount
 import com.acgcompass.domain.taste.WorkFeature
 import com.acgcompass.domain.taste.WorkFeatureCompleteness
 import com.acgcompass.domain.usecase.TasteTagTaxonomy
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Bangumi DTO → 领域模型映射。
@@ -144,6 +149,7 @@ fun BangumiSubjectDto.toWork(): Work {
             canonical = canonical,
             cn = chinese,
             ja = original,
+            aliases = infobox.titleAliases(exclude = listOfNotNull(original, chinese)),
         ),
         mediaType = mapBangumiMediaType(type),
         year = parseBangumiYear(date),
@@ -224,3 +230,36 @@ fun BangumiLegacySubjectDto.toRatingEntry(): RatingEntry? {
 }
 
 // endregion
+
+/** 信息框里记录作品其它名称的字段：别名里通常有英文名、罗马音和简称，是去外站匹配时最有用的名字。 */
+private val ALIAS_INFOBOX_KEYS = setOf("别名", "英文名", "罗马名", "罗马字", "其他名称", "日文名", "原名")
+private const val MAX_INFOBOX_ALIASES = 8
+
+/**
+ * 从信息框取作品的其它名称（[ALIAS_INFOBOX_KEYS]），去空白、去重，排除与 [exclude] 归一化后相同的名字，最多
+ * [MAX_INFOBOX_ALIASES] 个。值可以是字符串，也可以是 `[{"v": "…"}]` 列表。
+ */
+internal fun List<BangumiInfoboxItemDto>.titleAliases(exclude: List<String> = emptyList()): List<String> {
+    val excluded = exclude.mapTo(HashSet()) { normalizeTitle(it) }
+    return asSequence()
+        .filter { it.key.trim() in ALIAS_INFOBOX_KEYS }
+        .flatMap { infoboxStrings(it.value) }
+        .map(String::trim)
+        .filter { it.isNotEmpty() }
+        .distinctBy { normalizeTitle(it) }
+        .filter { normalizeTitle(it).isNotEmpty() && normalizeTitle(it) !in excluded }
+        .take(MAX_INFOBOX_ALIASES)
+        .toList()
+}
+
+private fun infoboxStrings(value: JsonElement?): Sequence<String> = when (value) {
+    is JsonPrimitive -> if (value.isString) sequenceOf(value.content) else emptySequence()
+    is JsonArray -> value.asSequence().mapNotNull { item ->
+        when (item) {
+            is JsonObject -> (item["v"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            is JsonPrimitive -> item.takeIf { it.isString }?.content
+            else -> null
+        }
+    }
+    else -> emptySequence()
+}

@@ -2,6 +2,7 @@ package com.acgcompass.data.remote.bangumi
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 /**
  * Bangumi `/v0/` REST DTO 集合。
@@ -73,6 +74,17 @@ data class BangumiSubjectDto(
     /** 收藏列表里内嵌的精简条目没有 [rating]，只有这个分数。 */
     @SerialName("score") val score: Float? = null,
     @SerialName("collection") val collection: BangumiCollectionDto? = null,
+    /** 条目信息框（搜索结果与条目详情都有，收藏列表里的精简条目没有）。 */
+    @SerialName("infobox") val infobox: List<BangumiInfoboxItemDto> = emptyList(),
+)
+
+/**
+ * 信息框的一项。`value` 可能是字符串，也可能是 `[{"v": "…"}]` 形式的列表（如「别名」），所以按原始 JSON 保存。
+ */
+@Serializable
+data class BangumiInfoboxItemDto(
+    @SerialName("key") val key: String = "",
+    @SerialName("value") val value: JsonElement? = null,
 )
 
 /** 分页条目列表（`POST /v0/search/subjects`）。 */

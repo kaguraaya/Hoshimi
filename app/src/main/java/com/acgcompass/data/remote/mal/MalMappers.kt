@@ -21,14 +21,11 @@ import com.acgcompass.domain.model.WorkMatch
 
 /** MAL 动画 `media_type` → 领域 [MediaType]；anime 端点只返回动画，未知 / 缺失回退 [MediaType.ANIME]。 */
 fun mapMalMediaType(mediaType: String?): MediaType = when (mediaType?.lowercase()) {
-    MalMediaType.TV,
-    MalMediaType.MOVIE,
-    MalMediaType.OVA,
-    MalMediaType.ONA,
-    MalMediaType.SPECIAL,
+    // 主题曲 MV、宣传片、广告是动画条目的衍生物，不能当作正片参与匹配和推荐。
     MalMediaType.MUSIC,
-    MalMediaType.UNKNOWN,
-    -> MediaType.ANIME
+    MalMediaType.PV,
+    MalMediaType.CM,
+    -> MediaType.OTHER
     else -> MediaType.ANIME
 }
 

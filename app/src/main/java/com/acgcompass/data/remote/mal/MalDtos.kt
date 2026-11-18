@@ -118,6 +118,8 @@ object MalMediaType {
     const val ONA: String = "ona"
     const val SPECIAL: String = "special"
     const val MUSIC: String = "music"
+    const val PV: String = "pv"
+    const val CM: String = "cm"
     const val UNKNOWN: String = "unknown"
 }
 

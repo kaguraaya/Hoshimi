@@ -276,6 +276,8 @@ class WorkRepositoryImpl @Inject constructor(
             val hits = (bangumi.searchSubjects(keyword = q) as? AppResult.Success)?.data.orEmpty()
             val best = hits
                 .filter { it.work.mediaType == com.acgcompass.domain.model.MediaType.ANIME }
+                // 先排除续作、主题曲、衍生条目：长标题加一个「続」时标题相似度依然很高。
+                .filter { com.acgcompass.domain.matching.sameSeasonAndEdition(rep.work, it.work) }
                 .map { m -> m to candidateTitles(m).maxOf { matchConfidence(candidate = it, query = q) } }
                 .maxWithOrNull(
                     compareBy<Pair<WorkMatch, Double>>(
@@ -1173,22 +1175,45 @@ class WorkRepositoryImpl @Inject constructor(
         }
         val searchers = crossSourceSearchers(existingSources, priority)
         if (searchers.isEmpty()) return
-        val queries = crossSourceQueries(self)
+        val queries = com.acgcompass.domain.matching.foreignSearchQueries(self)
         if (queries.isEmpty()) return
-
-        val fresh: List<WorkMatch> = coroutineScope {
-            queries.flatMap { q ->
-                searchers.map { (_, search) -> async { safeSearch { search(q) } } }
-            }.flatMap { it.await() }
-        }
-        if (fresh.isEmpty()) return
 
         // 以本作为锚点参与聚类（matchConfidence=1f 确保先建簇），取「与本作同簇」的其他源候选。
         val anchor = WorkMatch(work = self, matchConfidence = 1f, sourceTag = primary, popularity = Int.MAX_VALUE)
-        val cluster = com.acgcompass.domain.matching.clusterMatches(listOf(anchor) + fresh)
-            .firstOrNull { c -> c.any { it.work.id == self.id && it.sourceTag == primary } }
-            ?: return
+        fun clusterOfSelf(candidates: List<WorkMatch>): List<WorkMatch>? =
+            com.acgcompass.domain.matching.clusterMatches(listOf(anchor) + candidates)
+                .firstOrNull { c -> c.any { it.work.id == self.id && it.sourceTag == primary } }
+
+        // 分两步：先搜 Bangumi / AniList；AniList 命中的同簇条目带罗马音和英文名，再用它们去搜 Tenrai / MAL
+        // （MAL 的主标题就是罗马音），只有外文名的平台更容易精确命中。
+        val (firstStage, secondStage) = searchers.partition { (sid, _) ->
+            sid == SourceId.BANGUMI || sid == SourceId.ANILIST
+        }
+        val fresh = searchAll(firstStage, queries).toMutableList()
+        if (secondStage.isNotEmpty()) {
+            val bridgeTitles = clusterOfSelf(fresh).orEmpty()
+                .filter { it.sourceTag == SourceId.ANILIST }
+                .flatMap { listOfNotNull(it.work.titles.romaji, it.work.titles.en) }
+            val secondQueries = (bridgeTitles + queries)
+                .distinctBy { com.acgcompass.domain.matching.normalizeTitle(it) }
+                .take(SECOND_STAGE_QUERY_LIMIT)
+            fresh += searchAll(secondStage, secondQueries)
+        }
+        if (fresh.isEmpty()) return
+        val cluster = clusterOfSelf(fresh) ?: return
         persistCrossSourceCluster(workId, primary, existingSources, cluster, priority)
+    }
+
+    private suspend fun searchAll(
+        searchers: List<Pair<SourceId, suspend (String) -> AppResult<List<WorkMatch>>>>,
+        queries: List<String>,
+    ): List<WorkMatch> = if (searchers.isEmpty()) {
+        emptyList()
+    } else {
+        coroutineScope {
+            queries.flatMap { q -> searchers.map { (_, search) -> async { safeSearch { search(q) } } } }
+                .flatMap { it.await() }
+        }
     }
 
     private suspend fun crossSourceSearchers(
@@ -1211,11 +1236,6 @@ class WorkRepositoryImpl @Inject constructor(
             }
         }
     }
-
-    private fun crossSourceQueries(work: Work): List<String> = (
-        listOfNotNull(work.titles.ja, work.titles.romaji, work.titles.canonical, work.titles.en) +
-            work.titles.aliases
-        ).map(String::trim).filter(String::isNotBlank).distinct().take(3)
 
     private suspend fun persistCrossSourceCluster(
         workId: String,
@@ -1291,6 +1311,9 @@ class WorkRepositoryImpl @Inject constructor(
 
         /** 跨平台交叉验证的标题相似度阈值（高阈值避免误配，宁缺毋滥）。 */
         const val CROSS_MATCH_THRESHOLD = 0.86
+
+        /** 第二步（Tenrai / MAL）的查询词上限：AniList 给出的罗马音、英文名在前。 */
+        const val SECOND_STAGE_QUERY_LIMIT = 3
         const val SUPPLEMENTARY_PAGE_SIZE = 25
         const val POPULAR_YEAR_POOL_COUNT = 15
         const val ESTIMATED_PUBLIC_WORK_SLOT_BYTES = 64L * 1024L
