@@ -292,19 +292,8 @@ private fun ReadyContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .onSizeChanged { cardSize = it }
-                    .graphicsLayer {
-                        val tilt = (offsetX.value / swipeThreshold).coerceIn(-MAX_TILT_PROGRESS, MAX_TILT_PROGRESS) *
-                            MAX_TILT_DEGREES
-                        applySwipeTransform(offsetX.value, tilt, cardSize)
-                    }
-                    .graphicsLayer {
-                        rotationY = rotation.value
-                        val scale = APPEAR_START_SCALE + (1f - APPEAR_START_SCALE) * appear.value
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = appear.value
-                        cameraDistance = CAMERA_DISTANCE_FACTOR * this.density
-                    }
+                    // 手势放在所有变换图层之前：拖动量取屏幕坐标。放在翻面（rotationY = 180°）之后的话，
+                    // 背面朝上时 x 轴是镜像的，手指往右卡片却往左。
                     .pointerInput(card.workId) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
@@ -321,6 +310,19 @@ private fun ReadyContent(
                             },
                         )
                     }
+                    .graphicsLayer {
+                        val tilt = (offsetX.value / swipeThreshold).coerceIn(-MAX_TILT_PROGRESS, MAX_TILT_PROGRESS) *
+                            MAX_TILT_DEGREES
+                        applySwipeTransform(offsetX.value, tilt, cardSize)
+                    }
+                    .graphicsLayer {
+                        rotationY = rotation.value
+                        val scale = APPEAR_START_SCALE + (1f - APPEAR_START_SCALE) * appear.value
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = appear.value
+                        cameraDistance = CAMERA_DISTANCE_FACTOR * this.density
+                    }
                     .clickable(onClickLabel = if (flipped) "翻回正面" else "查看简介") { flipped = !flipped },
                 // 扁平：靠色块与大圆角区分层次，不用描边和投影。
                 shape = MaterialTheme.shapes.extraLarge,
@@ -328,10 +330,10 @@ private fun ReadyContent(
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
                 if (rotation.value <= HALF_FLIP_DEGREES) {
-                    ExploreCardFrontWithStamps(card = card, dragProgress = dragProgress)
+                    WithSwipeStamps(dragProgress) { ExploreCardFront(card) }
                 } else {
                     Box(modifier = Modifier.graphicsLayer { rotationY = FULL_FLIP_DEGREES }) {
-                        ExploreCardBack(card = card, onOpenWork = onOpenWork)
+                        WithSwipeStamps(dragProgress) { ExploreCardBack(card = card, onOpenWork = onOpenWork) }
                     }
                 }
             }
@@ -387,11 +389,11 @@ private fun BatchProgress(position: Int, total: Int) {
     }
 }
 
-/** 卡片正面 + 拖动方向印章（右拖显示「加入待补池」，左拖显示「暂不」）。 */
+/** 卡片内容 + 拖动方向印章（右拖显示「加入待补池」，左拖显示「暂不」），正反两面都显示。 */
 @Composable
-private fun ExploreCardFrontWithStamps(card: ExploreCardUiModel, dragProgress: Float) {
+private fun WithSwipeStamps(dragProgress: Float, content: @Composable () -> Unit) {
     Box {
-        ExploreCardFront(card)
+        content()
         SwipeStamp(
             text = "加入待补池",
             visibility = dragProgress.coerceAtLeast(0f),
