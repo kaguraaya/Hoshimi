@@ -26,7 +26,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * 口味排行：调 [TasteEngine.rankLocalPoolDetailed] 排序，再补上标题、年份、是否完结和「是否已收藏 / 在待补池」。
- * 结果按画像对象缓存在内存里：画像没重建就直接返回上次的结果，重新打开页面不用再算。
+ * 结果按画像对象缓存在内存里：画像没重建就直接返回上次的结果，重新打开页面不用再算；
+ * 同时存一份到本地文件（[TasteRankingDiskCache]），冷启动后也能先显示上次的结果，再在后台重算。
  */
 @Singleton
 @Suppress("LongParameterList") // 排行要合并画像、作品、收藏、待补池、作品库补充和补资料
@@ -38,6 +39,7 @@ class TasteRankingRepositoryImpl @Inject constructor(
     private val workFeatureDao: WorkFeatureDao,
     private val expander: LocalPoolExpander,
     private val enrichment: WorkFeatureEnrichmentScheduler,
+    private val diskCache: TasteRankingDiskCache,
     private val dispatchers: DispatcherProvider,
 ) : TasteRankingRepository {
 
@@ -82,8 +84,11 @@ class TasteRankingRepositoryImpl @Inject constructor(
         cachedFor = engine.observeProfile().value
         cachedPoolSize = poolSize
         cached = ranking
+        if (ranking != null) withContext(dispatchers.io) { diskCache.write(ranking) }
         ranking
     }
+
+    override suspend fun lastResult(): TasteRanking? = cached ?: withContext(dispatchers.io) { diskCache.read() }
 
     private suspend fun toItem(
         ranked: LocalRankedWork,

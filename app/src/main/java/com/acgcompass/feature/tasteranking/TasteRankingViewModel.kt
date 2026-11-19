@@ -11,6 +11,7 @@ import com.acgcompass.domain.taste.TasteRankingRepository
 import com.acgcompass.domain.taste.WorkFormat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +50,8 @@ data class TasteRankingUiState(
     /** 还没有可用的口味画像。 */
     val unavailable: Boolean = false,
     val refreshing: Boolean = false,
+    /** 正在显示上次的结果，后台重新计算中。 */
+    val updating: Boolean = false,
     val ranking: TasteRanking? = null,
     val filter: TasteRankingFilter = TasteRankingFilter(),
     /** 「补充作品库」的进度（应用级任务，离开页面也继续）。 */
@@ -75,7 +78,8 @@ data class TasteRankingUiState(
 }
 
 /**
- * 口味排行：打开时读缓存（画像没变就不重算），下拉重新计算；筛选只在已算好的结果上进行，不重算。
+ * 口味排行：打开时先显示上次的结果，后台按需重算（画像和作品库都没变就不重算），下拉重新计算；
+ * 筛选只在已算好的结果上进行，不重算。
  */
 @HiltViewModel
 @Suppress("TooManyFunctions") // 每个筛选项、补充作品库各一个操作
@@ -85,10 +89,15 @@ class TasteRankingViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TasteRankingUiState())
+    private val refreshGate = com.acgcompass.core.common.RefreshGate(minIntervalMillis = 0L)
     val state: StateFlow<TasteRankingUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
+            // 先显示上次的结果，再在后台重算；算完有变化就整列换掉。
+            runCatching { repository.lastResult() }.getOrNull()?.let { last ->
+                _state.update { it.copy(loading = false, ranking = last, updating = true) }
+            }
             load(force = false)
             refreshPoolStatus()
         }
@@ -112,11 +121,32 @@ class TasteRankingViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 下拉重新计算（只用本地作品库，不联网）。指示器最多转 3 秒；算得久时头部显示「正在更新」，
+     * 算完提示一次，用户知道有没有重新算过。
+     */
     fun onRefresh() {
         if (_state.value.refreshing) return
-        _state.update { it.copy(refreshing = true) }
+        _state.update { it.copy(refreshing = true, updating = true) }
         viewModelScope.launch {
-            load(force = true)
+            val startedAt = System.currentTimeMillis()
+            val job = viewModelScope.async { runCatching { repository.load(force = true) }.getOrNull() }
+            refreshGate.awaitIndicator(job, startedAt)
+            _state.update { it.copy(refreshing = false) }
+            val ranking = job.await()
+            _state.update {
+                it.copy(
+                    loading = false,
+                    updating = false,
+                    unavailable = ranking == null && it.ranking == null,
+                    ranking = ranking ?: it.ranking,
+                    message = if (ranking != null) {
+                        "排行已重新计算（本地作品库 ${ranking.poolSize} 部，不联网）"
+                    } else {
+                        "这次没算出来，稍后再试"
+                    },
+                )
+            }
             refreshPoolStatus()
         }
     }
@@ -170,6 +200,7 @@ class TasteRankingViewModel @Inject constructor(
             it.copy(
                 loading = false,
                 refreshing = false,
+                updating = false,
                 unavailable = ranking == null && it.ranking == null,
                 ranking = ranking ?: it.ranking,
             )

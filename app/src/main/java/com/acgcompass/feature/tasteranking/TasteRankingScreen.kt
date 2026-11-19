@@ -189,7 +189,7 @@ private fun Header(state: TasteRankingUiState, actions: TasteRankingActions) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "${ranking?.poolSize ?: 0} 部参与排序 · 没评过分 $unrated 部",
+                "${ranking?.poolSize ?: 0} 部参与排序 · 没评过分 $unrated 部" + if (state.updating) " · 正在更新" else "",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
