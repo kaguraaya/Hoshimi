@@ -110,7 +110,10 @@ interface BangumiApi {
 
     /** 每日放送（legacy 公共端点，免鉴权）→ 本季 / 近期在播公共发现池。 */
     @GET("calendar")
-    suspend fun getCalendar(@Tag auth: SourceAuth): Response<List<BangumiCalendarDayDto>>
+    suspend fun getCalendar(
+        @Tag auth: SourceAuth,
+        @retrofit2.http.Header("Cache-Control") cacheControl: String? = null,
+    ): Response<List<BangumiCalendarDayDto>>
 
     /**
      * 条目章节列表（`GET /v0/episodes`）。`type=0` 仅本篇。用于动画进度上传时把「看到第 N 集」

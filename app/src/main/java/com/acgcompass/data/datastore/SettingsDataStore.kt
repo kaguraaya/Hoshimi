@@ -329,6 +329,13 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it[Keys.BACKLOG_GRID_MODE] = grid }
     }
 
+    /** 是否记录并显示发现页的最近搜索。 */
+    val searchHistoryEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.SEARCH_HISTORY_ENABLED] ?: true }
+
+    suspend fun setSearchHistoryEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.SEARCH_HISTORY_ENABLED] = enabled }
+    }
+
     /**
      * 番剧信息自动缓存目标上限（部数）。0 = 未设置（由 App 智能决定，用 [SettingsState.AUTO_CACHE_DEFAULT_TARGET]）。
      * 仅影响「公共发现池番剧信息」自动缓存规模，不影响封面等其他缓存。
@@ -599,6 +606,7 @@ class SettingsDataStore @Inject constructor(
         scoreDiffAutoBackfill = this[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true,
         syncBacklogToBangumi = this[Keys.SYNC_BACKLOG_TO_BANGUMI] ?: true,
         aiDailyDraw = this[Keys.AI_DAILY_DRAW] ?: false,
+        searchHistoryEnabled = this[Keys.SEARCH_HISTORY_ENABLED] ?: true,
         tasteMatchBranch = this[Keys.TASTE_MATCH_BRANCH] ?: DEFAULT_MATCH_BRANCH,
         recordTimeMachineSnapshots =
         this[Keys.RECORD_TIME_MACHINE_SNAPSHOTS]
@@ -687,6 +695,7 @@ class SettingsDataStore @Inject constructor(
         val HOME_MODULES = stringSetPreferencesKey("home_modules")
         val AUTO_SYNC_INTERVAL_MINUTES = intPreferencesKey("auto_sync_interval_minutes")
         val BACKLOG_GRID_MODE = booleanPreferencesKey("backlog_grid_mode")
+        val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
         val RECOMMEND_MIN_COMMUNITY_SCORE = floatPreferencesKey("recommend_min_community_score")
         val TASTE_MATCH_THRESHOLD = floatPreferencesKey("taste_match_threshold")
         val AUTO_CACHE_MAX_COUNT = intPreferencesKey("auto_cache_max_count")

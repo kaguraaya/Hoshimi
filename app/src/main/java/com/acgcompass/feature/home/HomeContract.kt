@@ -43,6 +43,8 @@ data class HomeUiState(
     val seasonalHot: List<HomeWorkCard> = emptyList(),
     /** 本季正在播出或即将开播的作品。 */
     val seasonalNew: List<HomeWorkCard> = emptyList(),
+    /** 本季列表上次联网取到的时间；还没联网取过时为 null。 */
+    val seasonalUpdatedAt: Long? = null,
     val upcomingBroadcasts: List<BroadcastScheduleEntry> = emptyList(),
     val scheduleRefreshing: Boolean = false,
     val scheduleError: String? = null,
@@ -172,6 +174,60 @@ internal val HOME_EMPTY_CTA: Cta = Cta(label = "批量导入补番清单", actio
  * 从公共发现池构建本季新番首页模块卡片。**以 Bangumi 为主**，
  * 数量不足时用其它公共源（Jikan/AniList）补足。按年份降序近似「近期」；无公共数据时为空。
  */
+/**
+ * 首页本季列表：按 [com.acgcompass.domain.repository.HomeSeasonalLists] 里存的顺序，带 Bangumi 评分。
+ */
+internal fun buildSeasonalCards(
+    items: List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>>,
+    limit: Int = 6,
+    matches: Map<String, Int> = emptyMap(),
+): List<HomeWorkCard> = items.take(limit).map { (work, rating) ->
+    val match = matches[work.id]?.takeIf { it >= LIKELY_MATCH }
+    HomeWorkCard(
+        workId = work.id,
+        card = WorkCardUiModel(
+            coverUrl = work.coverUrl,
+            title = work.titles.canonical,
+            subtitle = listOfNotNull(work.titles.ja ?: work.titles.en, work.year?.toString()).joinToString(" · "),
+            type = work.mediaType.displayLabel(),
+            ratingText = rating?.takeIf { it.score > 0f }?.let { seasonalRatingText(it.score, it.voteCount) },
+            sourceTags = listOfNotNull(work.primarySource.displayLabel(), match?.let { "合你口味 $it%" }),
+        ),
+    )
+}
+
+/** 「Bangumi 8.1 · 1.2 万人评」：带上评分人数。 */
+internal fun seasonalRatingText(score: Float, votes: Int): String {
+    val count = when {
+        votes >= TEN_THOUSAND -> "%.1f 万人评".format(votes / TEN_THOUSAND.toFloat())
+        votes > 0 -> "$votes 人评"
+        else -> null
+    }
+    return listOfNotNull("Bangumi %.1f".format(score), count).joinToString(" · ")
+}
+
+/**
+ * 本季新番要显示的几部：不按评分或人数排，而是从「热度前一半」和「口味匹配度 ≥ 72%」的作品里随机挑 [count] 部，
+ * 下拉换一批。[matches] 是作品 id → 口味匹配度（没有资料算不出时缺省）。
+ */
+internal fun pickSeasonal(
+    candidates: List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>>,
+    matches: Map<String, Int>,
+    random: kotlin.random.Random,
+    count: Int = 6,
+): List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>> {
+    val distinct = candidates.distinctBy { it.first.id }
+    val popular = distinct.sortedByDescending { it.second?.voteCount ?: 0 }
+        .take(maxOf(MIN_POPULAR, distinct.size / 2))
+    val liked = distinct.filter { (matches[it.first.id] ?: 0) >= LIKELY_MATCH }
+    return (popular + liked).distinctBy { it.first.id }.shuffled(random).take(count)
+}
+
+private const val TEN_THOUSAND = 10_000
+private const val LIKELY_MATCH = 72
+private const val MIN_POPULAR = 12
+
+/** 本季列表还没取过（首次打开、离线）时的兜底：本地作品库里最新的作品。 */
 internal fun buildSeasonalHot(works: List<Work>, limit: Int = 6): List<HomeWorkCard> {
     val bangumiSorted = works.asSequence()
         .filter { it.primarySource == SourceId.BANGUMI }

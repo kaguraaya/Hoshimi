@@ -467,14 +467,18 @@ private fun BacklogGridItem(
                 )
             }
         }
+        // 整个单元按封面圆角裁切（按压涟漪跟着圆角走），标题离底角留出距离，不被圆角切掉。
         Text(
             text = model.title,
             style = MaterialTheme.typography.labelMedium,
             maxLines = 2,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = GRID_TITLE_INSET, end = GRID_TITLE_INSET, bottom = GRID_TITLE_INSET),
         )
     }
 }
+
+private val GRID_TITLE_INSET = 6.dp
 
 /**
  * 空待补池引导卡。明确「下一步」：去导入补番清单 / 去搜索添加。

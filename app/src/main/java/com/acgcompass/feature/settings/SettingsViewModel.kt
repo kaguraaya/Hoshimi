@@ -153,6 +153,7 @@ class SettingsViewModel @Inject constructor(
                         scoreDiffAutoBackfill = settings.scoreDiffAutoBackfill,
                         syncBacklogToBangumi = settings.syncBacklogToBangumi,
                         aiDailyDraw = settings.aiDailyDraw,
+                        searchHistoryEnabled = settings.searchHistoryEnabled,
                         aiConfigured = statusMap[SourceId.AI_PROVIDER]?.configured == true,
                         tasteMatchBranch = settings.tasteMatchBranch,
                     ),
@@ -263,6 +264,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** 切换源相关开关，写入 [SettingsDataStore]。 */
+    @Suppress("CyclomaticComplexMethod") // 每个开关一个分支
     fun onToggleChange(toggleKey: String, checked: Boolean) {
         viewModelScope.launch {
             when (toggleKey) {
@@ -276,6 +278,11 @@ class SettingsViewModel @Inject constructor(
                     settingsDataStore.setAutoTranslateVndbDescription(checked)
                 ToggleKeys.ALLOW_AI_ANALYZE_REVIEWS -> settingsDataStore.setAllowAiAnalyzeReviews(checked)
                 ToggleKeys.RECORD_TIME_MACHINE_SNAPSHOTS -> settingsDataStore.setRecordTimeMachineSnapshots(checked)
+                ToggleKeys.SEARCH_HISTORY -> {
+                    settingsDataStore.setSearchHistoryEnabled(checked)
+                    // 关掉时把已有记录一起清掉。
+                    if (!checked) settingsDataStore.clearSearchHistory()
+                }
                 ToggleKeys.SCORE_DIFF_AUTO_BACKFILL -> settingsDataStore.setScoreDiffAutoBackfill(checked)
                 ToggleKeys.AI_DAILY_DRAW -> settingsDataStore.setAiDailyDraw(checked)
                 ToggleKeys.SYNC_BACKLOG_TO_BANGUMI -> settingsDataStore.setSyncBacklogToBangumi(checked)
@@ -623,6 +630,7 @@ internal object ToggleKeys {
     const val AUTO_TRANSLATE_VNDB_DESCRIPTION = "auto_translate_vndb_description"
     const val ALLOW_AI_ANALYZE_REVIEWS = "allow_ai_analyze_reviews"
     const val RECORD_TIME_MACHINE_SNAPSHOTS = "record_time_machine_snapshots"
+    const val SEARCH_HISTORY = "search_history"
     const val SCORE_DIFF_AUTO_BACKFILL = "score_diff_auto_backfill"
     const val AI_DAILY_DRAW = "ai_daily_draw"
     const val SYNC_BACKLOG_TO_BANGUMI = "sync_backlog_to_bangumi"

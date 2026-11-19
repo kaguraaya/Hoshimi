@@ -229,6 +229,8 @@ data class PrivacyCardState(
     val syncBacklogToBangumi: Boolean = true,
     /** 首页「今日补番签」用 AI 生成。 */
     val aiDailyDraw: Boolean = false,
+    /** 记录并显示发现页的最近搜索。 */
+    val searchHistoryEnabled: Boolean = true,
     /** 是否已配置 AI 提供商：未配置时 [aiDailyDraw] 不能打开。 */
     val aiConfigured: Boolean = false,
     /** 口味匹配度分支（[com.acgcompass.domain.taste.TasteMatchBranch.key]）。 */

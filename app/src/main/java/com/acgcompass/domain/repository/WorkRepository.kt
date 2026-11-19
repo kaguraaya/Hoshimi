@@ -103,8 +103,14 @@ interface WorkRepository {
      * 总榜（airDate=null）/ 今年 / 本季由 [airDate] 过滤区间决定（如 `[">=2026-01-01", "<2027-01-01"]`）。
      * 命中作品 + 该源评分写入 Room（详情可跳转、冷启动可重建卡片），返回该页作品 + 评分（缺失为 null，不伪造），
      * 按真实排名顺序。空页（分页到底）属正常，返回空列表；仅网络/解析失败返回 [AppResult.Failure]。
+     * 网络结果一到就先交给 [onFetched]（页面立即显示），再写数据库。
      */
-    suspend fun loadBangumiRankingPage(airDate: List<String>?, offset: Int, limit: Int): AppResult<RankingPage>
+    suspend fun loadBangumiRankingPage(
+        airDate: List<String>?,
+        offset: Int,
+        limit: Int,
+        onFetched: suspend (RankingPage) -> Unit = {},
+    ): AppResult<RankingPage>
 
     /**
      * 读取某榜单范围已持久化的缓存（冷启动秒开）。按缓存的有序作品 id 从 Room 重建作品 + Bangumi 评分；
@@ -114,6 +120,30 @@ interface WorkRepository {
 
     /** 持久化某榜单范围的有序作品 id（覆盖写），供下次冷启动秒开。 */
     suspend fun saveRankingCache(scopeKey: String, orderedWorkIds: List<String>)
+
+    /**
+     * 刷新首页「本季新番 / 本季热门」：Bangumi 每日放送（按评分人数排）和本季排行各一次请求，前台优先级，
+     * 结果按顺序存为 [HomeSeasonalLists.NEW] / [HomeSeasonalLists.HOT]，用 [getCachedRanking] 读出。
+     * [fresh] 为 true（用户下拉）时跳过 HTTP 缓存。
+     *
+     * 网络结果一到就先交给 [onFetched]（页面立即显示），再写数据库：写库要和后台补资料排队，可能要等几秒。
+     */
+    suspend fun refreshHomeSeasonal(fresh: Boolean, onFetched: suspend (HomeSeasonal) -> Unit = {}): AppResult<Unit>
+}
+
+/** 首页本季列表：作品 + Bangumi 评分，按显示顺序。[fetchedAt] 是联网取到的时间，读本地缓存时为 null。 */
+data class HomeSeasonal(
+    val new: List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>>,
+    val hot: List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>>,
+    val fetchedAt: Long? = null,
+) {
+    val isEmpty: Boolean get() = new.isEmpty() && hot.isEmpty()
+}
+
+/** 首页本季列表在榜单缓存里的键。 */
+object HomeSeasonalLists {
+    const val NEW: String = "HOME_SEASON_NEW"
+    const val HOT: String = "HOME_SEASON_HOT"
 }
 
 /**

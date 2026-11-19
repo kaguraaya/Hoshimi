@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +51,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.AppSearchField
 import com.acgcompass.core.designsystem.AppSearchFieldState
-import com.acgcompass.core.designsystem.FlatAssistChip
+import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.PillTabs
 import com.acgcompass.core.designsystem.PrismCard
@@ -107,6 +109,14 @@ fun DiscoverRoute(
     viewModel: DiscoverViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val showMessage = com.acgcompass.core.ui.LocalAppMessenger.current
+    androidx.compose.runtime.LaunchedEffect(message) {
+        message?.let {
+            showMessage(it)
+            viewModel.clearMessage()
+        }
+    }
     val query by viewModel.query.collectAsStateWithLifecycle()
     val tab by viewModel.tab.collectAsStateWithLifecycle()
     val rankingBoards by viewModel.rankingBoards.collectAsStateWithLifecycle()
@@ -502,8 +512,10 @@ private fun SearchBar(query: String, onQueryChange: (String) -> Unit, onSearchSu
     )
 }
 
-/** 历史搜索：一排药丸（点一下就搜，右侧小叉删除单条），标题行右侧「清空」。 */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * 最近搜索：一张卡片里的列表（时钟图标 + 关键词，点一下就搜，右侧删除单条），标题行右侧「清空」；
+ * 超过 [HISTORY_COLLAPSED] 条时折叠，可展开全部。
+ */
 @Composable
 private fun SearchHistorySection(
     history: List<String>,
@@ -511,26 +523,64 @@ private fun SearchHistorySection(
     onRemoveHistory: (String) -> Unit,
     onClearHistory: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionHeader("历史搜索") { TextButton(onClick = onClearHistory) { Text("清空") } }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            history.forEach { item ->
-                FlatAssistChip(
-                    onClick = { onSelectHistory(item) },
-                    label = { Text(item, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    trailingIcon = {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val shown = if (expanded) history else history.take(HISTORY_COLLAPSED)
+    PrismCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("最近搜索", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = onClearHistory) { Text("清空") }
+            }
+            shown.forEachIndexed { index, item ->
+                if (index > 0) FlatDivider(Modifier.padding(start = 44.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(PrismCorner.Badge)
+                        .clickable { onSelectHistory(item) }
+                        .padding(start = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        item,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { onRemoveHistory(item) }) {
                         Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "删除",
+                            Icons.Filled.Close,
+                            contentDescription = "删除「$item」",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp).clickable { onRemoveHistory(item) },
+                            modifier = Modifier.size(18.dp),
                         )
-                    },
-                )
+                    }
+                }
+            }
+            if (history.size > HISTORY_COLLAPSED) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text(if (expanded) "收起" else "展开全部 ${history.size} 条")
+                }
             }
         }
     }
 }
+
+private const val HISTORY_COLLAPSED = 6
 
 /**
  * 单条搜索结果：统一作品卡片 + （低置信时）手动纠正横幅与入口。

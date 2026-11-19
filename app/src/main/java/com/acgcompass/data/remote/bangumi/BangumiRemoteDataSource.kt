@@ -124,7 +124,7 @@ class BangumiRemoteDataSource @Inject constructor(
         // fresh：用户下拉刷新，跳过 HTTP 缓存（条目响应带 max-age）和短时结果复用，直接向服务器取最新的。
         val result = subjectCoalescer.get("$subjectId", priority, fresh) {
             runCatchingApp {
-                api.getSubject(subjectId, auth.withPriority(priority), if (fresh) "no-cache" else null).bodyOrThrow()
+                api.getSubject(subjectId, auth.withPriority(priority), noCacheIf(fresh)).bodyOrThrow()
             }
         }
         return when (result) {
@@ -300,11 +300,15 @@ class BangumiRemoteDataSource @Inject constructor(
         }
     }
 
-    /** 每日放送（legacy 公共端点）→ 每条 [Work] + 可空 [RatingEntry]（评分缺失为 null，不伪造）。 */
+    /**
+     * 每日放送（legacy 公共端点）→ 每条 [Work] + 可空 [RatingEntry]（评分缺失为 null，不伪造）。
+     * 接口带 `max-age=3600`，[fresh] 为 true（用户下拉刷新）时跳过 HTTP 缓存直接向服务器取。
+     */
     suspend fun getCalendar(
         priority: RequestPriority = RequestPriority.FOREGROUND,
+        fresh: Boolean = false,
     ): AppResult<List<Pair<WorkMatch, RatingEntry?>>> = runCatchingApp {
-        val days = api.getCalendar(auth.withPriority(priority)).bodyOrThrow()
+        val days = api.getCalendar(auth.withPriority(priority), noCacheIf(fresh)).bodyOrThrow()
         days.flatMap { it.items }
             .distinctBy { it.id }
             .filter { it.id > 0 }
@@ -313,9 +317,12 @@ class BangumiRemoteDataSource @Inject constructor(
 
     suspend fun getCalendarDays(
         priority: RequestPriority = RequestPriority.BACKGROUND,
+        fresh: Boolean = false,
     ): AppResult<List<BangumiCalendarDayDto>> = runCatchingApp {
-        api.getCalendar(auth.withPriority(priority)).bodyOrThrow()
+        api.getCalendar(auth.withPriority(priority), noCacheIf(fresh)).bodyOrThrow()
     }
+
+    private fun noCacheIf(fresh: Boolean): String? = if (fresh) "no-cache" else null
 
     /**
      * 取条目「本篇」章节 id（按集数升序）。用于把「看到第 N 集」映射为前 N 个本篇章节 id。
