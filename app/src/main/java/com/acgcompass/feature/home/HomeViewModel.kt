@@ -31,6 +31,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +91,12 @@ class HomeViewModel @Inject constructor(
 
     /** 本季新番这次显示的几部（从热门和可能喜欢的里随机挑）。 */
     private val seasonalPick = MutableStateFlow<SeasonalPick?>(null)
+
+    /** 最近显示过的本季新番，下拉时先换成没显示过的。 */
+    private val shownSeasonal = mutableSetOf<String>()
+
+    /** 本季作品的口味匹配度（作品 id → 分数），后台算好后存在这里，挑作品时直接用。 */
+    private var seasonalMatches: Map<String, Int> = emptyMap()
 
     /** 「今晚想看什么类型」的随机种子：同一次浏览里不跳动，重新进入首页会换一批。 */
     private val moodSeed = kotlin.random.Random.nextLong()
@@ -323,18 +330,37 @@ class HomeViewModel @Inject constructor(
         if (_refreshing.value) return
         _refreshing.value = true
         viewModelScope.launch {
-            refreshGate.run(viewModelScope) {
-                // 首页看得到的两块：本季列表（每日放送 + 本季排行）和近期放送，跳过 HTTP 缓存、前台优先级、并行。
+            val startedAt = System.currentTimeMillis()
+            // 本季新番在本地已有的本季列表里马上换一批：看得到的变化立刻出现，不等网络，也不受 30 秒节流限制。
+            val local = seasonalLists.value?.takeUnless { it.isEmpty }
+            if (local != null) {
+                repickSeasonal()
+                _syncMessage.value = "本季新番换了一批"
+            }
+            // 联网部分：近期放送（跳过 HTTP 缓存）和过期了的本季列表，前台优先级、并行；30 秒内重复下拉不再联网。
+            var networkOk = true
+            val job = refreshGate.launch(viewModelScope) {
                 if (uiState.value is UiState.Error) onRetry()
-                launch { refreshSeasonal(fresh = true) }
+                val seasonal = async { refreshSeasonal(fresh = true, alreadyRepicked = local != null) }
                 val result = runCatching { scheduleRepository.refreshUpcoming(force = true) }
                     .getOrElse { Result.failure(it) }
                 scheduleRefreshState.value = HomeScheduleRefreshState(
                     refreshing = false,
                     errorMessage = result.exceptionOrNull()?.message,
                 )
+                networkOk = seasonal.await() && result.isSuccess
             }
+            refreshGate.awaitIndicator(job, startedAt)
             _refreshing.value = false
+            when {
+                // 指示器转满还没取完：说清楚还在取，取完再提示一次，免得以为刷新卡住了。
+                job != null && job.isActive -> {
+                    _syncMessage.value = "还在从 Bangumi 取最新的放送和评分，取到后会自动更新"
+                    job.join()
+                    _syncMessage.value = if (networkOk) "最新的放送和评分已经取到" else "有一部分没取到，先显示已有的数据"
+                }
+                job == null && local == null -> _syncMessage.value = "刚刷新过，过一会儿再下拉"
+            }
         }
     }
 
@@ -348,45 +374,59 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * 拉本季列表：网络结果一到就显示，写库在后面慢慢做。
-     * 用户下拉时（[fresh]）换一批并马上提示，不等写库；打开首页时只把已显示作品的评分换成最新的，不突然换一批。
+     * 本季列表联网更新（返回是否成功或不需要更新）：列表超过 [SEASONAL_STALE_MS] 没更新（或还没取过）才去 Bangumi 取，取到后只更新列表和已显示作品的评分，
+     * 不再突然换一批。下拉时本地已经先换过一批（[alreadyRepicked]）；本地还没有列表时取到后再挑。打开首页时也是先显示上次的列表，再在后台取。
      */
-    private suspend fun refreshSeasonal(fresh: Boolean) {
+    private suspend fun refreshSeasonal(fresh: Boolean, alreadyRepicked: Boolean = false): Boolean {
+        val local = seasonalLists.value?.takeUnless { it.isEmpty }
+        val stale = local?.fetchedAt?.let { System.currentTimeMillis() - it > SEASONAL_STALE_MS } ?: true
+        if (fresh && alreadyRepicked && !stale) return true
         var fetched = false
         val result = runCatching {
             workRepository.refreshHomeSeasonal(fresh) { lists ->
                 if (lists.isEmpty) return@refreshHomeSeasonal
                 seasonalLists.value = lists
                 fetched = true
-                if (fresh || seasonalPick.value?.items.isNullOrEmpty()) {
-                    repickSeasonal()
-                    if (fresh) _syncMessage.value = "本季新番换了一批，评分和评分人数是刚取到的"
-                } else {
-                    refreshPickedRatings(lists)
-                }
+                if (seasonalPick.value?.items.isNullOrEmpty()) repickSeasonal() else refreshPickedRatings(lists)
             }
         }.getOrNull()
-        if (fresh && !fetched) {
-            repickSeasonal()
-            _syncMessage.value = if (result is AppResult.Success) {
+        if (fresh && !alreadyRepicked) {
+            if (!fetched) repickSeasonal()
+            _syncMessage.value = if (fetched || result is AppResult.Success) {
                 "本季新番换了一批"
             } else {
                 "这次没取到最新数据，先从已有的作品里换了一批"
             }
         }
+        return fetched || result is AppResult.Success
     }
 
-    /** 从本季列表里重新随机挑一批（热度前一半 + 口味匹配度 ≥ 72%）。 */
-    private suspend fun repickSeasonal() {
+    /**
+     * 从本季列表里重新随机挑一批（热度前一半 + 口味匹配度 ≥ 72%），先挑最近没显示过的。
+     * 用上次算好的口味匹配度马上挑，不等重新计算（算匹配度要读资料、可能和后台任务抢资源，会让「换一批」慢好几秒）；
+     * 新的匹配度在后台算好后存下，下次挑的时候用，这一批不再变。
+     */
+    private fun repickSeasonal() {
         val lists = seasonalLists.value ?: return
         val candidates = (lists.new + lists.hot).distinctBy { it.first.id }
         if (candidates.isEmpty()) return
-        val matches = runCatching {
-            tasteEngine.scoreBatch(candidates.map { it.first.id }, networkBudget = 0)
-                .filterValues { !it.isRated }
-                .mapValues { it.value.score }
+        val picked = pickSeasonal(candidates, seasonalMatches, kotlin.random.Random.Default, exclude = shownSeasonal)
+        val ids = picked.map { it.first.id }
+        // 能挑的都显示过了就重新开始记。
+        if (ids.any { it in shownSeasonal }) shownSeasonal.clear()
+        shownSeasonal += ids
+        seasonalPick.value = SeasonalPick(picked, seasonalMatches)
+        val missing = candidates.map { it.first.id }.filterNot { it in seasonalMatches }
+        if (missing.isNotEmpty()) viewModelScope.launch { updateSeasonalMatches(missing) }
+    }
+
+    private suspend fun updateSeasonalMatches(ids: List<String>) {
+        val fresh = runCatching {
+            tasteEngine.scoreBatch(ids, networkBudget = 0).filterValues { !it.isRated }.mapValues { it.value.score }
         }.getOrDefault(emptyMap())
-        seasonalPick.value = SeasonalPick(pickSeasonal(candidates, matches, kotlin.random.Random.Default), matches)
+        if (fresh.isEmpty()) return
+        seasonalMatches = seasonalMatches + fresh
+        seasonalPick.value = seasonalPick.value?.copy(matches = seasonalMatches)
     }
 
     /** 已显示的那几部换成刚取到的评分，作品不变。 */
@@ -423,6 +463,9 @@ class HomeViewModel @Inject constructor(
         const val HOME_RETRY_LIMIT = 3L
         const val HOME_RETRY_BASE_MS = 1_000L
         const val TAG = "Home"
+
+        /** 本季列表多久没更新才在下拉时去 Bangumi 重新取（本季作品不多，评分变化也慢）。 */
+        const val SEASONAL_STALE_MS = 3 * 60 * 60 * 1000L
     }
 }
 

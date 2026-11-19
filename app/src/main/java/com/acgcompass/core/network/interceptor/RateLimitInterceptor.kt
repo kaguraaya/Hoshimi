@@ -25,7 +25,7 @@ class RateLimiterRegistry private constructor(
         val state = states[sourceId] ?: return
         if (response.code == HTTP_TOO_MANY_REQUESTS || response.code == HTTP_SERVICE_UNAVAILABLE) {
             val serverDelay = retryAfterMillis(response) ?: rateLimitResetDelayMillis(response)
-            state.recordRateLimited(serverDelay)
+            state.recordRateLimited(serverDelay, tooManyRequests = response.code == HTTP_TOO_MANY_REQUESTS)
         } else if (response.isSuccessful) {
             state.recordSuccess()
         }
@@ -119,13 +119,24 @@ class RateLimiterRegistry private constructor(
             if (delay > 0L) Thread.sleep(delay.coerceAtMost(RETRY_SLICE_MILLIS))
         }
 
-        fun recordRateLimited(serverDelayMillis: Long?) {
+        /**
+         * 撞上限流（429）或服务不可用（503）后的退避。服务器给了等待时间（Retry-After / 限额重置时间）就所有请求都等；
+         * 没给时：503 说明服务器出问题，所有请求按退避表暂停；429 只是额度用完，后台按退避表暂停，
+         * 前台只停 [FOREGROUND_RATE_LIMIT_PAUSE_MILLIS]，用户正在等的页面不至于被后台任务拖住几分钟。
+         */
+        fun recordRateLimited(serverDelayMillis: Long?, tooManyRequests: Boolean = false) {
             lock.withLock {
                 consecutiveRateLimits++
                 val index = (consecutiveRateLimits - 1).coerceAtMost(BACKOFF_SCHEDULE_MILLIS.lastIndex)
                 val localDelay = BACKOFF_SCHEDULE_MILLIS[index].coerceAtMost(maxBackoffMillis)
-                val delay = maxOf(localDelay, serverDelayMillis ?: 0L)
-                limiter.pauseUntil(elapsedClock() + delay)
+                val now = elapsedClock()
+                limiter.pauseBackgroundUntil(now + maxOf(localDelay, serverDelayMillis ?: 0L))
+                val foregroundDelay = when {
+                    serverDelayMillis != null -> serverDelayMillis
+                    tooManyRequests -> FOREGROUND_RATE_LIMIT_PAUSE_MILLIS.coerceAtMost(localDelay)
+                    else -> localDelay
+                }
+                limiter.pauseUntil(now + foregroundDelay)
             }
         }
 
@@ -143,6 +154,9 @@ class RateLimiterRegistry private constructor(
 
         private companion object {
             const val RETRY_SLICE_MILLIS = 250L
+
+            /** 没有服务器等待时间的 429 之后，前台请求暂停多久。 */
+            const val FOREGROUND_RATE_LIMIT_PAUSE_MILLIS = 5_000L
 
             /** 后台任务最多占用限流窗口容量的比例。 */
             const val BACKGROUND_CAPACITY_SHARE = 0.5

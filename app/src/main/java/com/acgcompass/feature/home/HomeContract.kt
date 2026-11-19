@@ -209,23 +209,33 @@ internal fun seasonalRatingText(score: Float, votes: Int): String {
 /**
  * 本季新番要显示的几部：不按评分或人数排，而是从「热度前一半」和「口味匹配度 ≥ 72%」的作品里随机挑 [count] 部，
  * 下拉换一批。[matches] 是作品 id → 口味匹配度（没有资料算不出时缺省）。
+ *
+ * 评分人数不到 [MIN_VOTES] 或评分低于 [MIN_SCORE] 的不放（够数时）；[exclude] 是最近显示过的，先挑没显示过的，
+ * 没显示过的不够时再从显示过的里补，这样每次下拉都尽量换成没见过的。
  */
 internal fun pickSeasonal(
     candidates: List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>>,
     matches: Map<String, Int>,
     random: kotlin.random.Random,
     count: Int = 6,
+    exclude: Set<String> = emptySet(),
 ): List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>> {
     val distinct = candidates.distinctBy { it.first.id }
-    val popular = distinct.sortedByDescending { it.second?.voteCount ?: 0 }
-        .take(maxOf(MIN_POPULAR, distinct.size / 2))
-    val liked = distinct.filter { (matches[it.first.id] ?: 0) >= LIKELY_MATCH }
-    return (popular + liked).distinctBy { it.first.id }.shuffled(random).take(count)
+    val (decent, weak) = distinct.partition { (_, r) -> r != null && r.voteCount >= MIN_VOTES && r.score >= MIN_SCORE }
+    val base = if (decent.size >= count) decent else decent + weak.sortedByDescending { it.second?.voteCount ?: 0 }
+    val popular = base.sortedByDescending { it.second?.voteCount ?: 0 }
+        .take(maxOf(MIN_POPULAR, base.size / 2))
+    val liked = base.filter { (matches[it.first.id] ?: 0) >= LIKELY_MATCH }
+    val pool = (popular + liked).distinctBy { it.first.id }
+    val (seen, unseen) = pool.partition { it.first.id in exclude }
+    return (unseen.shuffled(random) + seen.shuffled(random)).take(count)
 }
 
 private const val TEN_THOUSAND = 10_000
 private const val LIKELY_MATCH = 72
 private const val MIN_POPULAR = 12
+private const val MIN_VOTES = 50
+private const val MIN_SCORE = 6f
 
 /** 本季列表还没取过（首次打开、离线）时的兜底：本地作品库里最新的作品。 */
 internal fun buildSeasonalHot(works: List<Work>, limit: Int = 6): List<HomeWorkCard> {

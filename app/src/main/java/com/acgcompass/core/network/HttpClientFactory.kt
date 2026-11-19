@@ -1,6 +1,7 @@
 package com.acgcompass.core.network
 
 import java.util.concurrent.TimeUnit
+import okhttp3.Dispatcher
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 
@@ -58,6 +59,14 @@ object HttpClientFactory {
         cache: okhttp3.Cache? = null,
     ): OkHttpClient {
         val builder = OkHttpClient.Builder()
+            // OkHttp 默认同一域名最多 5 个请求同时进行；排队等限速额度的请求也占着名额，
+            // 后台任务排满 5 个时前台请求连限速器都进不去，「前台优先」就失效了。真正的并发由限速器按来源控制。
+            .dispatcher(
+                Dispatcher().apply {
+                    maxRequestsPerHost = MAX_REQUESTS_PER_HOST
+                    maxRequests = MAX_REQUESTS
+                },
+            )
             .connectTimeout(timeouts.connectSeconds, TimeUnit.SECONDS)
             .readTimeout(timeouts.readSeconds, TimeUnit.SECONDS)
             .writeTimeout(timeouts.writeSeconds, TimeUnit.SECONDS)
@@ -79,4 +88,6 @@ object HttpClientFactory {
     }
 
     private const val HTTP2_PING_INTERVAL_SECONDS = 15L
+    private const val MAX_REQUESTS_PER_HOST = 24
+    private const val MAX_REQUESTS = 96
 }

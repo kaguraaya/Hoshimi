@@ -59,6 +59,9 @@ class RateLimiter(
     private val grants = ArrayDeque<Long>()
     private var pausedUntilMillis: Long = Long.MIN_VALUE
 
+    /** 只对后台请求（[tryAcquireNow] 的份额小于 1）生效的暂停：撞上限流后后台退避，前台照常。 */
+    private var backgroundPausedUntilMillis: Long = Long.MIN_VALUE
+
     /**
      * 预约一个放行名额并返回其被允许发出的时间戳（≥ 当前时钟读数）。
      *
@@ -126,7 +129,7 @@ class RateLimiter(
     /** 受 [capacityShare] 约束时最早可放行的时刻；份额为 1（前台）时不加额外约束。 */
     private fun shareEarliest(now: Long, capacityShare: Double): Long {
         if (capacityShare >= 1.0) return Long.MIN_VALUE
-        var earliest = Long.MIN_VALUE
+        var earliest = backgroundPausedUntilMillis
         for (rule in rules) {
             val cap = floor(rule.maxRequests * capacityShare).toInt().coerceAtLeast(1)
             val windowStart = now - rule.windowMillis
@@ -142,6 +145,12 @@ class RateLimiter(
     @Synchronized
     fun pauseUntil(timestampMillis: Long) {
         pausedUntilMillis = maxOf(pausedUntilMillis, timestampMillis)
+    }
+
+    /** 只暂停后台请求到 [timestampMillis]（不影响前台）。 */
+    @Synchronized
+    fun pauseBackgroundUntil(timestampMillis: Long) {
+        backgroundPausedUntilMillis = maxOf(backgroundPausedUntilMillis, timestampMillis)
     }
 
     @Synchronized

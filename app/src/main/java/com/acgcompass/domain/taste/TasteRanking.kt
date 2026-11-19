@@ -72,6 +72,9 @@ interface TasteRankingRepository {
     /** [force] 为 true 时忽略缓存重新计算。还没有可用的口味画像时返回 null。 */
     suspend fun load(force: Boolean = false): TasteRanking?
 
+    /** 上次算好的结果（内存里没有就读本地文件），不重新计算；从没算过时为 null。用来打开页面先显示。 */
+    suspend fun lastResult(): TasteRanking?
+
     /** 作品库现状：能参与排行的动画数、已在作品库里但还缺资料（标签）的部数。 */
     suspend fun poolStatus(): LocalPoolStatus
 

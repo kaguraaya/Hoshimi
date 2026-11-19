@@ -2,6 +2,7 @@ package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.ApplicationScope
+import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.WorkFeatureDao
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
@@ -48,7 +49,8 @@ class LocalPoolExpander @Inject constructor(
         var failed = false
         var more = true
         while (more && offset - start < target) {
-            val page = bangumi.rankedSubjectDtos(offset = offset, limit = PAGE)
+            // 后台优先级：补充作品库一次要几十个请求，只用限速窗口的一半，不挤占首页、详情等前台请求。
+            val page = bangumi.rankedSubjectDtos(offset = offset, limit = PAGE, priority = RequestPriority.BACKGROUND)
             val subjects = (page as? AppResult.Success)?.data?.first.orEmpty()
             val total = (page as? AppResult.Success)?.data?.second ?: 0
             failed = page !is AppResult.Success

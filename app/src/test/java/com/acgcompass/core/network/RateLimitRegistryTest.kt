@@ -143,4 +143,32 @@ class RateLimitRegistryTest : StringSpec({
             pool.shutdownNow()
         }
     }
+
+    "429 without a server delay backs off background only; foreground waits a few seconds" {
+        var elapsed = 0L
+        val registry = RateLimiterRegistry.default(elapsedClock = { elapsed }, wallClock = { 0L })
+        val response = Response.Builder()
+            .request(Request.Builder().url("https://api.bgm.tv/").build())
+            .protocol(Protocol.HTTP_1_1)
+            .code(429)
+            .message("Too Many Requests")
+            .build()
+
+        registry.recordResponse(NetworkSource.BANGUMI, response)
+        val limiter = requireNotNull(registry.limiterFor(NetworkSource.BANGUMI))
+
+        // 前台只停 5 秒，后台按退避表停 30 秒。
+        limiter.delayUntilNextPermitMillis() shouldBe 5_000L
+        limiter.delayUntilNextPermitMillis(capacityShare = 0.5) shouldBe 30_000L
+        elapsed = 5_000L
+        limiter.tryAcquireNow() shouldBe true
+        limiter.tryAcquireNow(capacityShare = 0.5) shouldBe false
+        elapsed = 30_000L
+        limiter.tryAcquireNow(capacityShare = 0.5) shouldBe true
+    }
+
+    "every HTTP client lets more than five requests per host wait for the limiter" {
+        val client = HttpClientFactory.build()
+        (client.dispatcher.maxRequestsPerHost > 5) shouldBe true
+    }
 })

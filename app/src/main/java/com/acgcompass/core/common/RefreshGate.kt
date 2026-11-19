@@ -1,6 +1,7 @@
 package com.acgcompass.core.common
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -25,16 +26,24 @@ class RefreshGate(
      */
     suspend fun run(scope: CoroutineScope, work: suspend CoroutineScope.() -> Unit): Boolean {
         val started = clock()
-        if (lastRunAt != 0L && started - lastRunAt < minIntervalMillis) {
-            delay(minIndicatorMillis)
-            return false
-        }
-        lastRunAt = started
-        val job = scope.launch(block = work)
-        withTimeoutOrNull(maxIndicatorMillis) { job.join() }
-        val elapsed = clock() - started
+        val job = launch(scope, work)
+        awaitIndicator(job, started)
+        return job != null
+    }
+
+    /** 在 [scope] 里启动 [work] 并返回它；节流期内不启动，返回 null。配合 [awaitIndicator] 使用。 */
+    fun launch(scope: CoroutineScope, work: suspend CoroutineScope.() -> Unit): Job? {
+        val now = clock()
+        if (lastRunAt != 0L && now - lastRunAt < minIntervalMillis) return null
+        lastRunAt = now
+        return scope.launch(block = work)
+    }
+
+    /** 指示器陪 [job] 转：最多 [maxIndicatorMillis]、至少 [minIndicatorMillis]（从 [startedAt] 算起）。 */
+    suspend fun awaitIndicator(job: Job?, startedAt: Long = clock()) {
+        if (job != null) withTimeoutOrNull(maxIndicatorMillis) { job.join() }
+        val elapsed = clock() - startedAt
         if (elapsed < minIndicatorMillis) delay(minIndicatorMillis - elapsed)
-        return true
     }
 
     companion object {
