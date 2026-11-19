@@ -37,4 +37,28 @@ class SeasonalRefreshTest {
         val b = pickSeasonal(candidates, matches, kotlin.random.Random(2)).map { it.first.id }
         assert(a != b) { "different seeds should give a different batch" }
     }
+
+    @Test
+    fun skipsFewVotesAndLowScoresWhenThereAreEnough() {
+        val good = (1..10).map { work("g$it") to rating(7f, 500 + it) }
+        val fewVotes = (1..5).map { work("f$it") to rating(9f, 3) }
+        val lowScore = (1..5).map { work("l$it") to rating(4.5f, 5_000) }
+        repeat(10) { seed ->
+            val picked = pickSeasonal(good + fewVotes + lowScore, emptyMap(), kotlin.random.Random(seed))
+            assert(picked.all { it.first.id.startsWith("g") }) { picked.map { it.first.id } }
+        }
+        // 质量够的不够 6 部时，用评分人数多的补满。
+        val picked = pickSeasonal(good.take(3) + lowScore, emptyMap(), kotlin.random.Random(1))
+        assertEquals(6, picked.size)
+    }
+
+    @Test
+    fun prefersWorksNotShownRecently() {
+        val candidates = (1..12).map { work("$it") to rating(7f, 1_000 + it) }
+        val shown = (1..6).map { "$it" }.toSet()
+        repeat(10) { seed ->
+            val picked = pickSeasonal(candidates, emptyMap(), kotlin.random.Random(seed), exclude = shown)
+            assert(picked.none { it.first.id in shown }) { picked.map { it.first.id } }
+        }
+    }
 }
