@@ -47,6 +47,8 @@ data class BangumiSubjectBundle(
 class BangumiRemoteDataSource @Inject constructor(
     private val api: BangumiApi,
     private val nextApi: BangumiNextApi,
+    /** 搜索和榜单结果顺带存进本地作品库（基础资料）。 */
+    private val subjectSink: BangumiSubjectSink = BangumiSubjectSink {},
 ) {
 
     private val auth: SourceAuth = SourceAuths.bangumi
@@ -145,6 +147,7 @@ class BangumiRemoteDataSource @Inject constructor(
     ): AppResult<List<WorkMatch>> = runCatchingApp {
         val request = BangumiSearchRequestDto(keyword = keyword, sort = sort, filter = filter)
         val paged = api.searchSubjects(request, limit, offset, auth.withPriority(priority)).bodyOrThrow()
+        subjectSink.accept(paged.data)
         paged.data.map { it.toWorkMatch() }
     }
 
@@ -174,6 +177,7 @@ class BangumiRemoteDataSource @Inject constructor(
             filter = filter,
         )
         val (subjects, total) = collectSearchPages(request, limit, offset, auth.withPriority(priority))
+        subjectSink.accept(subjects)
         // 按真实 rank 升序（排名越小越靠前）客户端兜底排序，nulls/0 视为最差。
         val items = subjects
             .sortedBy { it.rating?.rank?.takeIf { r -> r > 0 } ?: Int.MAX_VALUE }
