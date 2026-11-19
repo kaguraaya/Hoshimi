@@ -18,7 +18,8 @@ Hoshimi 的界面规则参考 FlClash（`chen08209/FlClash` 与它的组件库 `
 - **表面保持近灰**：壁纸取色或预设配色的表面色只保留色相、彩度压到很低（`prismColorScheme`）。颜色只留给
   「被选中、开启、出错、这一屏的主操作」。
 - 主色容器 / 次色容器 / 第三色容器**不当卡片底色**，也不当选中态；色调按钮、底栏选中块都是中性色。
-- 浮在内容上的东西（菜单、对话框、底栏、底部面板）浅色取卡片级、深色取色块级，并带投影；其余卡片没有投影。
+- 浮在内容上的东西（菜单、对话框、底栏、底部面板、底部提示、下拉刷新指示器）浅色取卡片级、深色取色块级，并带投影；
+  其余卡片没有投影。
 
 ## 2. 该描边的地方
 
@@ -54,9 +55,31 @@ Hoshimi 的界面规则参考 FlClash（`chen08209/FlClash` 与它的组件库 `
 
 ## 5. 按压
 
-按下只有涟漪（状态层），**不缩放**、不变色块。
+按下只有涟漪（状态层），**不缩放**、不变色块。涟漪必须跟着可点区域的形状走：
 
-## 6. 验证
+- 有底色的圆角组件用带 `onClick` / `selected` 的 `Surface`、`PrismCard(onClick = …)`，或在 `clickable` / `selectable`
+  **之前**先 `clip(形状)`；把 `clickable` 放在 `Surface` 的 `modifier` 里会画出一个矩形高亮。
+- 卡片里铺满宽度的行（`NavRow`、可展开分组的标题行）由卡片自己的圆角裁切；卡片内边距里的小块可点文字先
+  `clip(PrismCorner.Badge)`。
+
+## 6. 顶栏与页面顶部
+
+照 FlClash 的 `FloatingHeader`：顶栏不画底色、不模糊，是一层页面底色的渐变遮罩（`Modifier.topBarScrim()`）——
+状态栏区域 90% 不透明，往下按 easeInOut 分 8 段淡出，到顶栏底边再往下 16dp 完全透明。
+
+- 页面内容**一律铺到顶栏下面**，容器不加顶部内边距；列表用 `ScreenContentPadding.Top`（标准顶栏）或
+  `ScreenContentPadding.lazyList(innerPadding)` / `top(innerPadding)`（`AcgScreenScaffold` 下发的实际高度）让出顶栏。
+  同时加 `padding(innerPadding)` 和 `ScreenContentPadding.Top` 会把顶栏算两次，顶部出现一大片空白。
+- 顶栏下面固定的分组药丸放进顶栏（`AcgScreenScaffold(header = …)`，或和顶栏放在同一个加遮罩的 `Column` 里），
+  列表从它们下面滚过。
+
+## 7. 底部提示与下拉刷新
+
+- 所有从底部浮起的提示都用 `AcgSnackbarHost`（外观同撤销提示条 `AcgUndoBar`），页面里的一次性提示用
+  `LocalAppMessenger`，不用系统 Toast（图片查看器这类独立窗口除外）。
+- 下拉刷新用 `AcgPullRefreshBox`；关闭 Android 12+ 的拉伸回弹，到边直接停住。
+
+## 8. 验证
 
 改完界面跑 `DeviceLikeScreenshotTest`：它用一套高饱和的壁纸取色配色和放大的字宽渲染首页、今晚看什么、导入、缓存、
 「我的」等页面（带假封面和样例数据），图在 `app/build/outputs/roborazzi/device-*.png`。
