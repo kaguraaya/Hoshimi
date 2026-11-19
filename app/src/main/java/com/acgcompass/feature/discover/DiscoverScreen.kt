@@ -107,6 +107,14 @@ fun DiscoverRoute(
     viewModel: DiscoverViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val showMessage = com.acgcompass.core.ui.LocalAppMessenger.current
+    androidx.compose.runtime.LaunchedEffect(message) {
+        message?.let {
+            showMessage(it)
+            viewModel.clearMessage()
+        }
+    }
     val query by viewModel.query.collectAsStateWithLifecycle()
     val tab by viewModel.tab.collectAsStateWithLifecycle()
     val rankingBoards by viewModel.rankingBoards.collectAsStateWithLifecycle()

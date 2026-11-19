@@ -203,12 +203,18 @@ private class FakeWorkRepository(
         airDate: List<String>?,
         offset: Int,
         limit: Int,
+        onFetched: suspend (com.acgcompass.domain.repository.RankingPage) -> Unit,
     ): AppResult<com.acgcompass.domain.repository.RankingPage> =
         AppResult.Success(com.acgcompass.domain.repository.RankingPage(emptyList(), 0))
     override suspend fun getCachedRanking(
         scopeKey: String,
     ): List<Pair<Work, com.acgcompass.domain.model.RatingEntry?>> = emptyList()
     override suspend fun saveRankingCache(scopeKey: String, orderedWorkIds: List<String>) {}
+
+    override suspend fun refreshHomeSeasonal(
+        fresh: Boolean,
+        onFetched: suspend (com.acgcompass.domain.repository.HomeSeasonal) -> Unit,
+    ): AppResult<Unit> = AppResult.Success(Unit)
 }
 
 /** 内存 Fake [ImportDao]，实现仓库使用到的方法。 */

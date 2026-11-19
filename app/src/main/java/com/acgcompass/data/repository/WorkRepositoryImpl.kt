@@ -58,6 +58,8 @@ import com.acgcompass.domain.model.TagCategory
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.WorkMatch
 import com.acgcompass.domain.repository.CacheFillController
+import com.acgcompass.domain.repository.HomeSeasonal
+import com.acgcompass.domain.repository.HomeSeasonalLists
 import com.acgcompass.domain.repository.PublicCacheWorkRepository
 import com.acgcompass.domain.repository.RankingPage
 import com.acgcompass.domain.repository.WorkRepository
@@ -760,10 +762,59 @@ class WorkRepositoryImpl @Inject constructor(
         return listOf(">=${start.format(fmt)}", "<${end.format(fmt)}")
     }
 
+    override suspend fun refreshHomeSeasonal(
+        fresh: Boolean,
+        onFetched: suspend (HomeSeasonal) -> Unit,
+    ): AppResult<Unit> = withContext(dispatchers.io) {
+        runCatchingApp {
+            val (calendar, season) = coroutineScope {
+                val calendarCall = async { bangumi.getCalendar(RequestPriority.FOREGROUND, fresh) }
+                val seasonCall = async {
+                    bangumi.searchRankedSubjects(airDate = currentSeasonAirDateRange(), limit = HOME_SEASONAL_LIMIT)
+                }
+                calendarCall.await() to seasonCall.await()
+            }
+            val calendarItems = (calendar as? AppResult.Success)?.data.orEmpty()
+            val seasonItems = (season as? AppResult.Success)?.data?.items.orEmpty()
+            if (calendarItems.isEmpty() && seasonItems.isEmpty()) {
+                throw ((calendar as? AppResult.Failure)?.error ?: (season as AppResult.Failure).error).asException()
+            }
+            val newItems = calendarItems.sortedByDescending { it.second?.voteCount ?: 0 }
+            onFetched(
+                HomeSeasonal(
+                    new = newItems.map { it.first.work to it.second },
+                    hot = seasonItems.map { it.first.work to it.second },
+                    fetchedAt = System.currentTimeMillis(),
+                ),
+            )
+            persistWithBangumiRatings(calendarItems + seasonItems)
+            if (newItems.isNotEmpty()) saveRankingCache(HomeSeasonalLists.NEW, newItems.map { it.first.work.id })
+            if (seasonItems.isNotEmpty()) saveRankingCache(HomeSeasonalLists.HOT, seasonItems.map { it.first.work.id })
+        }
+    }
+
+    private suspend fun persistWithBangumiRatings(
+        items: List<Pair<WorkMatch, com.acgcompass.domain.model.RatingEntry?>>,
+    ) {
+        persistMatches(items.map { it.first }.distinctBy { it.work.id })
+        items.forEach { (match, entry) ->
+            if (entry != null) {
+                ratingDao.upsert(
+                    entry.toEntity(
+                        id = ratingId(match.work.id, SourceId.BANGUMI),
+                        workId = match.work.id,
+                        sourceId = SourceId.BANGUMI,
+                    ),
+                )
+            }
+        }
+    }
+
     override suspend fun loadBangumiRankingPage(
         airDate: List<String>?,
         offset: Int,
         limit: Int,
+        onFetched: suspend (RankingPage) -> Unit,
     ): AppResult<RankingPage> = withContext(dispatchers.io) {
         runCatchingApp {
             // 按 offset/limit 拉取真实排行的一页（Bangumi 已按 rank 排序，跨页顺序由 offset 维持）。
@@ -774,6 +825,9 @@ class WorkRepositoryImpl @Inject constructor(
                 is AppResult.Failure -> throw r.error.asException()
             }
             val pageData = page.items
+            // 返回该页作品 + 过滤后总数，供上层用 total 判定是否还有更多页（不依赖返回数 >= limit）。
+            val result = RankingPage(items = pageData.map { (match, entry) -> match.work to entry }, total = page.total)
+            onFetched(result)
             // 写入 Room（详情可跳转 + 冷启动重建卡片）+ 写 Bangumi 评分行；跨源聚类由 persistMatches 处理。
             // 空页（分页到底）属正常：persistMatches 对空列表直接返回。
             persistMatches(pageData.map { it.first })
@@ -788,11 +842,7 @@ class WorkRepositoryImpl @Inject constructor(
                     )
                 }
             }
-            // 返回该页作品 + 过滤后总数，供上层用 total 判定是否还有更多页（不依赖返回数 >= limit）。
-            RankingPage(
-                items = pageData.map { (match, entry) -> match.work to entry },
-                total = page.total,
-            )
+            result
         }
     }
 
@@ -1295,6 +1345,9 @@ class WorkRepositoryImpl @Inject constructor(
         }
 
     private companion object {
+        /** 首页本季热门取的条数（本季排行一页）。 */
+        const val HOME_SEASONAL_LIMIT = 30
+
         /** 空态「下一步」引导：去搜索添加作品。 */
         val EMPTY_WORK_CTA = Cta(label = "搜索并添加作品", action = "search")
 

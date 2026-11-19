@@ -571,3 +571,11 @@ private fun CompletionCost.boardLabel(): String = when (this) {
 }
 
 // endregion
+
+/** 榜单下拉刷新后的提示：有几部作品的名次或评分变了；没变化也说清楚，免得以为没刷新。 */
+internal fun rankingRefreshMessage(ok: Boolean, before: List<RankedWork>, after: List<RankedWork>): String {
+    if (!ok) return "榜单这次没取到，显示的是上次的结果"
+    val old = before.mapIndexed { index, item -> item.workId to (index to item.card.ratingText) }.toMap()
+    val changed = after.withIndex().count { (index, item) -> old[item.workId] != (index to item.card.ratingText) }
+    return if (changed > 0) "榜单已更新：$changed 部作品的名次或评分有变化" else "榜单已是最新，名次和评分都没有变化"
+}

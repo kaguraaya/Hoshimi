@@ -159,14 +159,17 @@ class DiscoverViewModel @Inject constructor(
             refreshGate.run(viewModelScope) {
                 when (_tab.value) {
                     DiscoverTab.RANKING -> {
-                        // 公共池较慢，在后台补；指示器只等当前榜单首页。
-                        viewModelScope.launch { fetchPublicPool() }
+                        // 只刷新看得到的榜单首页；公共池是整套缓存补充，不在下拉时跑。
+                        val before = (_scopedRanking.value as? UiState.Success)?.data.orEmpty()
                         rankingGeneration += 1L
                         scopeStates.remove(_rankingScope.value)
-                        fetchInitialRanking(_rankingScope.value, rankingGeneration)
+                        val ok = fetchInitialRanking(_rankingScope.value, rankingGeneration)
+                        val after = (_scopedRanking.value as? UiState.Success)?.data.orEmpty()
+                        _message.value = rankingRefreshMessage(ok, before, after)
                     }
                     DiscoverTab.SCORE_DIFF -> {
-                        fetchPublicPool()
+                        // 评分差异依赖公共池：按后台优先级补充，不和前台请求抢额度；再补一轮第二平台评分。
+                        runCatching { workRepository.loadPublicDiscovery(background = true) }
                         scoreDiffBackfilledOnce = false
                         backfillScoreDiffRatings()
                     }
@@ -176,6 +179,15 @@ class DiscoverViewModel @Inject constructor(
             }
             _refreshing.value = false
         }
+    }
+
+    private val _message = MutableStateFlow<String?>(null)
+
+    /** 一次性提示（下拉刷新的结果）；显示后调用 [clearMessage]。 */
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun clearMessage() {
+        _message.value = null
     }
 
     /** 「重试」：对当前关键词重新触发搜索（错误态 ）。 */
@@ -389,7 +401,8 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch { fetchInitialRanking(scope, generation) }
     }
 
-    private suspend fun fetchInitialRanking(scope: RankingScope, generation: Long) {
+    /** 返回联网是否成功（成功时榜单已换成最新的一页）。 */
+    private suspend fun fetchInitialRanking(scope: RankingScope, generation: Long): Boolean {
         // 冷启动缓存——立即展示上次持久化的榜单顺序，避免白屏等待网络。
         val cached = workRepository.getCachedRanking(scope.name)
         if (cached.isNotEmpty()) {
@@ -399,16 +412,14 @@ class DiscoverViewModel @Inject constructor(
         } else if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
             _scopedRanking.value = UiState.Loading
         }
-        // 联网刷新首页。
+        // 联网刷新首页：网络结果一到就显示，写库后再存榜单顺序。
+        var fetched: RankingScopeState? = null
         when (
             val r = workRepository.loadBangumiRankingPage(
                 airDateOf(scope),
                 offset = 0,
                 limit = RANKING_PAGE_SIZE,
-            )
-        ) {
-            is AppResult.Success -> {
-                val page = r.data
+            ) { page ->
                 val items = page.items.map { (w, e) -> rankedCardOf(w, e) }
                 val state = RankingScopeState(
                     items = items,
@@ -416,11 +427,15 @@ class DiscoverViewModel @Inject constructor(
                     nextOffset = items.size,
                     canLoadMore = items.isNotEmpty() && items.size < page.total,
                 )
+                fetched = state
                 scopeStates[scope] = state
-                workRepository.saveRankingCache(scope.name, items.map { it.workId })
                 if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
                     publishScopeState(state)
                 }
+            }
+        ) {
+            is AppResult.Success -> fetched?.let { state ->
+                workRepository.saveRankingCache(scope.name, state.items.map { it.workId })
             }
             is AppResult.Failure -> {
                 // 已用缓存秒开则保留缓存内容，仅在无缓存时显示错误态。
@@ -431,6 +446,7 @@ class DiscoverViewModel @Inject constructor(
                 }
             }
         }
+        return fetched != null
     }
 
     /** 触底加载下一页并追加（按真实排名 offset 递增，跨页去重）。 */
@@ -441,32 +457,33 @@ class DiscoverViewModel @Inject constructor(
         if (!state.canLoadMore || _rankingLoadingMore.value) return
         _rankingLoadingMore.value = true
         viewModelScope.launch {
+            var fetched: RankingScopeState? = null
             when (
                 val r = workRepository.loadBangumiRankingPage(
                     airDateOf(scope),
                     offset = state.nextOffset,
                     limit = RANKING_PAGE_SIZE,
-                )
-            ) {
-                is AppResult.Success -> {
-                    val page = r.data
+                ) { page ->
                     val existingIds = state.items.mapTo(mutableSetOf()) { it.workId }
                     val appended = page.items.map { (w, e) -> rankedCardOf(w, e) }
                         .filter { it.workId !in existingIds }
-                    val merged = state.items + appended
                     // offset 按服务端本页返回数推进（非 RANKING_PAGE_SIZE，避免短返回跳号）；
                     // canLoadMore 用 total 判定，并以「本页非空」兜底防空页死循环。
                     val newNextOffset = state.nextOffset + page.items.size
                     val newState = RankingScopeState(
-                        items = merged,
+                        items = state.items + appended,
                         nextOffset = newNextOffset,
                         canLoadMore = page.items.isNotEmpty() && newNextOffset < page.total,
                     )
+                    fetched = newState
                     scopeStates[scope] = newState
-                    workRepository.saveRankingCache(scope.name, merged.map { it.workId })
                     if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
                         publishScopeState(newState)
                     }
+                }
+            ) {
+                is AppResult.Success -> fetched?.let { newState ->
+                    workRepository.saveRankingCache(scope.name, newState.items.map { it.workId })
                 }
                 is AppResult.Failure -> {
                     // 加载更多失败：保留已加载内容，停掉指示，下次触底可重试。

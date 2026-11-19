@@ -96,7 +96,7 @@ private fun stripComments(lines: List<String>): List<String> {
     }
 }
 
-private fun findAppRoot(): Path {
+internal fun findAppRoot(): Path {
     val workingDirectory = Path.of(System.getProperty("user.dir")).toAbsolutePath()
     return sequenceOf(workingDirectory, workingDirectory.resolve("app"))
         .first { Files.exists(it.resolve("src/main/java")) }

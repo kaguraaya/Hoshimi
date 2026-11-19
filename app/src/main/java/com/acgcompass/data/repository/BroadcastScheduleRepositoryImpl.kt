@@ -30,6 +30,8 @@ import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -104,12 +106,20 @@ class BroadcastScheduleRepositoryImpl @Inject constructor(
         val cachedAt = scheduleDao.latestCacheTime(scope)
         if (!force && cachedAt != null && now - cachedAt < ttlMillis) return Result.success(Unit)
 
-        val bangumiEntries = fallbackFromBangumi(fromMillis, toMillis).getOrNull().orEmpty()
-        val remoteEntries = aniList.getAiringSchedules(
-            fromEpochSeconds = fromMillis / 1_000L,
-            toEpochSeconds = toMillis / 1_000L,
-            priority = RequestPriority.BACKGROUND,
-        ).getOrNull()
+        // 用户下拉（force）时走前台优先级、跳过 HTTP 缓存；Bangumi 与 AniList 并行请求。
+        val priority = if (force) RequestPriority.FOREGROUND else RequestPriority.BACKGROUND
+        val (bangumiEntries, remoteEntries) = coroutineScope {
+            val bangumiCall =
+                async { fallbackFromBangumi(fromMillis, toMillis, priority, fresh = force).getOrNull().orEmpty() }
+            val aniListCall = async {
+                aniList.getAiringSchedules(
+                    fromEpochSeconds = fromMillis / 1_000L,
+                    toEpochSeconds = toMillis / 1_000L,
+                    priority = priority,
+                ).getOrNull()
+            }
+            bangumiCall.await() to aniListCall.await()
+        }
         val needsTenraiTime = needsTenraiScheduleSupplement(bangumiEntries, remoteEntries.orEmpty())
         val tenraiEntries = if (needsTenraiTime) {
             loadTenraiSchedule().mapNotNull { it.toScheduleEntry(fromMillis, toMillis) }
@@ -294,8 +304,13 @@ class BroadcastScheduleRepositoryImpl @Inject constructor(
         else -> null
     }
 
-    private suspend fun fallbackFromBangumi(fromMillis: Long, toMillis: Long): Result<List<BroadcastScheduleEntry>> {
-        val result = bangumi.getCalendarDays(RequestPriority.BACKGROUND)
+    private suspend fun fallbackFromBangumi(
+        fromMillis: Long,
+        toMillis: Long,
+        priority: RequestPriority,
+        fresh: Boolean,
+    ): Result<List<BroadcastScheduleEntry>> {
+        val result = bangumi.getCalendarDays(priority, fresh)
         val days = (result as? AppResult.Success)?.data
             ?: return Result.failure(IllegalStateException("Bangumi calendar unavailable"))
         val zone = ZoneId.systemDefault()

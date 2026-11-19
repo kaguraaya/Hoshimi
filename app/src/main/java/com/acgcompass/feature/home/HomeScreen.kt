@@ -140,6 +140,7 @@ fun HomeRoute(
         modifier = modifier,
         refreshing = refreshing,
         onPullRefresh = viewModel::onPullRefresh,
+        onRetry = viewModel::onRetry,
     )
 }
 
@@ -162,6 +163,7 @@ fun HomeScreen(
     onOpenSchedule: () -> Unit = {},
     refreshing: Boolean = false,
     onPullRefresh: () -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -193,6 +195,7 @@ fun HomeScreen(
                 StateScaffold(
                     state = state,
                     modifier = Modifier.fillMaxSize(),
+                    onRetry = onRetry,
                     onCta = { onOpenImport() },
                 ) { data ->
                     HomeContent(
@@ -264,7 +267,20 @@ private fun HomeContent(
         }
 
         if (HOME_MOD_SEASONAL_NEW in data.enabledModules) {
-            item(key = "seasonal_new_title") { SectionTitle("本季新番") }
+            item(key = "seasonal_new_title") {
+                SectionHeader("本季新番") {
+                    data.seasonalUpdatedAt?.let { at ->
+                        Text(
+                            "更新于 " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(at),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            if (data.seasonalNew.isNotEmpty()) {
+                item(key = "seasonal_new_hint") { HintText("从本季热门和你可能喜欢的作品里随机挑几部，下拉换一批") }
+            }
             if (data.seasonalNew.isEmpty()) {
                 item(key = "seasonal_new_empty") {
                     EmptyHintCard("本季新番正在准备中，也可以前往发现页查看本季榜单")
