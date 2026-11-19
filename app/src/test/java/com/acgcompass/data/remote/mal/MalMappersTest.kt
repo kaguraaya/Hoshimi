@@ -78,7 +78,7 @@ class MalMappersTest : StringSpec({
             mainPicture = MalPictureDto(medium = "m", large = "cover"),
         ).toWork()
 
-        work.id shouldBe "1"
+        work.id shouldBe "MAL:1"
         work.titles.canonical shouldBe "Cowboy Bebop"
         work.titles.ja shouldBe "カウボーイビバップ"
         work.titles.en shouldBe "Cowboy Bebop"
@@ -108,19 +108,19 @@ class MalMappersTest : StringSpec({
         val match = MalAnimeDto(id = 5, title = "测试").toWorkMatch(matchConfidence = 0.66f)
         match.matchConfidence shouldBe 0.66f
         match.sourceTag shouldBe SourceId.MAL
-        match.work.id shouldBe "5"
+        match.work.id shouldBe "MAL:5"
         MalAnimeDto(id = 5).toWorkMatch().matchConfidence shouldBe 1f
     }
 
     "toWorkMatchOrNull unwraps node and returns null when node missing" {
         MalUserListNodeDto(node = MalAnimeDto(id = 9, title = "N")).toWorkMatchOrNull()
-            ?.work?.id shouldBe "9"
+            ?.work?.id shouldBe "MAL:9"
         MalUserListNodeDto(node = null).toWorkMatchOrNull().shouldBeNull()
     }
 
     "search node toWorkMatchOrNull unwraps node and returns null when node missing" {
         MalAnimeListNodeDto(node = MalAnimeDto(id = 11, title = "S")).toWorkMatchOrNull()
-            ?.work?.id shouldBe "11"
+            ?.work?.id shouldBe "MAL:11"
         MalAnimeListNodeDto(node = null).toWorkMatchOrNull().shouldBeNull()
     }
 })

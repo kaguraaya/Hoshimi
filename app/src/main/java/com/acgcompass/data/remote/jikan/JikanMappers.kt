@@ -7,6 +7,7 @@ import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.Titles
 import com.acgcompass.domain.model.Units
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.model.WorkIds
 import com.acgcompass.domain.model.WorkMatch
 
 /**
@@ -87,7 +88,7 @@ fun JikanAnimeDto.toWork(source: SourceId = SourceId.JIKAN): Work {
     val canonical = primary ?: english ?: japanese ?: malId.toString()
     val aliases = titleSynonyms.filter { it.isNotBlank() }
     return Work(
-        id = malId.toString(),
+        id = WorkIds.local(source, malId.toString()),
         titles = Titles(
             canonical = canonical,
             ja = japanese,

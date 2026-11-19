@@ -81,6 +81,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
 
     @Inject lateinit var tasteProfileValidationScheduler: Lazy<TasteProfileValidationScheduler>
 
+    @Inject lateinit var workIdMigration: Lazy<com.acgcompass.data.local.migration.WorkIdMigration>
+
     @Inject lateinit var outboxScheduler: Lazy<com.acgcompass.data.sync.BangumiOutboxScheduler>
 
     @Inject lateinit var databaseHealthMonitor: Lazy<com.acgcompass.data.local.migration.DatabaseHealthMonitor>
@@ -159,6 +161,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             val justUpgraded = databaseHealthMonitor.get().upgradeVerified
             if (health is com.acgcompass.data.local.migration.DatabaseHealth.Failed) return@launch
             dataSafety.get().restoreAutoBackupIfRequested()
+            // 其它平台作品的旧编号改成「来源:编号」，免得和同号的 Bangumi 作品串在一起。
+            runCatching { workIdMigration.get().run() }
             settingsDataStore.autoBackupEnabled
                 .distinctUntilChanged()
                 .onEach { enabled -> autoBackupScheduler.get().apply(enabled) }

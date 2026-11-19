@@ -7,6 +7,7 @@ import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.Titles
 import com.acgcompass.domain.model.Units
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.model.WorkIds
 import com.acgcompass.domain.model.WorkMatch
 
 /**
@@ -75,7 +76,7 @@ fun MalAnimeDto.toWork(): Work {
     val canonical = primary ?: english ?: japanese ?: id.toString()
     val aliases = alternativeTitles?.synonyms.orEmpty().filter { it.isNotBlank() }
     return Work(
-        id = id.toString(),
+        id = WorkIds.local(SourceId.MAL, id.toString()),
         titles = Titles(
             canonical = canonical,
             ja = japanese,

@@ -7,6 +7,7 @@ import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.Titles
 import com.acgcompass.domain.model.Units
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.model.WorkIds
 import com.acgcompass.domain.model.WorkMatch
 
 /**
@@ -91,7 +92,7 @@ fun AniListMediaDto.toWork(): Work {
     val native = title?.nativeTitle?.takeIf { it.isNotBlank() }
     val canonical = english ?: romaji ?: native ?: id.toString()
     return Work(
-        id = id.toString(),
+        id = WorkIds.local(SourceId.ANILIST, id.toString()),
         titles = Titles(
             canonical = canonical,
             ja = native,

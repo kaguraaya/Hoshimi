@@ -371,7 +371,7 @@ class BroadcastScheduleRepositoryImpl @Inject constructor(
                 mediaType = MediaType.ANIME,
                 status = ReleaseStatus.RELEASING,
                 coverUrl = entry.coverUrl,
-                primarySource = if (entry.source == SourceId.BANGUMI.name) SourceId.BANGUMI else SourceId.ANILIST,
+                primarySource = SourceId.entries.firstOrNull { it.name == entry.source } ?: SourceId.TENRAI,
             )
             val fullCover = bangumiFullCover(entry.coverUrl)
             // 放送表只有标题和小封面：已有作品只补空缺，不能用它覆盖年份、原名、集数和高清封面。

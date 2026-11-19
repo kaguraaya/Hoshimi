@@ -12,6 +12,7 @@ import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.SourceRef
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.model.WorkIds
 import com.acgcompass.domain.model.WorkMatch
 import com.acgcompass.domain.model.displayTitle
 import kotlin.math.roundToInt
@@ -104,8 +105,8 @@ internal fun WorkMatch.toResultItem(): DiscoverResultItem {
         card = card,
         isLowConfidence = low,
         sourceId = sourceTag,
-        // WorkMatch 未暴露源内条目 id，以规范化作品 id 兜底（不伪造，仅作纠正引用）。
-        sourceItemId = work.id,
+        // 作品 id 去掉来源前缀就是该平台的条目编号（见 WorkIds）。
+        sourceItemId = WorkIds.sourceItemId(work.id, sourceTag),
         matchConfidence = matchConfidence,
     )
 }
@@ -198,7 +199,7 @@ private fun List<WorkMatch>.toMergedItem(): DiscoverResultItem {
         card = card,
         isLowConfidence = low,
         sourceId = rep.sourceTag,
-        sourceItemId = rep.work.id,
+        sourceItemId = WorkIds.sourceItemId(rep.work.id, rep.sourceTag),
         matchConfidence = bestConfidence,
         mergeCandidates = if (size > 1) map { it.toResultItem() } else emptyList(),
     )

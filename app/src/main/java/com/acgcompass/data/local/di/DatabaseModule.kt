@@ -155,4 +155,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideTrashDao(db: AcgCompassDatabase): com.acgcompass.data.local.dao.TrashDao = db.trashDao()
+
+    @Provides
+    @Singleton
+    fun provideWorkIdMigrationDao(db: AcgCompassDatabase): com.acgcompass.data.local.dao.WorkIdMigrationDao =
+        db.workIdMigrationDao()
 }
