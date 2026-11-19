@@ -34,6 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -81,6 +82,14 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
     @Inject lateinit var tasteProfileValidationScheduler: Lazy<TasteProfileValidationScheduler>
 
     @Inject lateinit var outboxScheduler: Lazy<com.acgcompass.data.sync.BangumiOutboxScheduler>
+
+    @Inject lateinit var databaseHealthMonitor: Lazy<com.acgcompass.data.local.migration.DatabaseHealthMonitor>
+
+    @Inject lateinit var autoBackupManager: Lazy<com.acgcompass.data.backup.AutoBackupManager>
+
+    @Inject lateinit var autoBackupScheduler: Lazy<com.acgcompass.data.backup.AutoBackupScheduler>
+
+    @Inject lateinit var dataSafety: Lazy<com.acgcompass.data.backup.DataSafety>
 
     @Inject lateinit var trashRepository: Lazy<com.acgcompass.domain.repository.TrashRepository>
 
@@ -145,6 +154,24 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
         // （Room / 网络客户端 / 仓库）与观察者注册都在后台完成，避免冷启动 / 开屏期间在主线程
         // 构建依赖图并与开屏动效争抢，减少掉帧。均为 best-effort，绝不阻塞 UI 起步。
         appScope.launch {
+            // 先打开数据库并自检（刚升级过时对比核心表行数）；打不开时界面进入安全模式，后面的初始化跳过。
+            val health = databaseHealthMonitor.get().check()
+            val justUpgraded = databaseHealthMonitor.get().upgradeVerified
+            if (health is com.acgcompass.data.local.migration.DatabaseHealth.Failed) return@launch
+            dataSafety.get().restoreAutoBackupIfRequested()
+            settingsDataStore.autoBackupEnabled
+                .distinctUntilChanged()
+                .onEach { enabled -> autoBackupScheduler.get().apply(enabled) }
+                .launchIn(appScope)
+            // 升级成功后立即备份一次；平时超过一周没备份成功就补做。升级后疑似少了数据时先不备份，
+            // 免得缺数据的版本挤掉升级前的好备份。
+            launch {
+                when {
+                    health !is com.acgcompass.data.local.migration.DatabaseHealth.Ok -> Unit
+                    justUpgraded -> if (settingsDataStore.autoBackupEnabled.first()) autoBackupManager.get().backupNow()
+                    else -> autoBackupManager.get().runIfDue()
+                }
+            }
             // 自动同步间隔变化即时重新调度；0 表示关闭。
             settingsDataStore.autoSyncIntervalMinutes
                 .distinctUntilChanged()

@@ -141,6 +141,7 @@ data class SettingsActions(
     val onSetDarkThemePreset: (ThemePreset) -> Unit = {},
     val onSetPredictiveBackEnabled: (Boolean) -> Unit = {},
     val onOpenCacheManagement: () -> Unit = {},
+    val onOpenDataSafety: () -> Unit = {},
 )
 
 /**
@@ -193,6 +194,7 @@ fun SettingsScreen(
  * @param sourceKey 数据源键：[SourceId] 枚举名（含 AI_PROVIDER）或 [PRIVACY_SOURCE_KEY]。
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList") // 二级页的跳转回调都由导航层传入
 @Composable
 fun SettingsSourceScreen(
     sourceKey: String,
@@ -203,6 +205,8 @@ fun SettingsSourceScreen(
     onClearLocalData: () -> Unit = {},
     onClearCache: () -> Unit = {},
     onBangumiLogin: () -> Unit = {},
+    onOpenCacheManagement: () -> Unit = {},
+    onOpenDataSafety: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val actions = rememberSettingsActions(
@@ -211,6 +215,8 @@ fun SettingsSourceScreen(
         onOpenDoc = onOpenDoc,
         onClearLocalData = onClearLocalData,
         onClearCache = onClearCache,
+        onOpenCacheManagement = onOpenCacheManagement,
+        onOpenDataSafety = onOpenDataSafety,
         onBangumiLogin = onBangumiLogin,
     )
 
@@ -249,6 +255,8 @@ fun SettingsSourceScreen(
  * 装配 [SettingsActions]：备份 / 导入 / CSV 的 SAF 启动器、官方文档打开兜底、数据操作结果 Toast。
  * 主设置页与二级页共用同一实现和凭据处理逻辑。
  */
+// 把 ViewModel 方法、文件选择器和导航回调组装成一个 SettingsActions，逐项对应，没有分支逻辑可拆。
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 private fun rememberSettingsActions(
     viewModel: SettingsViewModel,
@@ -257,6 +265,7 @@ private fun rememberSettingsActions(
     onClearLocalData: () -> Unit,
     onClearCache: () -> Unit,
     onOpenCacheManagement: () -> Unit = {},
+    onOpenDataSafety: () -> Unit = {},
     onBangumiLogin: () -> Unit = {},
 ): SettingsActions {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
@@ -355,7 +364,7 @@ private fun rememberSettingsActions(
             onOpenDoc(url)
         }
     }
-    val actions = remember(viewModel, effectiveOpenDoc, onOpenCacheManagement) {
+    val actions = remember(viewModel, effectiveOpenDoc, onOpenCacheManagement, onOpenDataSafety) {
         SettingsActions(
             onNavigateBack = onNavigateBack,
             onOpenDoc = effectiveOpenDoc,
@@ -414,6 +423,7 @@ private fun rememberSettingsActions(
             onSetDarkThemePreset = viewModel::onSetDarkThemePreset,
             onSetPredictiveBackEnabled = viewModel::onSetPredictiveBackEnabled,
             onOpenCacheManagement = onOpenCacheManagement,
+            onOpenDataSafety = onOpenDataSafety,
         )
     }
     return actions
@@ -584,7 +594,7 @@ private fun LazyListScope.preferenceAndDataItems(
     item(key = "data") {
         SettingsSummaryRow(
             title = "备份与导出",
-            statusText = "导出 / 导入备份、导出 CSV",
+            statusText = "导出 / 导入备份、导出 CSV、自动备份与数据安全",
             lastTestedAtText = null,
             onClick = { onOpenSource(DATA_SOURCE_KEY) },
         )
@@ -768,6 +778,27 @@ private fun SettingsSummaryRow(
     }
 }
 
+/** 备份与导出二级页：导出 / 导入、数据安全、缓存管理。 */
+private fun LazyListScope.dataSettingsItems(actions: SettingsActions) {
+    item(key = "data") { SettingsGroupCard("备份与导出") { DataManagementActions(actions) } }
+    item(key = "data_safety") {
+        SettingsSummaryRow(
+            title = "数据安全",
+            statusText = "每周自动备份、从自动备份恢复、数据库升级前备份",
+            lastTestedAtText = null,
+            onClick = actions.onOpenDataSafety,
+        )
+    }
+    item(key = "data_cache") {
+        SettingsSummaryRow(
+            title = "缓存管理",
+            statusText = "设置数量或空间上限，按来源、分类或作品清理",
+            lastTestedAtText = null,
+            onClick = actions.onOpenCacheManagement,
+        )
+    }
+}
+
 /**
  * 二级页内容：按 [sourceKey] 渲染对应的既有详细卡片，并强制展开。
  * Bangumi 额外渲染 [BangumiApiConfigCard]，保留官方/社区/自定义下拉与非官方 Token 风险确认。
@@ -802,17 +833,7 @@ private fun SettingsSourceDetail(
             PRIVACY_SOURCE_KEY -> item(key = "privacy") {
                 SettingsGroupCard("隐私") { PrivacyToggles(card = data.privacy, actions = actions) }
             }
-            DATA_SOURCE_KEY -> {
-                item(key = "data") { SettingsGroupCard("备份与导出") { DataManagementActions(actions) } }
-                item(key = "data_cache") {
-                    SettingsSummaryRow(
-                        title = "缓存管理",
-                        statusText = "设置数量或空间上限，按来源、分类或作品清理",
-                        lastTestedAtText = null,
-                        onClick = actions.onOpenCacheManagement,
-                    )
-                }
-            }
+            DATA_SOURCE_KEY -> dataSettingsItems(actions)
             else -> {
                 val card = data.cards.firstOrNull { it.sourceId.name == sourceKey }
                 if (card != null) {

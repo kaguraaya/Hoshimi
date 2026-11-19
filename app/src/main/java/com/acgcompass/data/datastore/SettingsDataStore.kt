@@ -494,6 +494,29 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it[Keys.SCORE_DIFF_AUTO_BACKFILL] = enabled }
     }
 
+    /** 每周自动备份（默认开）。 */
+    val autoBackupEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.AUTO_BACKUP_ENABLED] ?: true }
+
+    suspend fun setAutoBackupEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.AUTO_BACKUP_ENABLED] = enabled }
+    }
+
+    /** 自动备份最近一次的结果：成功时间（0 表示还没成功过）和最近一次失败的原因。 */
+    val autoBackupStatus: Flow<Pair<Long, String?>> = dataStore.data.map {
+        (it[Keys.AUTO_BACKUP_LAST_SUCCESS] ?: 0L) to it[Keys.AUTO_BACKUP_LAST_ERROR]
+    }
+
+    suspend fun recordAutoBackupSuccess(at: Long) {
+        dataStore.edit {
+            it[Keys.AUTO_BACKUP_LAST_SUCCESS] = at
+            it.remove(Keys.AUTO_BACKUP_LAST_ERROR)
+        }
+    }
+
+    suspend fun recordAutoBackupFailure(reason: String) {
+        dataStore.edit { it[Keys.AUTO_BACKUP_LAST_ERROR] = reason }
+    }
+
     /** 首页「今日补番签」是否用 AI 生成。 */
     val aiDailyDraw: Flow<Boolean> = dataStore.data.map { it[Keys.AI_DAILY_DRAW] ?: false }
 
@@ -633,6 +656,9 @@ class SettingsDataStore @Inject constructor(
         val ALLOW_AI_ANALYZE_REVIEWS = booleanPreferencesKey("allow_ai_analyze_reviews")
         val SCORE_DIFF_AUTO_BACKFILL = booleanPreferencesKey("score_diff_auto_backfill")
         val AI_DAILY_DRAW = booleanPreferencesKey("ai_daily_draw")
+        val AUTO_BACKUP_ENABLED = booleanPreferencesKey("auto_backup_enabled")
+        val AUTO_BACKUP_LAST_SUCCESS = longPreferencesKey("auto_backup_last_success")
+        val AUTO_BACKUP_LAST_ERROR = stringPreferencesKey("auto_backup_last_error")
         val SYNC_BACKLOG_TO_BANGUMI = booleanPreferencesKey("sync_backlog_to_bangumi")
         val TASTE_MATCH_BRANCH = stringPreferencesKey("taste_match_branch")
         val RATING_BACKFILL_ATTEMPTS = stringSetPreferencesKey("rating_backfill_attempts")

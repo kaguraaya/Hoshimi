@@ -88,6 +88,8 @@ fun AcgApp(
     OnboardingGate(shouldShowOnboarding, currentRoute, navController)
     val snackbarHostState = rememberAuthNoticeSnackbar(bangumiAuthNotice, onBangumiAuthNoticeShown)
 
+    if (!databaseReady(shellViewModel, modifier)) return
+
     val showDock = TopLevelDestination.isTopLevelRoute(currentRoute)
     // 底栏是一层毛玻璃：取样它下面滚过的页面内容。
     val dockHaze = remember { HazeState() }
@@ -381,7 +383,12 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
             onNavigateBack = { navController.popBackOnce() },
             onBangumiLogin = { navController.navigateOnce(AppDestination.BangumiOAuth.route) },
             onClearCache = { navController.navigateOnce(AppDestination.CacheManagement.route) },
+            onOpenCacheManagement = { navController.navigateOnce(AppDestination.CacheManagement.route) },
+            onOpenDataSafety = { navController.navigateOnce(AppDestination.DataSafety.route) },
         )
+    }
+    composable(AppDestination.DataSafety.route) {
+        com.acgcompass.feature.safety.DataSafetyRoute(onBack = { navController.popBackOnce() })
     }
     composable(AppDestination.CacheManagement.route) {
         CacheManagementScreen(

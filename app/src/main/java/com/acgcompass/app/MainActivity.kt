@@ -29,12 +29,18 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsDataStore: SettingsDataStore
 
+    @Inject
+    lateinit var databaseHealthMonitor: com.acgcompass.data.local.migration.DatabaseHealthMonitor
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // 安装系统开屏（androidx core-splashscreen）——必须在 super.onCreate 之前。
         // 开屏动效（八芒星旋转 + 淡入放大）由 Theme.Hoshimi.Splash 的 windowSplashScreenAnimatedIcon
         // （@drawable/avd_splash）在**系统冷启动窗口**内直接播放，不再用 Compose 手写覆盖层——从根上
         // 消除「首帧与 Compose 争抢主线程掉帧」与「方形静态图标闪现」。setContent 直接托管 AcgApp。
-        installSplashScreen()
+        // 数据库打开 / 升级自检完成前保持开屏（通常几十毫秒；结构升级时会长一些），避免页面先读到打不开的数据库。
+        installSplashScreen().setKeepOnScreenCondition {
+            databaseHealthMonitor.state.value is com.acgcompass.data.local.migration.DatabaseHealth.Checking
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {

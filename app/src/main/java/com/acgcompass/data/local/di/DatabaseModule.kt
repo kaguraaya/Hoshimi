@@ -48,16 +48,19 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AcgCompassDatabase = Room.databaseBuilder(
-        context,
-        AcgCompassDatabase::class.java,
-        AcgCompassDatabase.DATABASE_NAME,
-    )
-        // No fallbackToDestructiveMigration: data must survive upgrades.
-        // Explicit Migration objects are registered centrally in AcgMigrations ;
-        // empty at schema v1, so this spread is currently a safe no-op.
-        .addMigrations(*AcgMigrations.ALL)
-        .build()
+    fun provideDatabase(@ApplicationContext context: Context): AcgCompassDatabase {
+        // 打开之前先看要不要升级：要升级就把数据库文件原样备份一份（见 DatabaseUpgradeBackup）。
+        runCatching { com.acgcompass.data.local.migration.DatabaseUpgradeBackup.backupIfUpgrading(context) }
+        return Room.databaseBuilder(
+            context,
+            AcgCompassDatabase::class.java,
+            AcgCompassDatabase.DATABASE_NAME,
+        )
+            // No fallbackToDestructiveMigration: data must survive upgrades.
+            // Explicit Migration objects are registered centrally in AcgMigrations.
+            .addMigrations(*AcgMigrations.ALL)
+            .build()
+    }
 
     @Provides
     @Singleton

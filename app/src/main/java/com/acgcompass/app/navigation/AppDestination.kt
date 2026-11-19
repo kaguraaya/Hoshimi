@@ -99,6 +99,11 @@ sealed interface AppDestination {
         override val route: String = "trash"
     }
 
+    /** 数据安全：自动备份与升级前数据库备份（设置 → 备份与导出 → 数据安全）。 */
+    data object DataSafety : AppDestination {
+        override val route: String = "data_safety"
+    }
+
     /** 关于页。 */
     data object About : AppDestination {
         override val route: String = "about"
