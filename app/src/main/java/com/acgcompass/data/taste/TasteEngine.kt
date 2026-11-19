@@ -381,23 +381,42 @@ class TasteEngine @Inject constructor(
             val features = runCatching {
                 workFeatureRepository.getFeatures(subjectIds.distinct(), networkBudget)
             }.getOrDefault(emptyMap())
-            val tagOverrides = loadTagOverrides()
-            val memo = batchMemoFor(profile, tagOverrides)
-            val todo = features.filterKeys { !memo.containsKey(it) }
-            if (todo.isNotEmpty()) {
-                val chunkSize = (todo.size / PARALLEL_CHUNKS + 1).coerceAtLeast(MIN_CHUNK)
-                coroutineScope {
-                    todo.entries.chunked(chunkSize).map { chunk ->
-                        async(dispatchers.default) {
-                            chunk.forEach { (id, f) ->
-                                memo[id] = computeMatch(f, profile, null, tagOverrides, withNeighbors = false)
-                            }
-                        }
-                    }.awaitAll()
-                }
-            }
-            features.keys.mapNotNull { id -> memo[id]?.let { id to it } }.toMap()
+            scoreLoaded(profile, features)
         }
+
+    /**
+     * 和 [scoreBatch] 一样打分，但直接用调用方已经读出来的特征（今晚看什么还要拿同一批特征做意图匹配，
+     * 不必再读一遍库）。画像不可用时返回空表。
+     */
+    suspend fun scoreFeatures(features: Map<String, WorkFeature>): Map<String, TasteMatchResult> =
+        withContext(dispatchers.io) {
+            if (features.isEmpty()) return@withContext emptyMap()
+            val profile = profileState.value ?: rebuildFromCache()
+            if (profile == null || !profile.isUsable) return@withContext emptyMap()
+            scoreLoaded(profile, features)
+        }
+
+    private suspend fun scoreLoaded(
+        profile: AdvancedTasteProfile,
+        features: Map<String, WorkFeature>,
+    ): Map<String, TasteMatchResult> {
+        val tagOverrides = loadTagOverrides()
+        val memo = batchMemoFor(profile, tagOverrides)
+        val todo = features.filterKeys { !memo.containsKey(it) }
+        if (todo.isNotEmpty()) {
+            val chunkSize = (todo.size / PARALLEL_CHUNKS + 1).coerceAtLeast(MIN_CHUNK)
+            coroutineScope {
+                todo.entries.chunked(chunkSize).map { chunk ->
+                    async(dispatchers.default) {
+                        chunk.forEach { (id, f) ->
+                            memo[id] = computeMatch(f, profile, null, tagOverrides, withNeighbors = false)
+                        }
+                    }
+                }.awaitAll()
+            }
+        }
+        return features.keys.mapNotNull { id -> memo[id]?.let { id to it } }.toMap()
+    }
 
     /**
      * 给本地作品资料库里的全部作品（已评分的除外，最多 [limit] 部）算口味匹配度并从高到低排序，不联网。

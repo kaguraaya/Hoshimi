@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
  * (); aggregation happens at the domain layer.
  */
 @Dao
+@Suppress("TooManyFunctions") // 按查询场景各一个方法，拆开反而分散
 interface RatingDao {
 
     @Query("SELECT * FROM ratings WHERE workId = :workId")
@@ -27,6 +28,9 @@ interface RatingDao {
 
     @Query("SELECT * FROM ratings WHERE workId = :workId")
     suspend fun getByWork(workId: String): List<RatingEntity>
+
+    @Query("SELECT * FROM ratings WHERE workId IN (:workIds)")
+    suspend fun getByWorks(workIds: List<String>): List<RatingEntity>
 
     @Query("SELECT * FROM ratings WHERE workId = :workId AND sourceId = :sourceId LIMIT 1")
     suspend fun getByWorkAndSource(workId: String, sourceId: String): RatingEntity?

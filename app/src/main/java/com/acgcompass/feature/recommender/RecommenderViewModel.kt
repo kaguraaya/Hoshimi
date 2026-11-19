@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -104,6 +105,15 @@ class RecommenderViewModel @Inject constructor(
             // 统计候选池标签同样是纯计算，放到后台线程，切换候选池时界面不卡。
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * 本地动画作品（含标签）。进页面统计标签时读一次，之后提交推荐直接复用；作品表有变化时 Room 会自动推新的一份。
+     * 在数据库里只筛动画，不读视觉小说等其它类型的作品和标签。
+     */
+    private val animeWorks: StateFlow<List<Work>?> =
+        workRepository.observeWorksByMediaType(MediaType.ANIME)
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     init {
         // 进入推荐页只从本地缓存恢复画像；远端特征补齐由独立后台任务负责。
@@ -196,10 +206,9 @@ class RecommenderViewModel @Inject constructor(
 
     /** 按候选池加载候选作品（跨源去重、优先 Bangumi 代表）。供推荐与动态标签统计共用。 */
     private suspend fun loadCandidates(pool: CandidatePool): List<Work> {
-        val allWorks = workRepository.observeWorks().first()
+        val allWorks = animeWorks.filterNotNull().first()
         return when (pool) {
-            CandidatePool.ALL_WORKS ->
-                dedupePreferBangumi(allWorks.filter { it.mediaType == MediaType.ANIME })
+            CandidatePool.ALL_WORKS -> dedupePreferBangumi(allWorks)
             CandidatePool.BACKLOG -> {
                 val backlogIds = backlogRepository
                     .observeBacklog(BacklogFilter.NONE, BacklogSort.ADDED_DESC)
@@ -246,9 +255,10 @@ class RecommenderViewModel @Inject constructor(
         candidates: List<Work>,
     ): UiState<List<RecommendationUiModel>> {
         val taste: TasteProfile? = tasteProfileRepository.observeTasteProfile().first()
-        // 推荐热路径只读取本地特征；后台补齐不会阻塞提交。画像尚未就绪时回退到
-        // PersonalTasteScorer，继续使用个人标签偏好完成即时排序。
-        runCatching { tasteEngine.rebuildFromCache() }
+        // 推荐热路径只读取本地特征；后台补齐不会阻塞提交。画像由收藏变化时的自动更新器重建，
+        // 这里直接用现成的（没有才用缓存建一次），打分记忆因此能跨多次提交复用。
+        // 画像尚未就绪时回退到 PersonalTasteScorer，继续使用个人标签偏好完成即时排序。
+        runCatching { tasteEngine.ensureReady() }
         // 用户可调的社区评分下限与口味匹配度阈值。
         val minScore = settingsDataStore.recommendMinCommunityScore.first()
         val tasteThreshold = settingsDataStore.tasteMatchThreshold.first()
@@ -328,20 +338,14 @@ class RecommenderViewModel @Inject constructor(
 
         // 第二步：口味打分。优先使用 12 维口味引擎的校准匹配度（0–100）；
         // 引擎对该候选不可用（无特征 / 非 Bangumi / 画像未建）时回退共享 [PersonalTasteScorer] 旧标签重合估计。
+        // 特征只读一次：打分、意图匹配、风险气质都用这一份；只用本地缓存，不联网（缺的由后台任务补齐）。
+        val featureById = tasteEngine.cachedFeatures(workingSet.mapNotNull { subjectIdOf(it.first) })
         val engineScores: Map<String, com.acgcompass.domain.taste.TasteMatchResult> = runCatching {
-            tasteEngine.scoreBatch(
-                workingSet.mapNotNull { subjectIdOf(it.first) },
-                networkBudget = TONIGHT_FEATURE_BUDGET,
-            )
+            tasteEngine.scoreFeatures(featureById)
         }.getOrDefault(emptyMap())
 
         // 当晚意图匹配：按标签在作品里的代表性（标注人数 + 名次）判断「这部是不是今晚想看的那一类」，
         // 多个标签按 soft-AND 组合处理。有缓存特征时用带标注人数的标签，否则退回作品标签的顺序。
-        val featureById = if (tagSelected) {
-            tasteEngine.cachedFeatures(workingSet.mapNotNull { subjectIdOf(it.first) })
-        } else {
-            emptyMap()
-        }
         val intentById: Map<String, IntentMatch> = if (tagSelected) {
             workingSet.mapNotNull { (w, _, _) ->
                 val feature = subjectIdOf(w)?.let { featureById[it] }
@@ -365,8 +369,9 @@ class RecommenderViewModel @Inject constructor(
             triple to (roughTaste + (intentById[w.id]?.fit?.toFloat() ?: 0f))
         }.sortedByDescending { it.second }.take(RATING_LOOKUP_POOL).map { it.first }
 
+        val ratingsById = workRepository.aggregateRatingsCached(preRanked.map { it.first.id })
         val ranked = preRanked.map { (w, matchedSelected, hitSelected) ->
-            val agg = workRepository.aggregateRatingsCached(w.id)
+            val agg = ratingsById[w.id] ?: workRepository.aggregateRatingsCached(w.id)
             val mean = agg.mean10()
             val votes = agg.totalVotes()
             // 贝叶斯均分：评分人数少的高分被拉回先验，避免「三个人打 9.5」压过大众口碑。
@@ -428,10 +433,9 @@ class RecommenderViewModel @Inject constructor(
         val riskById: Map<String, Pair<String, Double>> = if (untolerated.isEmpty()) {
             emptyMap()
         } else {
-            val features = tasteEngine.cachedFeatures(filtered.mapNotNull { subjectIdOf(it.work) })
             filtered.mapNotNull { s ->
                 val w = s.work
-                val feature = subjectIdOf(w)?.let { features[it] }
+                val feature = subjectIdOf(w)?.let { featureById[it] }
                 val rep = TagRepresentativeness(
                     tags = feature?.tagCounts?.takeIf { it.isNotEmpty() } ?: w.tags.map { TagCount(it.name, 0) },
                     episodes = feature?.eps?.takeIf { it > 0 } ?: w.units.episodes ?: 0,
@@ -690,12 +694,6 @@ class RecommenderViewModel @Inject constructor(
          * 仍按频次降序保证主流热门优先；待补池维持 [MAX_TAG_OPTIONS] 精简。
          */
         const val ALL_WORKS_TAG_OPTIONS = 40
-
-        /**
-         * 精排热路径不联网补齐特征，只使用缓存特征；缺失时回退 [PersonalTasteScorer]。
-         * 特征由初始化、导入或同步任务在后台补齐。
-         */
-        const val TONIGHT_FEATURE_BUDGET = 0
 
         /** 重复推荐软惩罚的回看窗口（惩罚随时间衰减，见 [TonightRanker]）。 */
         const val REPEAT_COOLDOWN_MS = 14L * 24 * 3600 * 1000
