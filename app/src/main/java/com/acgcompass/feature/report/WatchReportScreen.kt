@@ -1,7 +1,8 @@
 package com.acgcompass.feature.report
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,24 +16,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,11 +40,9 @@ import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.designsystem.TonalFilterChip
 import com.acgcompass.core.ui.AcgScreenScaffold
-import com.acgcompass.core.ui.LocalAppMessenger
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.domain.report.ReportWork
 import com.acgcompass.domain.report.WatchReport
-import kotlinx.coroutines.launch
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -68,7 +62,9 @@ fun WatchReportRoute(
             state = state,
             onSelectPeriod = viewModel::onSelectPeriod,
             onSelectTemplate = viewModel::onSelectTemplate,
+            onSelectSize = viewModel::onSelectSize,
             onToggleHideRatings = viewModel::onToggleHideRatings,
+            onToggleHidden = viewModel::onToggleHidden,
             onOpenWork = onOpenWork,
             contentPadding = ScreenContentPadding.lazyList(innerPadding),
         )
@@ -82,7 +78,9 @@ fun WatchReportContent(
     state: WatchReportUiState,
     onSelectPeriod: (com.acgcompass.domain.report.ReportPeriod) -> Unit,
     onSelectTemplate: (ReportTemplate) -> Unit,
+    onSelectSize: (ReportSize) -> Unit,
     onToggleHideRatings: () -> Unit,
+    onToggleHidden: (String) -> Unit,
     onOpenWork: (String) -> Unit,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
 ) {
@@ -110,9 +108,9 @@ fun WatchReportContent(
                 Note("这段时间还没有看完的作品。在 Bangumi 上把看完的作品标成「看过」并同步后，这里会自动统计。")
             }
             else -> {
-                item(key = "stats") { StatsCard(report, state.hideRatings) }
-                item(key = "works") { FinishedGrid(report.finished, state.hideRatings, onOpenWork) }
-                item(key = "share") { ShareCard(state, onSelectTemplate, onToggleHideRatings) }
+                item(key = "stats") { StatsCard(report, state.style.hideRatings) }
+                item(key = "works") { FinishedGrid(report.finished, state.style, onOpenWork, onToggleHidden) }
+                item(key = "share") { ShareCard(state, onSelectTemplate, onSelectSize, onToggleHideRatings) }
                 item(key = "note") {
                     Note("看完时间优先按时光机记录的状态变化，其次按 Bangumi 收藏的更新时间推断，可能有偏差。")
                 }
@@ -166,47 +164,28 @@ private fun BigNumber(value: String, unit: String) {
     }
 }
 
-/** 看完的作品：4 列封面，评分高的在前。 */
+/** 看完的作品：4 列封面，评分高的在前；点开详情，长按切换放不放进分享图。 */
 @Composable
-private fun FinishedGrid(works: List<ReportWork>, hideRatings: Boolean, onOpenWork: (String) -> Unit) {
+private fun FinishedGrid(
+    works: List<ReportWork>,
+    style: ReportStyle,
+    onOpenWork: (String) -> Unit,
+    onToggleHidden: (String) -> Unit,
+) {
     PrismCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("看完的 ${works.size} 部", style = MaterialTheme.typography.titleMedium)
             works.chunked(GRID_COLUMNS).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { work ->
-                        Column(Modifier.weight(1f).clip(PrismCorner.Thumb).clickable { onOpenWork(work.workId) }) {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(COVER_ASPECT)
-                                    .clip(PrismCorner.Thumb)
-                                    .background(Surfaces.raisedColor),
-                            ) {
-                                if (work.coverUrl != null) {
-                                    AsyncImage(
-                                        model = work.coverUrl,
-                                        contentDescription = work.title,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            }
-                            Text(
-                                work.title,
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                            if (!hideRatings && work.rating != null) {
-                                Text(
-                                    "${work.rating} 分",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+                        FinishedCell(
+                            work = work,
+                            hideRatings = style.hideRatings,
+                            hidden = work.workId in style.hidden,
+                            onClick = { onOpenWork(work.workId) },
+                            onLongClick = { onToggleHidden(work.workId) },
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                     repeat(GRID_COLUMNS - row.size) { Box(Modifier.weight(1f)) }
                 }
@@ -215,53 +194,64 @@ private fun FinishedGrid(works: List<ReportWork>, hideRatings: Boolean, onOpenWo
     }
 }
 
-/** 分享图：选版式、隐藏评分，保存或分享。 */
+@Suppress("LongParameterList") // 一格的数据、两个状态和两种点击
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ShareCard(
-    state: WatchReportUiState,
-    onSelectTemplate: (ReportTemplate) -> Unit,
-    onToggleHideRatings: () -> Unit,
+private fun FinishedCell(
+    work: ReportWork,
+    hideRatings: Boolean,
+    hidden: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val showMessage = LocalAppMessenger.current
-    var busy by remember { mutableStateOf(false) }
-    val report = state.report ?: return
-    PrismCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("分享图", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ReportTemplate.entries.forEach { template ->
-                    TonalFilterChip(template.label, template == state.template, { onSelectTemplate(template) })
-                }
-                TonalFilterChip("隐藏评分", state.hideRatings, onToggleHideRatings)
-            }
-            if (!report.enoughForShare) {
-                Text(
-                    "看完 ${WatchReport.MIN_FINISHED} 部以上才能生成分享图，再看几部再来吧。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column(
+        modifier
+            .clip(PrismCorner.Thumb)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .alpha(if (hidden) HIDDEN_ALPHA else 1f),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(COVER_ASPECT)
+                .clip(PrismCorner.Thumb)
+                .background(Surfaces.raisedColor),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (work.coverUrl != null) {
+                AsyncImage(
+                    model = work.coverUrl,
+                    contentDescription = work.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                fun run(action: suspend (android.graphics.Bitmap) -> Boolean, done: String) {
-                    busy = true
-                    scope.launch {
-                        val ok = runCatching {
-                            action(ReportShare.render(context, report, state.template, state.hideRatings))
-                        }.getOrDefault(false)
-                        busy = false
-                        showMessage(if (ok) done else "生成失败，稍后再试")
-                    }
-                }
-                val enabled = report.enoughForShare && !busy
-                FilledTonalButton(onClick = { run({ ReportShare.save(context, it) }, "已保存到相册") }, enabled = enabled) {
-                    Text("存图")
-                }
-                Button(onClick = { run({ ReportShare.share(context, it) }, "已生成，选择要分享到哪里") }, enabled = enabled) {
-                    Text(if (busy) "生成中…" else "分享")
-                }
+            if (hidden) {
+                Text(
+                    "不放进图里",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .clip(PrismCorner.Thumb)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
             }
+        }
+        Text(
+            work.title,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        if (!hideRatings && work.rating != null) {
+            Text(
+                "${work.rating} 分",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -279,3 +269,4 @@ private fun Note(text: String) {
 private const val GRID_COLUMNS = 4
 private const val COVER_ASPECT = 0.75f
 private const val PERCENT = 100
+private const val HIDDEN_ALPHA = 0.4f

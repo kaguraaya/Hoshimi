@@ -20,8 +20,7 @@ data class WatchReportUiState(
     val selected: ReportPeriod = periods.first(),
     val loading: Boolean = true,
     val report: WatchReport? = null,
-    val template: ReportTemplate = ReportTemplate.WALL,
-    val hideRatings: Boolean = false,
+    val style: ReportStyle = ReportStyle(),
 )
 
 /** 年度 / 季度回顾：切换时间范围时重新统计（只读本地数据）。 */
@@ -43,9 +42,18 @@ class WatchReportViewModel @Inject constructor(
         load(period)
     }
 
-    fun onSelectTemplate(template: ReportTemplate) = _state.update { it.copy(template = template) }
+    fun onSelectTemplate(template: ReportTemplate) = updateStyle { it.copy(template = template) }
 
-    fun onToggleHideRatings() = _state.update { it.copy(hideRatings = !it.hideRatings) }
+    fun onSelectSize(size: ReportSize) = updateStyle { it.copy(size = size) }
+
+    fun onToggleHideRatings() = updateStyle { it.copy(hideRatings = !it.hideRatings) }
+
+    /** 长按作品：放进 / 不放进分享图。 */
+    fun onToggleHidden(workId: String) = updateStyle { style ->
+        style.copy(hidden = if (workId in style.hidden) style.hidden - workId else style.hidden + workId)
+    }
+
+    private fun updateStyle(change: (ReportStyle) -> ReportStyle) = _state.update { it.copy(style = change(it.style)) }
 
     private fun load(period: ReportPeriod) {
         loadJob?.cancel()
