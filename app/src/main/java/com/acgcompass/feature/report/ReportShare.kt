@@ -8,6 +8,7 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.acgcompass.core.ui.GallerySaver
+import com.acgcompass.domain.report.ReportWork
 import com.acgcompass.domain.report.WatchReport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -20,9 +21,9 @@ internal object ReportShare {
     private const val COVER_PIXELS = 480
     private const val MAX_COVERS = 40
 
-    suspend fun render(context: Context, report: WatchReport, template: ReportTemplate, hideRatings: Boolean): Bitmap {
-        val covers = loadCovers(context, report)
-        return withContext(Dispatchers.Default) { ReportImage.render(report, template, covers, hideRatings) }
+    suspend fun render(context: Context, report: WatchReport, style: ReportStyle): Bitmap {
+        val covers = loadCovers(context, report.finished.filterNot { it.workId in style.hidden })
+        return withContext(Dispatchers.Default) { ReportImage.render(report, style, covers) }
     }
 
     suspend fun save(context: Context, bitmap: Bitmap): Boolean = GallerySaver.savePng(
@@ -42,8 +43,9 @@ internal object ReportShare {
         return true
     }
 
-    private suspend fun loadCovers(context: Context, report: WatchReport): Map<String, Bitmap> = coroutineScope {
-        report.finished.take(MAX_COVERS).filter { it.coverUrl != null }.map { work ->
+    /** 封面走 Coil 的缓存，换版式时不会重复下载。 */
+    private suspend fun loadCovers(context: Context, works: List<ReportWork>): Map<String, Bitmap> = coroutineScope {
+        works.take(MAX_COVERS).filter { it.coverUrl != null }.map { work ->
             async {
                 val request = ImageRequest.Builder(context)
                     .data(work.coverUrl)
