@@ -73,7 +73,13 @@ class CollectionMergePlannerTest {
 
     @Test
     fun olderLocalEditLosesToNewerWebChange() {
-        val local = mapOf("A" to record("A", "看过", updatedAt = 15 * minute, syncedAt = 10 * minute))
+        // 10 分同步过（当时 Bangumi 上的更新时间也是 10 分），15 分在应用里改，20 分又在网页上改。
+        val local = mapOf(
+            "A" to record(
+                "A", "看过", updatedAt = 15 * minute, syncedAt = 10 * minute,
+                sourceUpdatedAt = "1970-01-01T00:10:00Z",
+            ),
+        )
         val plan = planCollectionMerge(listOf(remote("A", "抛弃", at = 20 * minute)), local, emptyMap(), emptySet(), true)
         assertEquals("抛弃", plan.upserts.single().status)
         assertTrue(plan.pushLocal.isEmpty())
@@ -125,5 +131,50 @@ class CollectionMergePlannerTest {
         assertEquals(1_763_424_000_000L, parseBangumiTime("2025-11-18T08:00:00+08:00"))
         assertNull(parseBangumiTime("garbage"))
         assertNull(parseBangumiTime(null))
+    }
+
+    @Test
+    fun localEditKeptWhenRemoteUnchangedEvenIfPhoneClockIsBehind() {
+        // 上次同步时 Bangumi 上的更新时间是 20 分；手机时钟慢了一小时，本地 30 分（真实时间）改的评分记成了 -30 分。
+        val local = mapOf(
+            "A" to record(
+                "A", "看过", rating = 9, updatedAt = -30 * minute, syncedAt = -40 * minute,
+                sourceUpdatedAt = "1970-01-01T00:20:00Z",
+            ),
+        )
+        // 远端没再改过：更新时间还是 20 分。
+        val plan =
+            planCollectionMerge(
+                listOf(remote("A", "看过", rating = 7, at = 20 * minute)),
+                local,
+                emptyMap(),
+                emptySet(),
+                true,
+            )
+        assertEquals(listOf("A"), plan.pushLocal)
+        assertTrue(plan.upserts.isEmpty())
+    }
+
+    @Test
+    fun whenBothSidesChangedTheNewerWins() {
+        val local = mapOf(
+            "A" to record(
+                "A", "看过", rating = 9, updatedAt = 50 * minute, syncedAt = 10 * minute,
+                sourceUpdatedAt = "1970-01-01T00:10:00Z",
+            ),
+            "B" to record(
+                "B", "看过", rating = 9, updatedAt = 30 * minute, syncedAt = 10 * minute,
+                sourceUpdatedAt = "1970-01-01T00:10:00Z",
+            ),
+        )
+        val plan = planCollectionMerge(
+            listOf(remote("A", "看过", rating = 6, at = 40 * minute), remote("B", "看过", rating = 6, at = 40 * minute)),
+            local,
+            emptyMap(),
+            emptySet(),
+            true,
+        )
+        assertEquals(listOf("A"), plan.pushLocal)
+        assertEquals(listOf("B"), plan.upserts.map { it.localWorkId })
     }
 }

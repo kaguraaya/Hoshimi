@@ -300,7 +300,8 @@ class HomeViewModel @Inject constructor(
                     is AppResult.Success -> {
                         val rep = r.data
                         _syncMessage.value =
-                            "同步完成：新增 ${rep.added} · 更新 ${rep.updated} · 跳过 ${rep.skipped} · 失败 ${rep.failed}"
+                            "同步完成：新增 ${rep.added} · 更新 ${rep.updated} · 跳过 ${rep.skipped} · 失败 ${rep.failed}" +
+                            rep.incompleteNote.orEmpty()
                         // 同步状态由 SyncStatusRepository 写入，uiState 的 combine 会自动刷新提醒。
                     }
                     is AppResult.Failure ->

@@ -43,6 +43,37 @@ class CrossSourceMergeTest : StringSpec({
         clusters.size shouldBe 2
     }
 
+    "A≈B、B≈C 但 A 和 C 年份冲突时，C 不会被串进 A 的簇" {
+        val a = work("1", "某作品", ja = "サクヒン", year = 2013, source = SourceId.BANGUMI)
+        val b = work("2", "Sakuhin", ja = "サクヒン", year = null, source = SourceId.ANILIST)
+        val c = work("3", "Sakuhin", ja = "サクヒン", year = 2017, source = SourceId.TENRAI)
+        sameWork(a, b) shouldBe true
+        sameWork(b, c) shouldBe true
+        sameWork(a, c) shouldBe false
+        val clusters = clusterMatches(
+            listOf(
+                WorkMatch(work = a, matchConfidence = 0.9f, sourceTag = SourceId.BANGUMI),
+                WorkMatch(work = b, matchConfidence = 0.8f, sourceTag = SourceId.ANILIST),
+                WorkMatch(work = c, matchConfidence = 0.7f, sourceTag = SourceId.TENRAI),
+            ),
+        )
+        clusters.map { cluster -> cluster.map { it.work.id }.toSet() } shouldBe listOf(setOf("1", "2"), setOf("3"))
+    }
+
+    "靠中间一部搭桥的正常跨平台合并不受影响" {
+        val a = work("1", "某作品", ja = "サクヒン", year = 2013, source = SourceId.BANGUMI)
+        val b = work("2", "Sakuhin", ja = "サクヒン", year = 2013, source = SourceId.ANILIST)
+        val c = work("3", "Sakuhin", year = 2013, source = SourceId.TENRAI)
+        val clusters = clusterMatches(
+            listOf(
+                WorkMatch(work = a, matchConfidence = 0.9f, sourceTag = SourceId.BANGUMI),
+                WorkMatch(work = b, matchConfidence = 0.8f, sourceTag = SourceId.ANILIST),
+                WorkMatch(work = c, matchConfidence = 0.7f, sourceTag = SourceId.TENRAI),
+            ),
+        )
+        clusters.size shouldBe 1
+    }
+
     "9nine 与 9-nine 仅空格/连字符差异应合并（紧凑归一）" {
         val a = work("1", "9nine", source = SourceId.BANGUMI)
         val b = work("2", "9-nine", source = SourceId.ANILIST)

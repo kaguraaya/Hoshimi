@@ -222,16 +222,31 @@ private const val MIN_LATIN_ALIAS_LEN = 5
 
 /**
  * 按置信度降序对疑似同一作品的候选进行贪心聚类。
+ *
+ * 候选和簇里任意一部是同一作品就可以加入（不同平台的标题写法不同，常要靠中间一部搭桥），
+ * 但和簇里任何一部有硬冲突（季数、衍生类型、年份、媒介类型对不上）时不加入，
+ * 避免 A≈B、B≈C 而 A 和 C 明显不是同一部时被串进同一簇。
  */
 public fun clusterMatches(matches: List<WorkMatch>): List<List<WorkMatch>> {
     if (matches.isEmpty()) return emptyList()
     val ranked = matches.sortedByDescending { it.matchConfidence }
     val clusters = mutableListOf<MutableList<WorkMatch>>()
     for (m in ranked) {
-        val target = clusters.firstOrNull { cluster -> cluster.any { sameWork(it.work, m.work) } }
+        val target = clusters.firstOrNull { cluster ->
+            cluster.any { sameWork(it.work, m.work) } && cluster.none { hardConflict(it.work, m.work) }
+        }
         if (target != null) target.add(m) else clusters.add(mutableListOf(m))
     }
     return clusters
+}
+
+/** 两部作品明显不是同一部：季数、衍生类型、年份或媒介类型对不上（同一平台的同一编号除外）。 */
+private fun hardConflict(a: Work, b: Work): Boolean {
+    if (sameSourceItem(a, b)) return false
+    val seasonDiffers = seasonNumberOf(a.formalTitleVariants()) != seasonNumberOf(b.formalTitleVariants())
+    val editionDiffers = editionMarkersOf(a.formalTitleVariants()) != editionMarkersOf(b.formalTitleVariants())
+    val yearDiffers = a.year != null && b.year != null && a.year != b.year
+    return seasonDiffers || editionDiffers || yearDiffers || mediaTypesConflict(a.mediaType, b.mediaType)
 }
 
 /** 评分人数加成的满档（对数缩放）——达此人数即拿到最大加成。 */

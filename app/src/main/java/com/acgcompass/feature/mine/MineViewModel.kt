@@ -99,7 +99,7 @@ class MineViewModel @Inject constructor(
                         val rep = r.data
                         _syncMessage.value =
                             "已从 Bangumi 同步：新增 ${rep.added} · 更新 ${rep.updated} · " +
-                            "跳过 ${rep.skipped} · 失败 ${rep.failed}（共 ${rep.total}）"
+                            "跳过 ${rep.skipped} · 失败 ${rep.failed}（共 ${rep.total}）" + rep.incompleteNote.orEmpty()
                     }
                     is AppResult.Failure -> _syncMessage.value = "同步失败：${r.error.cause}"
                 }
