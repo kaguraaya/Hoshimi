@@ -111,6 +111,12 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindTasteRankingRepository(
+        impl: com.acgcompass.data.taste.TasteRankingRepositoryImpl,
+    ): com.acgcompass.domain.taste.TasteRankingRepository
+
+    @Binds
+    @Singleton
     abstract fun bindTrashRepository(
         impl: com.acgcompass.data.repository.TrashRepositoryImpl,
     ): com.acgcompass.domain.repository.TrashRepository

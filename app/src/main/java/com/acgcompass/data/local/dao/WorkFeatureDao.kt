@@ -53,6 +53,17 @@ interface WorkFeatureDao {
     @Query("SELECT COUNT(*) FROM work_features")
     suspend fun count(): Int
 
+    /** 能参与口味排行的动画资料数（mediaType 为空的旧数据按动画算）。 */
+    @Query("SELECT COUNT(*) FROM work_features WHERE mediaType IS NULL OR mediaType = 'ANIME'")
+    suspend fun countAnime(): Int
+
+    /** 本地作品池（`works` 表的 Bangumi 动画）里还没有作品资料的部数。 */
+    @Query(
+        "SELECT COUNT(*) FROM works w LEFT JOIN work_features f ON f.subjectId = w.id " +
+            "WHERE w.mediaType = :mediaType AND f.subjectId IS NULL AND w.id NOT GLOB '*[^0-9]*'",
+    )
+    suspend fun countPoolWithoutFeature(mediaType: String): Int
+
     @Query("SELECT COUNT(*) FROM work_features WHERE completeness != 'EMBEDDED'")
     suspend fun countVerified(): Int
 

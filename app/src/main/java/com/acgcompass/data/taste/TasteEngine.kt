@@ -15,6 +15,8 @@ import com.acgcompass.domain.taste.AdvancedTasteProfile
 import com.acgcompass.domain.taste.BuildTasteProfileUseCase
 import com.acgcompass.domain.taste.ComputeTasteMatchUseCase
 import com.acgcompass.domain.taste.ImplicitSignal
+import com.acgcompass.domain.taste.LocalRankedWork
+import com.acgcompass.domain.taste.LocalRanking
 import com.acgcompass.domain.taste.TasteAlgorithmConfigSource
 import com.acgcompass.domain.taste.TasteCategory
 import com.acgcompass.domain.taste.TasteMatchBranch
@@ -422,6 +424,42 @@ class TasteEngine @Inject constructor(
         }.sortedByDescending { it.second }
     }
 
+    /**
+     * 口味排行用：本地作品库里的动画全部算匹配度并排序（只算分；评过分的作品带上你的评分，和详情页一致），
+     * 再给没评过分的前 [detailedUnrated] 部、评过分的前 [detailedRated] 部补上推荐理由和预计评分。
+     * 两组分开取，避免评过分的作品把待发现的作品挤出前列。不联网；画像不可用时返回 null。
+     */
+    suspend fun rankLocalPoolDetailed(
+        detailedUnrated: Int = RANK_DETAILED,
+        detailedRated: Int = RANK_DETAILED_RATED,
+    ): LocalRanking? = withContext(dispatchers.io) {
+        val profile = profileState.value ?: rebuildFromCache()
+        if (profile == null || !profile.isUsable) return@withContext null
+        val rated = profile.ratedSubjectScores
+        val pool = runCatching { workFeatureRepository.getCachedPool(LOCAL_RANK_LIMIT) }.getOrDefault(emptyList())
+            .filter { it.hasSignal && (it.mediaType == null || it.mediaType == MediaType.ANIME) }
+        val overrides = loadTagOverrides()
+        val scored = parallelMap(pool) { f ->
+            val match =
+                computeMatch(f, profile, rated[f.subjectId], overrides, withNeighbors = false, withReasons = false)
+            f to match.score
+        }.sortedByDescending { it.second }
+        val (ratedScored, unratedScored) = scored.partition { it.first.subjectId in rated }
+        val top = unratedScored.take(detailedUnrated) + ratedScored.take(detailedRated)
+        val entries = parallelMap(top) { (f, _) ->
+            val mine = rated[f.subjectId]
+            LocalRankedWork(f, computeMatch(f, profile, mine, overrides, withNeighbors = false), mine)
+        }.sortedByDescending { it.match.score }
+        LocalRanking(entries, poolSize = pool.size, unratedCount = unratedScored.size)
+    }
+
+    /** 分块并行映射（纯计算，结果顺序与输入一致）。 */
+    private suspend fun <T, R> parallelMap(items: List<T>, transform: (T) -> R): List<R> = coroutineScope {
+        items.chunked((items.size / PARALLEL_CHUNKS + 1).coerceAtLeast(MIN_CHUNK)).map { chunk ->
+            async(dispatchers.default) { chunk.map(transform) }
+        }.awaitAll().flatten()
+    }
+
     private class BatchMemo(
         val profile: AdvancedTasteProfile,
         val overridesHash: Int,
@@ -528,6 +566,8 @@ class TasteEngine @Inject constructor(
 
         /** 本地排名一次最多算多少部（作品资料库里通常几百到几千部）。 */
         const val LOCAL_RANK_LIMIT = 20_000
+        const val RANK_DETAILED = 500
+        const val RANK_DETAILED_RATED = 300
 
         /** 批量评分记忆表的上限：超过就整表换新。 */
         const val BATCH_MEMO_LIMIT = 6_000

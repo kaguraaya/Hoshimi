@@ -34,6 +34,9 @@ enum class DiscoverTab(val label: String) {
     /** 各源榜单。 */
     RANKING("榜单"),
 
+    /** 本地作品库按我的口味匹配度排序。 */
+    TASTE("为你排行"),
+
     /** 评分差异榜。 */
     SCORE_DIFF("评分差异"),
 

@@ -109,6 +109,11 @@ sealed interface AppDestination {
         override val route: String = "taste_code/compat?code={code}"
     }
 
+    /** 口味排行：本地作品库按口味匹配度排序。 */
+    data object TasteRanking : AppDestination {
+        override val route: String = "taste_ranking"
+    }
+
     /** 回收站：移出待补池 / 清空的记录与 Bangumi 上已删除的收藏，可恢复。 */
     data object Trash : AppDestination {
         override val route: String = "trash"

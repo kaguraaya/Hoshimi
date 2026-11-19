@@ -187,6 +187,23 @@ class BangumiRemoteDataSource @Inject constructor(
     }
 
     /**
+     * 按 Bangumi 排行取一段条目的原始结果（带完整标签和标注人数），供「补充作品库」直接存作品资料；
+     * 返回 (条目, 过滤后总数)。不经过 [subjectSink]，由调用方同步写库。
+     */
+    suspend fun rankedSubjectDtos(
+        offset: Int,
+        limit: Int,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<Pair<List<BangumiSubjectDto>, Int>> = runCatchingApp {
+        val request = BangumiSearchRequestDto(
+            keyword = "",
+            sort = BangumiSearchSort.RANK,
+            filter = BangumiSearchFilterDto(type = listOf(BangumiSubjectType.ANIME), rank = listOf(">0"), nsfw = false),
+        )
+        collectSearchPages(request, limit, offset, auth.withPriority(priority))
+    }
+
+    /**
      * 连续取满 [limit] 条搜索结果。
      *
      * 搜索接口的单页条数由服务器封顶（实测 2026-11 为 20 条，官方规范未写上限且注明「实验性、随时可能改动」）：
