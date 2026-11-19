@@ -179,7 +179,7 @@ app/src/main/java/com/acgcompass/
 
 - 提交说明使用 [Conventional Commits](https://www.conventionalcommits.org/)，例如 `fix(画像): ...`、`feat(口味): ...`。
 - 每个版本同时修改 `app/build.gradle.kts` 的 `versionName` / `versionCode`，并在 `CHANGELOG.md` 顶部写 `## x.y.z - YYYY-MM-DD` 段落。
-- 提交前运行 `./gradlew :app:testDebugUnitTest :app:ktlintCheck :app:detekt`。
+- 提交前运行 `./gradlew :app:testDebugUnitTest :app:ktlintCheck :app:detekt`；推送到 `main` 和每个 PR 都会由 GitHub Actions（`.github/workflows/android-ci.yml`）自动跑同样的检查。
   - ktlint：行宽 120，import 按字母序；
   - detekt：方法长度 60 行、复杂度 15，基线在 `app/config/detekt-baseline.xml`。
 - 单元测试方法名使用 ASCII。
