@@ -51,6 +51,7 @@ object AcgMigrations {
     private const val VERSION_17 = 17
     private const val VERSION_18 = 18
     private const val VERSION_19 = 19
+    private const val VERSION_20 = 20
 
     /**
      * v1 → v2：新增 `user_collections` 表（用户个人收藏：状态、评分、进度、短评和标签）。
@@ -418,6 +419,18 @@ object AcgMigrations {
         db.execSQL("ALTER TABLE `work_features` ADD COLUMN `airDate` TEXT")
     }
 
+    /** v19 → v20：本地回收站（被移除的待补池条目与收藏的快照）。 */
+    private val MIGRATION_19_20 = Migration(VERSION_19, VERSION_20) { db ->
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `trash_items` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                "`workId` TEXT NOT NULL, `batchId` TEXT NOT NULL, `title` TEXT NOT NULL, `coverUrl` TEXT, " +
+                "`payloadJson` TEXT, `reason` TEXT NOT NULL, `removedAt` INTEGER NOT NULL, " +
+                "`purged` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_trash_items_workId` ON `trash_items` (`workId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_trash_items_batchId` ON `trash_items` (`batchId`)")
+    }
+
     private val MIGRATION_17_18 = Migration(VERSION_17, VERSION_18) { db ->
         db.execSQL(
             "ALTER TABLE `background_task_state` ADD COLUMN `personalInputFingerprint` TEXT NOT NULL DEFAULT ''",
@@ -458,5 +471,6 @@ object AcgMigrations {
         MIGRATION_16_17,
         MIGRATION_17_18,
         MIGRATION_18_19,
+        MIGRATION_19_20,
     )
 }

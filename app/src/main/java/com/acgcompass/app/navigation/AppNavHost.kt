@@ -12,10 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -81,41 +79,22 @@ fun AcgApp(
     onBangumiAuthNoticeShown: () -> Unit = {},
 ) {
     val shouldShowOnboarding by onboardingViewModel.shouldShowOnboarding.collectAsStateWithLifecycle()
+    val shellViewModel: AppShellViewModel = hiltViewModel()
 
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
     val currentTopLevel = TopLevelDestination.fromRoute(currentRoute)
 
-    // 首启引导门控：当 DataStore 表明尚未展示引导时，导航到引导页。
-    // 初始值为 false，老用户不会闪现引导页（见 OnboardingViewModel 注释）。
-    LaunchedEffect(shouldShowOnboarding) {
-        if (shouldShowOnboarding && currentRoute != AppDestination.Onboarding.route) {
-            navController.navigate(AppDestination.Onboarding.route) {
-                launchSingleTop = true
-            }
-        }
-    }
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(bangumiAuthNotice) {
-        bangumiAuthNotice?.let {
-            snackbarHostState.showSnackbar(it)
-            onBangumiAuthNoticeShown()
-        }
-    }
+    OnboardingGate(shouldShowOnboarding, currentRoute, navController)
+    val snackbarHostState = rememberAuthNoticeSnackbar(bangumiAuthNotice, onBangumiAuthNoticeShown)
 
     val showDock = TopLevelDestination.isTopLevelRoute(currentRoute)
     // 底栏是一层毛玻璃：取样它下面滚过的页面内容。
     val dockHaze = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        // 统一 inset 单一来源模型。
-        // 外层 Scaffold 用**默认** contentWindowInsets（消费状态栏 + 导航栏 + 底栏高度），
-        // 把消费后的 inset 通过 innerPadding 下发，并用 consumeWindowInsets 标记已消费，
-        // 使各页 TopAppBar / 内容统一用零 inset，不各自消费状态栏（各页各自消费状态栏时
-        // 时机不一致，会导致首张卡片/封面贴顶或被裁切）。
-        // 底栏不放进 bottomBar 槽：那样 Scaffold 会给它留出一整条矩形空带，圆角外面看不到下面的内容。
-        // 底栏叠在内容之上，按圆角轮廓遮挡；可滚动内容通过 LocalFloatingBarInset 加大底部内边距让出位置。
+        // 外层只替页面消费底部 inset（导航条），状态栏交给各页顶栏自己包住。底栏不放进 bottomBar 槽（那样会
+        // 留出一整条矩形空带），而是叠在内容之上；可滚动内容通过 LocalFloatingBarInset 让出底栏的位置。
         snackbarHost = {
             SnackbarHost(snackbarHostState, Modifier.padding(bottom = if (showDock) dockContentSpace() else 0.dp))
         },
@@ -143,6 +122,12 @@ fun AcgApp(
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
+            ShellOverlays(
+                shell = shellViewModel,
+                snackbarHostState = snackbarHostState,
+                bottomSpace = if (showDock) dockContentSpace() else 0.dp,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
     }
 }
@@ -282,6 +267,13 @@ fun AppNavHost(
                 onOpenLibrary = { tab ->
                     navController.navigateOnce(libraryRoute(tab))
                 },
+                onOpenTrash = { navController.navigateOnce(AppDestination.Trash.route) },
+            )
+        }
+        composable(AppDestination.Trash.route) {
+            com.acgcompass.feature.trash.TrashRoute(
+                onBack = { navController.popBackStack() },
+                onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
             )
         }
         // endregion

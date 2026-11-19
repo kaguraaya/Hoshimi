@@ -58,7 +58,14 @@ class ImportRepositoryImplTest : StringSpec({
         val workDao = FakeImportWorkDao()
         val backlogDao = FakeImportBacklogDao()
         val dispatchers = TestDispatchers()
-        val backlogRepo = BacklogRepositoryImpl(backlogDao, workDao, dispatchers, NoWishSync)
+        val backlogRepo = BacklogRepositoryImpl(
+            backlogDao,
+            workDao,
+            dispatchers,
+            NoWishSync,
+            DeletingLocalTrash(backlogDao),
+            com.acgcompass.domain.undo.UndoController(),
+        )
         val workRepo = FakeWorkRepository(matches)
         val repo = ImportRepositoryImpl(importDao, workDao, workRepo, backlogRepo, dispatchers)
         return Triple(repo, importDao, workDao)

@@ -22,6 +22,7 @@ import com.acgcompass.data.local.dao.TagDao
 import com.acgcompass.data.local.dao.TagDimensionDao
 import com.acgcompass.data.local.dao.TasteDao
 import com.acgcompass.data.local.dao.TasteTagProcessingDao
+import com.acgcompass.data.local.dao.TrashDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.VndbRankingCacheDao
 import com.acgcompass.data.local.dao.WorkDao
@@ -51,6 +52,7 @@ import com.acgcompass.data.local.entity.TagEntity
 import com.acgcompass.data.local.entity.TasteProfileEntity
 import com.acgcompass.data.local.entity.TasteTagProcessingEntity
 import com.acgcompass.data.local.entity.TasteTagStatEntity
+import com.acgcompass.data.local.entity.TrashItemEntity
 import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.data.local.entity.VndbRankingCacheEntity
 import com.acgcompass.data.local.entity.WorkEntity
@@ -104,8 +106,9 @@ import com.acgcompass.data.local.entity.WorkTagEntity
         TagClassificationPlanEntity::class,
         BroadcastScheduleEntity::class,
         TasteTagProcessingEntity::class,
+        TrashItemEntity::class,
     ],
-    version = 19,
+    version = 20,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -152,6 +155,8 @@ abstract class AcgCompassDatabase : RoomDatabase() {
     abstract fun tagClassificationPlanDao(): TagClassificationPlanDao
 
     abstract fun broadcastScheduleDao(): BroadcastScheduleDao
+
+    abstract fun trashDao(): TrashDao
 
     abstract fun tasteTagProcessingDao(): TasteTagProcessingDao
 

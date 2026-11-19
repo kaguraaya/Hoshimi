@@ -51,6 +51,8 @@ class BacklogRepositoryImpl @Inject constructor(
     private val workDao: WorkDao,
     private val dispatchers: DispatcherProvider,
     private val wishSync: com.acgcompass.data.sync.WishSyncQueue,
+    private val localTrash: LocalTrash,
+    private val undoController: com.acgcompass.domain.undo.UndoController,
 ) : BacklogRepository {
 
     // --- observeBacklog ----------------------------------------------------
@@ -172,11 +174,27 @@ class BacklogRepositoryImpl @Inject constructor(
 
     // --- bulk --------------------------------------------------------------
 
+    override suspend fun removeToTrash(ids: List<String>, batchId: String): Int = withContext(dispatchers.io) {
+        localTrash.trashBacklog(ids, com.acgcompass.domain.model.TrashReason.LOCAL, batchId)
+    }
+
     override suspend fun bulk(op: BulkOp, ids: List<String>): AppResult<Unit> = withContext(dispatchers.io) {
         runCatchingApp {
+            // 删除不是硬删：移进回收站，并提示可以撤销。
+            if (op == BulkOp.DELETE) {
+                val batchId = java.util.UUID.randomUUID().toString()
+                val moved = removeToTrash(ids, batchId)
+                if (moved > 0) {
+                    undoController.offer(
+                        if (moved == 1) "已移出待补池" else "已移出待补池 $moved 部",
+                        batchId,
+                    )
+                }
+                return@runCatchingApp
+            }
             for (id in ids) {
                 when (op) {
-                    BulkOp.DELETE -> backlogDao.deleteByWork(id)
+                    BulkOp.DELETE -> Unit
                     BulkOp.ARCHIVE_TO_DUST_MUSEUM -> updateEntity(id) {
                         it.copy(inDustMuseum = true)
                     }

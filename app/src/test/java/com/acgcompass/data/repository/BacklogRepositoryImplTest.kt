@@ -43,7 +43,14 @@ class BacklogRepositoryImplTest : StringSpec({
     fun newRepo(): Triple<BacklogRepositoryImpl, FakeBacklogDao, FakeWorkDao> {
         val backlogDao = FakeBacklogDao()
         val workDao = FakeWorkDao()
-        val repo = BacklogRepositoryImpl(backlogDao, workDao, TestDispatchers(), NoWishSync)
+        val repo = BacklogRepositoryImpl(
+            backlogDao,
+            workDao,
+            TestDispatchers(),
+            NoWishSync,
+            DeletingLocalTrash(backlogDao),
+            com.acgcompass.domain.undo.UndoController(),
+        )
         return Triple(repo, backlogDao, workDao)
     }
 

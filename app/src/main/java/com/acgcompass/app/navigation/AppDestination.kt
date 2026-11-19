@@ -94,6 +94,11 @@ sealed interface AppDestination {
         override val route: String = "onboarding"
     }
 
+    /** 回收站：移出待补池 / 清空的记录与 Bangumi 上已删除的收藏，可恢复。 */
+    data object Trash : AppDestination {
+        override val route: String = "trash"
+    }
+
     /** 关于页。 */
     data object About : AppDestination {
         override val route: String = "about"

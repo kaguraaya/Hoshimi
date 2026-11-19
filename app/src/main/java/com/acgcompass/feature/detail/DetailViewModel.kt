@@ -90,6 +90,8 @@ class DetailViewModel @Inject constructor(
     private val detailInteractions: DetailInteractionRepository,
     private val tasteAnalysis: TasteAnalysisController,
     private val json: Json,
+    private val undoController: com.acgcompass.domain.undo.UndoController,
+    private val trashRepository: com.acgcompass.domain.repository.TrashRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -108,6 +110,19 @@ class DetailViewModel @Inject constructor(
     /** 编辑「我的记录」并回写 Bangumi 的结果提示（Snackbar 文案）；消费后置 null。 */
     private val _recordMessage = MutableStateFlow<String?>(null)
     val recordMessage: StateFlow<String?> = _recordMessage
+
+    /** 这部作品在回收站里的记录（待补池条目 / 收藏）；不在回收站时为空列表。 */
+    val trashEntries: StateFlow<List<com.acgcompass.domain.model.TrashEntry>> = trashRepository
+        .observeWork(workId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptyList())
+
+    /** 把这部作品在回收站里的记录全部恢复（原来的加入时间、状态、评分不变）。 */
+    fun onRestoreFromTrash() {
+        viewModelScope.launch {
+            val restored = trashEntries.value.count { trashRepository.restore(it.id) }
+            _recordMessage.value = if (restored > 0) "已从回收站恢复" else "这部作品已经重新加入，回收站里的旧记录已丢弃"
+        }
+    }
 
     /** 消费一次性提示。 */
     fun consumeRecordMessage() {
@@ -354,9 +369,10 @@ class DetailViewModel @Inject constructor(
         val work = currentWork ?: return
         viewModelScope.launch {
             if (backlogMembership.value.inBacklog) {
-                backlogRepository.bulk(BulkOp.DELETE, listOf(work.id))
-                // 移出待补池即「取消想看」（与 markWantToWatch 对称）——同步清理本地「想看」记录并尽力清理 Bangumi。
-                removeWantToWatch(work)
+                // 移出待补池即「取消想看」（与 markWantToWatch 对称）：待补池条目和「想看」记录一起进回收站，可撤销。
+                val batchId = java.util.UUID.randomUUID().toString()
+                backlogRepository.removeToTrash(listOf(work.id), batchId)
+                removeWantToWatch(work, batchId)
             } else {
                 backlogRepository.addAll(listOf(work))
                 // 加入待补池默认置「想看」。
@@ -400,37 +416,21 @@ class DetailViewModel @Inject constructor(
     /**
      * 取消「想看」（与 [markWantToWatch] 对称，由移出待补池触发）。
      *
-     * 仅当当前状态为「想看」（未升级为在看/看过/搁置/抛弃）时才清理，避免误删已有的观看记录：
-     * - 本地：删除该作品的 user_collections「想看」记录，保持与待补池一致。
-     * - Bangumi：v0 开放 API 无删除收藏端点，无法真正移除「想看」收藏；遵循「不抓网页」原则，
-     *   仅尽力清除评分/短评/标签，并明确提示「想看」收藏需在 Bangumi 网页移除（绝不伪造已删）。
+     * 仅当当前状态为「想看」时，把这条记录和待补池条目一起移进回收站（同一批次，可撤销，原来的加入时间不变）；
+     * 已经是在看 / 看过 / 搁置 / 抛弃时只移出待补池，保留观看记录。
+     * 不改动 Bangumi：公开接口不能删除收藏，网页上的「想看」需要用户自己移除，所以撤销后两边的日期都保持原样。
      */
-    private suspend fun removeWantToWatch(work: Work) {
+    private suspend fun removeWantToWatch(work: Work, batchId: String) {
         val existing = detailInteractions.personalRecord(work.id)
-        if (existing == null) {
-            _recordMessage.value = "已移出待补池"
-            return
+        val message = when {
+            existing == null -> "已移出待补池"
+            existing.status != "想看" -> "已移出待补池（保留你的「${existing.status}」记录）"
+            else -> {
+                detailInteractions.trashPersonalRecord(work.id, batchId)
+                "已移出待补池并取消想看"
+            }
         }
-        // 已升级为在看/看过/搁置/抛弃：仅移出待补池，保留观看记录，不取消收藏。
-        if (existing.status != "想看") {
-            _recordMessage.value = "已移出待补池（保留你的「${existing.status}」记录）"
-            return
-        }
-        detailInteractions.deletePersonalRecord(work.id)
-        val subjectId = resolveBangumiSubjectId(work)
-        val configured = detailInteractions.isBangumiConfigured()
-        if (subjectId == null || !configured) {
-            _recordMessage.value = "已取消想看（本地）"
-            return
-        }
-        // Bangumi v0 无删除收藏端点：尽力清除评分/短评/标签；收藏状态本身需用户在网页移除。
-        runCatching {
-            detailInteractions.updateBangumiRecord(
-                subjectId,
-                BangumiRecordUpdate(rating = 0, comment = "", tags = emptyList()),
-            )
-        }
-        _recordMessage.value = "已取消本地想看；Bangumi 不支持 API 删除收藏，如需云端移除请在 Bangumi 网页操作"
+        undoController.offer(message, batchId)
     }
 
     private fun loadRatings(forceRefresh: Boolean = false) {
@@ -1027,25 +1027,12 @@ class DetailViewModel @Inject constructor(
             val fullyCleared = effectiveStatus == null && rating == null && clampedProgress == null &&
                 comment.isNullOrBlank() && tags.isNullOrEmpty()
             if (fullyCleared) {
-                if (existing != null) detailInteractions.deletePersonalRecord(workId)
-                // 清空全部记录表示不再追踪；一并移出待补池和吃灰馆，避免个人记录已删但仍
-                // 滞留待补池的不一致（与「移出待补池」对称地移除全部本地收藏状态）。
-                backlogRepository.bulk(BulkOp.DELETE, listOf(workId))
-                // 清空时同步清除 Bangumi 端评分 / 短评 / 标签（rate=0、空），避免下次同步又拉回。
-                // 注：Bangumi v0 无「删除收藏状态」端点，收藏状态本身需在 Bangumi 网页移除。
-                if (subjectId != null && configured) {
-                    val result = detailInteractions.updateBangumiRecord(
-                        subjectId,
-                        BangumiRecordUpdate(rating = 0, comment = "", tags = emptyList()),
-                    )
-                    _recordMessage.value = if (result is AppResult.Success) {
-                        "已清空本地，并清除 Bangumi 评分/短评（收藏状态如需移除请在 Bangumi 网页操作）"
-                    } else {
-                        "已清空本地；清除 Bangumi 端失败，请稍后重试"
-                    }
-                } else {
-                    _recordMessage.value = "已清空本地记录"
-                }
+                // 清空记录表示停止追踪：记录和待补池条目一起移进回收站（可撤销）。Bangumi 上的收藏不动——
+                // 公开接口不能删除收藏，网页上的记录在回收站里提供入口，由用户自己移除。
+                val batchId = java.util.UUID.randomUUID().toString()
+                val trashed = detailInteractions.trashPersonalRecord(workId, batchId)
+                backlogRepository.removeToTrash(listOf(workId), batchId)
+                undoController.offer(if (trashed) "已清空记录，可在回收站恢复" else "已清空记录", batchId)
                 return@launch
             }
             detailInteractions.savePersonalRecord(
@@ -1109,7 +1096,11 @@ class DetailViewModel @Inject constructor(
                     }
                     "已保存并同步到 Bangumi$progressNote$tasteNote"
                 }
-                is AppResult.Failure -> "本地已保存，同步 Bangumi 失败：${result.error.cause}（${result.error.nextStep}）"
+                is AppResult.Failure -> {
+                    // 失败的修改进待推送队列，联网后自动重试。
+                    detailInteractions.schedulePendingPush()
+                    "本地已保存，同步 Bangumi 失败，联网后会自动重试：${result.error.cause}"
+                }
             }
         }
     }

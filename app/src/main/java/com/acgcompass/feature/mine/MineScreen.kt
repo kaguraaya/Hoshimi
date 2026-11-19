@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.SaveAlt
@@ -63,6 +64,7 @@ private val TIME_FORMATTER: DateTimeFormatter =
  * @param onNavigateToSettings 进入设置页入口。
  * @param onOpenTasteProfile 进入口味画像入口。
  */
+@Suppress("LongParameterList") // 「我的」页每个入口一个导航回调
 @Composable
 fun MineRoute(
     onNavigateToSettings: () -> Unit,
@@ -71,6 +73,7 @@ fun MineRoute(
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenLibrary: (String?) -> Unit = {},
+    onOpenTrash: () -> Unit = {},
     viewModel: MineViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -92,6 +95,7 @@ fun MineRoute(
         onOpenTasteProfile = onOpenTasteProfile,
         onOpenAbout = onOpenAbout,
         onOpenLibrary = onOpenLibrary,
+        onOpenTrash = onOpenTrash,
         modifier = modifier,
     )
 }
@@ -101,6 +105,7 @@ fun MineRoute(
  * 提供口味画像、设置、隐私与关于等入口。
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList") // 「我的」页每个入口一个导航回调
 @Composable
 fun MineScreen(
     state: UiState<MineUiState>,
@@ -112,6 +117,7 @@ fun MineScreen(
     syncing: Boolean = false,
     onSyncBangumi: () -> Unit = {},
     onOpenLibrary: (String?) -> Unit = {},
+    onOpenTrash: () -> Unit = {},
 ) {
     val hazeState = remember { HazeState() }
     Scaffold(
@@ -156,6 +162,7 @@ fun MineScreen(
                             onNavigateToSettings = onNavigateToSettings,
                             onOpenDataSettings = onOpenDataSettings,
                             onOpenAbout = onOpenAbout,
+                            onOpenTrash = onOpenTrash,
                         )
                     }
                 }
@@ -355,6 +362,7 @@ private fun ActionsCard(
     onNavigateToSettings: () -> Unit,
     onOpenDataSettings: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenTrash: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionHeader("更多")
@@ -374,6 +382,13 @@ private fun ActionsCard(
                 supporting = "导出 / 导入备份、导出 CSV、缓存管理",
                 onClick = onOpenDataSettings,
                 leading = { IconWell(Icons.Outlined.SaveAlt) },
+            )
+            RowGroupDivider()
+            NavRow(
+                title = "回收站",
+                supporting = "移出待补池、清空的记录，30 天内可恢复",
+                onClick = onOpenTrash,
+                leading = { IconWell(Icons.Outlined.Delete) },
             )
             RowGroupDivider()
             NavRow(title = "关于", onClick = onOpenAbout, leading = { IconWell(Icons.Outlined.Info) })

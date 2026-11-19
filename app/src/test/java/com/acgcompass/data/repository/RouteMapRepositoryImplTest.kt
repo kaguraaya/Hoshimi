@@ -299,6 +299,8 @@ private class FakeRouteWorkDao : WorkDao {
 
 /** Fake [BacklogRepository]，记录最近一次 addAll 的入参并返回去重后的 [AddResult]。 */
 private class FakeBacklogRepository : BacklogRepository {
+    override suspend fun removeToTrash(ids: List<String>, batchId: String): Int = 0
+
     var lastAdded: List<Work> = emptyList()
         private set
     var addAllCallCount: Int = 0

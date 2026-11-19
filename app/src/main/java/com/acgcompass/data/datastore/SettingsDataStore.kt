@@ -422,6 +422,35 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it.remove(Keys.BANGUMI_USERNAME) }
     }
 
+    /** 上次成功同步收藏时的 Bangumi 账号。退出登录不清除，用来发现「换了账号」。 */
+    val lastSyncedBangumiUser: Flow<String?> =
+        dataStore.data.map { it[Keys.LAST_SYNCED_BANGUMI_USER]?.takeIf { n -> n.isNotBlank() } }
+
+    suspend fun setLastSyncedBangumiUser(name: String) {
+        dataStore.edit { it[Keys.LAST_SYNCED_BANGUMI_USER] = name.trim() }
+    }
+
+    /** 等待用户选择的账号切换：旧账号 to 新账号；没有时为 null。 */
+    val pendingAccountSwitch: Flow<Pair<String, String>?> = dataStore.data.map { prefs ->
+        val from = prefs[Keys.ACCOUNT_SWITCH_FROM]
+        val to = prefs[Keys.ACCOUNT_SWITCH_TO]
+        if (from.isNullOrBlank() || to.isNullOrBlank()) null else from to to
+    }
+
+    suspend fun setPendingAccountSwitch(from: String, to: String) {
+        dataStore.edit {
+            it[Keys.ACCOUNT_SWITCH_FROM] = from
+            it[Keys.ACCOUNT_SWITCH_TO] = to
+        }
+    }
+
+    suspend fun clearPendingAccountSwitch() {
+        dataStore.edit {
+            it.remove(Keys.ACCOUNT_SWITCH_FROM)
+            it.remove(Keys.ACCOUNT_SWITCH_TO)
+        }
+    }
+
     /** 最近浏览过的作品 id（最新在前，最多 12 条），供搜索页空态「最近浏览」展示。 */
     val recentlyViewedWorkIds: Flow<List<String>> =
         dataStore.data.map { prefs -> prefs[Keys.RECENTLY_VIEWED].toHistoryList() }
@@ -640,6 +669,9 @@ class SettingsDataStore @Inject constructor(
         val CACHE_BACKGROUND_FILL_ENABLED = booleanPreferencesKey("cache_background_fill_enabled")
         val SEARCH_HISTORY = stringPreferencesKey("search_history")
         val BANGUMI_USERNAME = stringPreferencesKey("bangumi_username")
+        val LAST_SYNCED_BANGUMI_USER = stringPreferencesKey("last_synced_bangumi_user")
+        val ACCOUNT_SWITCH_FROM = stringPreferencesKey("account_switch_from")
+        val ACCOUNT_SWITCH_TO = stringPreferencesKey("account_switch_to")
         val RECENTLY_VIEWED = stringPreferencesKey("recently_viewed_work_ids")
         val BANGUMI_AUTH_NOTICE = stringPreferencesKey("bangumi_auth_notice")
         val OAUTH_REFRESH_ATTEMPTED_EXPIRES_AT = longPreferencesKey("oauth_refresh_attempted_expires_at")

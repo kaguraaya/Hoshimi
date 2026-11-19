@@ -148,4 +148,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideTasteTagProcessingDao(db: AcgCompassDatabase): TasteTagProcessingDao = db.tasteTagProcessingDao()
+
+    @Provides
+    @Singleton
+    fun provideTrashDao(db: AcgCompassDatabase): com.acgcompass.data.local.dao.TrashDao = db.trashDao()
 }

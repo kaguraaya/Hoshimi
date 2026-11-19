@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 @Singleton
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class DetailInteractionRepositoryImpl @Inject constructor(
     private val userCollectionDao: UserCollectionDao,
     private val workDao: WorkDao,
@@ -33,6 +33,8 @@ class DetailInteractionRepositoryImpl @Inject constructor(
     private val bangumi: BangumiRemoteDataSource,
     private val credentialStore: CredentialStore,
     private val settings: SettingsDataStore,
+    private val localTrash: LocalTrash,
+    private val outboxScheduler: com.acgcompass.data.sync.BangumiOutboxScheduler,
 ) : DetailInteractionRepository {
     override fun observePersonalRecord(workId: String): Flow<PersonalRecord?> =
         userCollectionDao.observeByWork(workId).map { it?.toDomain() }
@@ -47,6 +49,13 @@ class DetailInteractionRepositoryImpl @Inject constructor(
     override suspend fun deletePersonalRecord(workId: String) {
         userCollectionDao.deleteByWork(workId)
     }
+
+    override fun schedulePendingPush() {
+        runCatching { outboxScheduler.enqueue() }
+    }
+
+    override suspend fun trashPersonalRecord(workId: String, batchId: String): Boolean =
+        localTrash.trashCollection(workId, com.acgcompass.domain.model.TrashReason.LOCAL, batchId)
 
     override suspend fun markPersonalRecordSynced(workId: String, syncedAt: Long) {
         userCollectionDao.getByWork(workId)?.let { userCollectionDao.upsert(it.copy(syncedAt = syncedAt)) }

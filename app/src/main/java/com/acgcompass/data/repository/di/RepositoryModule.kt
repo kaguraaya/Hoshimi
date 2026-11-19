@@ -99,6 +99,18 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindTrashRepository(
+        impl: com.acgcompass.data.repository.TrashRepositoryImpl,
+    ): com.acgcompass.domain.repository.TrashRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalTrash(
+        impl: com.acgcompass.data.repository.TrashRepositoryImpl,
+    ): com.acgcompass.data.repository.LocalTrash
+
+    @Binds
+    @Singleton
     abstract fun bindWishSyncQueue(
         impl: com.acgcompass.data.sync.BangumiWishSync,
     ): com.acgcompass.data.sync.WishSyncQueue

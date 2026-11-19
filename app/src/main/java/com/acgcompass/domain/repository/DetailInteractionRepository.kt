@@ -21,6 +21,15 @@ interface DetailInteractionRepository {
 
     suspend fun deletePersonalRecord(workId: String)
 
+    /**
+     * 把本人记录移进本地回收站（同一次操作共用 [batchId]），没有记录时返回 false。
+     * 不改动 Bangumi：公开接口不能删除收藏，网页上的记录由用户自己移除。
+     */
+    suspend fun trashPersonalRecord(workId: String, batchId: String): Boolean
+
+    /** 推送失败的修改排进待推送队列，联网后自动重试。 */
+    fun schedulePendingPush()
+
     suspend fun markPersonalRecordSynced(workId: String, syncedAt: Long)
 
     suspend fun resolveBangumiSubjectId(work: Work): Int?

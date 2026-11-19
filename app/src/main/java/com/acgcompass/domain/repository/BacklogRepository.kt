@@ -59,6 +59,12 @@ interface BacklogRepository {
     suspend fun bulk(op: BulkOp, ids: List<String>): AppResult<Unit>
 
     /**
+     * 把待补池条目移进本地回收站（加入时间等原样保存，可恢复），返回移入的条数。
+     * [batchId] 与同一次操作的其它移除共用，撤销时一起恢复。不显示撤销提示，由调用方负责。
+     */
+    suspend fun removeToTrash(ids: List<String>, batchId: String): Int
+
+    /**
      * 把作品移入吃灰馆，并保存归档前的 Bangumi 收藏状态 [prevStatus]。
      * 仅置 `inDustMuseum=true` 与 `prevStatus`，不触碰其它字段；作品不在池中则无操作。
      */

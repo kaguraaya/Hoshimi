@@ -36,9 +36,31 @@ data class SyncReport(
     val skipped: Int = 0,
     val failed: Int = 0,
     val total: Int = 0,
+    /** Bangumi 上已删除、移进回收站的条数。 */
+    val removed: Int = 0,
+    /** 本地更新、推到 Bangumi 的条数。 */
+    val pushed: Int = 0,
 ) {
-    fun summary(username: String): String =
-        "已从 Bangumi @$username 同步：新增 $added · 更新 $updated · 跳过 $skipped · 失败 $failed（共 $total）"
+    fun summary(username: String): String = buildString {
+        append("已从 Bangumi @$username 同步：新增 $added · 更新 $updated")
+        if (removed > 0) append(" · 移入回收站 $removed")
+        if (pushed > 0) append(" · 推送本地修改 $pushed")
+        if (skipped > 0) append(" · 跳过 $skipped")
+        if (failed > 0) append(" · 失败 $failed")
+        append("（共 $total）")
+    }
+}
+
+/** 切换 Bangumi 账号时，用户对旧账号收藏的选择。 */
+enum class AccountSwitchChoice {
+    /** 把本地收藏合并进新账号（推送到 Bangumi）。 */
+    MERGE,
+
+    /** 把旧账号的收藏移进回收站。 */
+    MOVE_TO_TRASH,
+
+    /** 暂不处理，同步保持暂停。 */
+    CANCEL,
 }
 
 /**
@@ -52,6 +74,9 @@ data class SyncReport(
  *
  * 同一时间只跑一次同步：首页、我的、时光机、口味分析和后台任务同时触发时，后来的调用等待并共享
  * 正在进行的那一次的结果。同步开始前先按需续期 OAuth token（后台任务可能在用户多天没打开应用时运行）。
+ *
+ * 合并规则见 [planCollectionMerge]：以较新的一方为准；在应用里移除过的不会被加回来；Bangumi 上删除的移进本地回收站；
+ * 本地更新的修改由 [BangumiOutbox] 推到 Bangumi。发现换了账号时暂停同步，等用户在 [resolveAccountSwitch] 里选择。
  */
 @Singleton
 @Suppress("LongParameterList")
@@ -67,6 +92,8 @@ class BangumiSyncManager @Inject constructor(
     private val workFeatureRepository: WorkFeatureRepository,
     private val featureEnrichmentScheduler: WorkFeatureEnrichmentScheduler,
     private val tokenRefresher: BangumiTokenRefresher,
+    private val trash: com.acgcompass.data.repository.TrashRepositoryImpl,
+    private val outbox: BangumiOutbox,
     private val dispatchers: DispatcherProvider,
 ) {
     /** 同步在自己的作用域里跑：发起同步的页面离开时，同步本身不会被取消。 */
@@ -127,131 +154,197 @@ class BangumiSyncManager @Inject constructor(
         if (username.isBlank()) {
             return AppResult.Failure(AppError.Unauthorized(cause = "无法获取 Bangumi 用户名"))
         }
-        // 同步时持久化用户名，供设置页「当前用户名」展示（不再恒显「暂无数据」）。
+        // 换了账号：暂停同步，等用户选择怎么处理旧账号的收藏（合并 / 移进回收站）。
+        val lastUser = settingsDataStore.lastSyncedBangumiUser.first()
+        if (lastUser != null && lastUser != username) {
+            settingsDataStore.setPendingAccountSwitch(lastUser, username)
+            return AppResult.Failure(
+                AppError.Unauthorized(cause = ACCOUNT_SWITCH_MESSAGE, nextStep = ACCOUNT_SWITCH_NEXT),
+            )
+        }
         runCatching { settingsDataStore.setBangumiUsername(username) }
+        val fetched = when (val f = fetchAll(username)) {
+            is AppResult.Failure -> return AppResult.Failure(f.error)
+            is AppResult.Success -> f.data
+        }
+        val report = applyMerge(fetched, System.currentTimeMillis())
+        runCatching { settingsDataStore.setLastSyncedBangumiUser(username) }
+        return AppResult.Success(report)
+    }
 
-        val now = System.currentTimeMillis()
-        var added = 0
-        var updated = 0
-        var skipped = 0
-        var failed = 0
+    /** 一次拉取的结果：全部收藏、接口报的总数，以及有没有分页失败。 */
+    private data class Fetched(val items: List<BangumiUserSubjectCollectionDto>, val total: Int, val failedPages: Int) {
+        /** 确实拿全了：没有分页失败，条数等于总数。只有这时才处理「Bangumi 上已删除」。 */
+        val complete: Boolean get() = failedPages == 0 && items.size >= total
+    }
+
+    private suspend fun fetchAll(username: String): AppResult<Fetched> {
+        val items = mutableListOf<BangumiUserSubjectCollectionDto>()
         var total = 0
-        var offset = 0
+        var failedPages = 0
         var pages = 0
-        val batch = mutableListOf<UserCollectionEntity>()
-        // 将 Bangumi「想看/在看」收藏同步到待补池；其他状态不加入。
-        val backlogWorks = mutableListOf<com.acgcompass.domain.model.Work>()
-        // 收集同步到的作品（含社区标签），循环后统一写入 tags+work_tags，供候选池/今晚看什么/题材筛选使用。
-        val syncedWorks = mutableListOf<com.acgcompass.domain.model.Work>()
-        val lightweightFeatures = mutableListOf<WorkFeature>()
-
         while (pages < MAX_PAGES) {
             val page = retryTransient {
-                bangumi.getUserCollections(username = username, limit = PAGE_SIZE, offset = offset)
+                bangumi.getUserCollections(username = username, limit = PAGE_SIZE, offset = items.size)
             }
             when (page) {
                 is AppResult.Failure -> {
-                    // 首页就失败 → 整体失败；后续页失败 → 计入 failed 并停止。
-                    if (offset == 0) return AppResult.Failure(page.error)
-                    failed += 1
+                    // 首页就失败 → 整体失败；后续页失败 → 记下并停止（这次不处理删除）。
+                    if (items.isEmpty()) return AppResult.Failure(page.error)
+                    failedPages += 1
                     break
                 }
                 is AppResult.Success -> {
                     total = page.data.total
-                    val data = page.data.data
-                    if (data.isEmpty()) break
-                    for (dto in data) {
-                        val entity = mapCollection(dto, now)
-                        if (entity == null) {
-                            skipped += 1
-                            continue
-                        }
-                        // 仅在首次出现「想看/在看」状态时加入待补池，避免反向同步重复写入；
-                        // 收藏，或其在 Bangumi 上刚从别的状态转为想看/在看。已是想看/在看的重复同步不再回灌，
-                        // 避免用户已从待补池/吃灰馆删除的条目被同步「复活」回原状态。
-                        val existing = userCollectionDao.getByWork(entity.localWorkId)
-                        val nowWishOrWatching = entity.status == "想看" || entity.status == "在看"
-                        val wasWishOrWatching = existing?.status == "想看" || existing?.status == "在看"
-                        // 写入对应 Work（详情页/统计可读）；保留既有 createdAt。
-                        dto.subject?.toWork()?.let { work ->
-                            val existingWork = workDao.getById(work.id)
-                            // 收藏列表里的精简条目没有信息框（别名）；保留之前从搜索 / 详情写入的别名，跨源匹配要用。
-                            val entity = work.toEntity(createdAt = existingWork?.createdAt ?: now, updatedAt = now)
-                            workDao.upsert(
-                                if (entity.aliases.isEmpty() && existingWork != null) {
-                                    entity.copy(aliases = existingWork.aliases)
-                                } else {
-                                    entity
-                                },
-                            )
-                            syncedWorks += work
-                            if (nowWishOrWatching && !wasWishOrWatching) backlogWorks += work
-                        }
-                        dto.subject?.toBasicWorkFeature(
-                            subjectId = entity.localWorkId,
-                            updatedAt = now,
-                            completeness = WorkFeatureCompleteness.EMBEDDED,
-                        )?.let {
-                            lightweightFeatures += it
-                        }
-                        if (existing == null) added += 1 else updated += 1
-                        batch += entity
-                    }
-                    offset += data.size
+                    if (page.data.data.isEmpty()) break
+                    items += page.data.data
                     pages += 1
-                    if (offset >= total) break
+                    if (items.size >= total) break
                 }
             }
         }
+        if (pages >= MAX_PAGES && items.size < total) failedPages += 1
+        return AppResult.Success(Fetched(items, total, failedPages))
+    }
 
-        // 先写入全部收藏响应内嵌特征，再发布个人收藏，避免画像观察器看到个人记录已更新而特征池仍为空。
+    @Suppress("LongMethod") // 按合并计划依次写入作品、特征、收藏、待补池、回收站并推送，拆开反而难核对顺序
+    private suspend fun applyMerge(fetched: Fetched, now: Long): SyncReport {
+        val dtoByWork = LinkedHashMap<String, BangumiUserSubjectCollectionDto>()
+        val remote = fetched.items.mapNotNull { dto ->
+            dto.toCollectionEntity(now)?.let { entity ->
+                dtoByWork[entity.localWorkId] = dto
+                RemoteCollection(entity, parseBangumiTime(dto.updatedAt))
+            }
+        }
+        val local = userCollectionDao.getAll().associateBy { it.localWorkId }
+        val plan = planCollectionMerge(
+            remote = remote,
+            local = local,
+            removals = trash.collectionRemovals(),
+            pendingWish = settingsDataStore.pendingWishWorkIds.first(),
+            complete = fetched.complete,
+        )
+        val written = persistUpsertedWorks(plan.upserts, dtoByWork, local, now)
+        val added = written.added
+        val syncedWorks = written.syncedWorks
+        val backlogWorks = written.backlogWorks
+        val lightweightFeatures = written.features
+        // 先写入收藏响应内嵌的特征，再发布个人收藏，避免画像观察器看到个人记录已更新而特征池仍为空。
         if (lightweightFeatures.isNotEmpty()) {
             workFeatureRepository.seedLightweight(lightweightFeatures)
             featureEnrichmentScheduler.enqueue()
         }
-        if (batch.isNotEmpty()) userCollectionDao.upsertAll(batch)
-        // 持久化同步作品的社区标签（tags+work_tags），使候选池/今晚看什么/题材筛选能用真实 tag；失败不影响同步。
-        runCatching { workTagWriter.persist(syncedWorks.distinctBy { it.id }) }
-        // 把想看/在看作品并入待补池（addAll 去重幂等）；失败不影响同步结果。
-        if (backlogWorks.isNotEmpty()) {
-            runCatching { backlogRepository.addAll(backlogWorks.distinctBy { it.id }) }
+        if (plan.upserts.isNotEmpty()) userCollectionDao.upsertAll(plan.upserts)
+        (plan.clearRemovals + plan.obsoleteMarkers).forEach { trash.clearCollectionRemoval(it) }
+        val batchId = java.util.UUID.randomUUID().toString()
+        val removed = plan.remoteRemoved.count {
+            trash.trashCollection(it, com.acgcompass.domain.model.TrashReason.REMOTE_REMOVED, batchId, now)
         }
-        return AppResult.Success(
-            SyncReport(added = added, updated = updated, skipped = skipped, failed = failed, total = total),
+        runCatching { workTagWriter.persist(syncedWorks.distinctBy { it.id }) }
+        if (backlogWorks.isNotEmpty()) runCatching { backlogRepository.addAll(backlogWorks.distinctBy { it.id }) }
+        val pushed = if (plan.pushLocal.isEmpty()) {
+            0
+        } else {
+            (outbox.pushPending(plan.pushLocal) as? AppResult.Success)?.data ?: 0
+        }
+        return SyncReport(
+            added = added,
+            updated = plan.upserts.size - added,
+            skipped = fetched.items.size - remote.size + plan.keptRemoved.size,
+            failed = fetched.failedPages,
+            total = fetched.total,
+            removed = removed,
+            pushed = pushed,
         )
     }
 
-    /** Bangumi 收藏 DTO → 本地用户收藏实体；无法映射（无 subject）时返回 null。 */
-    private fun mapCollection(dto: BangumiUserSubjectCollectionDto, now: Long): UserCollectionEntity? {
-        val subjectId = dto.subjectId.takeIf { it > 0 } ?: return null
-        val workId = subjectId.toString()
-        // 收藏标签属于用户自己的记录。作品社区标签由 subject 另行写入 WorkFeature，
-        // 两者必须分开保存，否则详情页会把社区标签误当成用户输入。
-        val personalTags = dto.tags
-            .map(::cleanTag)
-            .filter(String::isNotBlank)
-            .distinct()
-        return UserCollectionEntity(
-            id = "BANGUMI:$subjectId",
-            source = CredentialSourceId.BANGUMI.name,
-            sourceItemId = workId,
-            localWorkId = workId,
-            status = mapStatus(dto.type),
-            rating = dto.rate.takeIf { it in 1..10 },
-            progress = dto.epStatus.takeIf { it > 0 },
-            comment = dto.comment?.takeIf { it.isNotBlank() },
-            tags = personalTags,
-            updatedAt = now,
-            syncedAt = now,
-            sourceUpdatedAt = dto.updatedAt,
-            // 同步 Bangumi 收藏可见性，供详情页回显并在保存时保持原值。
-            isPrivate = dto.private,
+    /** 并入的收藏对应的作品、内嵌特征和需要加进待补池的作品。 */
+    private class WrittenWorks {
+        var added = 0
+        val syncedWorks = mutableListOf<com.acgcompass.domain.model.Work>()
+        val backlogWorks = mutableListOf<com.acgcompass.domain.model.Work>()
+        val features = mutableListOf<WorkFeature>()
+    }
+
+    /**
+     * 写入要并入的收藏对应的作品资料，收集内嵌特征。
+     * 想看 / 在看只在首次出现时并入待补池，避免把用户已经从待补池删掉的作品同步「复活」。
+     */
+    private suspend fun persistUpsertedWorks(
+        upserts: List<UserCollectionEntity>,
+        dtoByWork: Map<String, BangumiUserSubjectCollectionDto>,
+        local: Map<String, UserCollectionEntity>,
+        now: Long,
+    ): WrittenWorks {
+        val written = WrittenWorks()
+        for (entity in upserts) {
+            val subject = (dtoByWork[entity.localWorkId] ?: continue).subject
+            val existing = local[entity.localWorkId]
+            if (existing == null) written.added += 1
+            val becameWish = entity.status.isWishOrWatching() && !existing?.status.isWishOrWatching()
+            subject?.toWork()?.let { work ->
+                persistWork(work, now)
+                written.syncedWorks += work
+                if (becameWish) written.backlogWorks += work
+            }
+            subject?.toBasicWorkFeature(
+                subjectId = entity.localWorkId,
+                updatedAt = now,
+                completeness = WorkFeatureCompleteness.EMBEDDED,
+            )?.let { written.features += it }
+        }
+        return written
+    }
+
+    /** 写入作品；收藏列表里的精简条目没有信息框（别名），保留之前从搜索 / 详情写入的别名，跨源匹配要用。 */
+    private suspend fun persistWork(work: com.acgcompass.domain.model.Work, now: Long) {
+        val existingWork = workDao.getById(work.id)
+        val entity = work.toEntity(createdAt = existingWork?.createdAt ?: now, updatedAt = now)
+        workDao.upsert(
+            if (entity.aliases.isEmpty() && existingWork != null) {
+                entity.copy(
+                    aliases = existingWork.aliases,
+                )
+            } else {
+                entity
+            },
         )
     }
 
-    /** 标签清洗：将下划线和连字符转为空格，并折叠多余空白。 */
-    private fun cleanTag(raw: String): String =
-        raw.replace('_', ' ').replace('-', ' ').trim().replace(Regex("\\s+"), " ")
+    /**
+     * 处理账号切换：
+     * - [AccountSwitchChoice.MERGE]：本地收藏全部标记为「未同步」，同步时以较新的一方为准，本地有而新账号没有的推到新账号；
+     * - [AccountSwitchChoice.MOVE_TO_TRASH]：旧账号的收藏全部移进回收站（可恢复，恢复后推到新账号）；
+     * - [AccountSwitchChoice.CANCEL]：只关掉提示，同步保持暂停，下次同步会再问。
+     * 选择合并或移进回收站后立即同步一次。
+     */
+    suspend fun resolveAccountSwitch(choice: AccountSwitchChoice): AppResult<SyncReport>? {
+        val pending = settingsDataStore.pendingAccountSwitch.first()
+        if (pending != null) settingsDataStore.clearPendingAccountSwitch()
+        if (pending == null || choice == AccountSwitchChoice.CANCEL) return null
+        applyAccountChoice(choice)
+        settingsDataStore.setLastSyncedBangumiUser(pending.second)
+        return syncCollections()
+    }
+
+    /** 合并：旧账号的收藏全部标记为未同步，推到新账号；移到回收站：旧账号的收藏作为一批移进回收站。 */
+    private suspend fun applyAccountChoice(choice: AccountSwitchChoice) {
+        val bangumiRecords = userCollectionDao.getAll().filter { it.source == CredentialSourceId.BANGUMI.name }
+        when (choice) {
+            AccountSwitchChoice.MERGE -> userCollectionDao.upsertAll(bangumiRecords.map { it.copy(syncedAt = 0L) })
+            AccountSwitchChoice.MOVE_TO_TRASH -> {
+                val batchId = java.util.UUID.randomUUID().toString()
+                bangumiRecords.forEach {
+                    trash.trashCollection(
+                        it.localWorkId,
+                        com.acgcompass.domain.model.TrashReason.ACCOUNT_SWITCH,
+                        batchId,
+                    )
+                }
+            }
+            AccountSwitchChoice.CANCEL -> Unit
+        }
+    }
 
     private companion object {
         const val PAGE_SIZE = 50
@@ -259,14 +352,9 @@ class BangumiSyncManager @Inject constructor(
         /** 最多 200 页（1 万条收藏）。 */
         const val MAX_PAGES = 200
 
-        /** Bangumi 收藏 type：1 想看 / 2 看过 / 3 在看 / 4 搁置 / 5 抛弃。 */
-        fun mapStatus(type: Int?): String? = when (type) {
-            1 -> "想看"
-            2 -> "看过"
-            3 -> "在看"
-            4 -> "搁置"
-            5 -> "抛弃"
-            else -> null
-        }
+        const val ACCOUNT_SWITCH_MESSAGE = "检测到切换了 Bangumi 账号，同步已暂停"
+        const val ACCOUNT_SWITCH_NEXT = "请在弹出的提示里选择如何处理旧账号的收藏"
     }
 }
+
+private fun String?.isWishOrWatching(): Boolean = this == "想看" || this == "在看"

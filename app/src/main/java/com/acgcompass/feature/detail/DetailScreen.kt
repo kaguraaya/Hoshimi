@@ -119,6 +119,7 @@ fun DetailRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val aiMatch by viewModel.aiMatch.collectAsStateWithLifecycle()
     val recordMessage by viewModel.recordMessage.collectAsStateWithLifecycle()
+    val trashEntries by viewModel.trashEntries.collectAsStateWithLifecycle()
     StateScaffold(
         state = state,
         modifier = modifier.fillMaxSize(),
@@ -129,8 +130,10 @@ fun DetailRoute(
             state = detail,
             aiMatch = aiMatch,
             recordMessage = recordMessage,
+            trashNotice = trashNoticeOf(trashEntries),
             actions = DetailScreenActions(
                 onToggleBacklog = viewModel::onToggleBacklog,
+                onRestoreFromTrash = viewModel::onRestoreFromTrash,
                 onOpenWork = onOpenWork,
                 onOpenVndbProducer = onOpenVndbProducer,
                 onAddMainline = viewModel::onAddMainlineToBacklog,
@@ -154,12 +157,14 @@ fun DetailRoute(
  *
  * 个人区、决策区与详情 Tab 共用本无状态组件。
  */
+@Suppress("LongParameterList") // 页面状态与两类一次性提示分开传，预览可以单独构造
 @Composable
 fun DetailScreen(
     state: DetailUiState,
     modifier: Modifier = Modifier,
     aiMatch: AiMatchUi = AiMatchUi.Idle,
     recordMessage: String? = null,
+    trashNotice: String? = null,
     actions: DetailScreenActions = DetailScreenActions(),
 ) {
     Column(
@@ -192,9 +197,11 @@ fun DetailScreen(
                 onToggleBacklog = actions.onToggleBacklog,
                 onUpdateMyRecord = actions.onUpdateMyRecord,
                 onSyncToBangumi = actions.onSyncVndbRecordToBangumi,
+                onRestoreFromTrash = actions.onRestoreFromTrash,
             ),
             options = PersonalSectionOptions(
                 recordMessage = recordMessage,
+                trashNotice = trashNotice,
                 localOnly = state.isVndb,
                 canSyncToBangumi = state.vndbBangumiLinked,
             ),
@@ -513,6 +520,36 @@ private fun ConsensusMetricRow(metric: ConsensusMetric, modifier: Modifier = Mod
 
 // region 个人区
 
+/** 「在回收站中」：这部作品的待补池条目或收藏在回收站里，可以一键恢复成原来的样子。 */
+@Composable
+private fun TrashNotice(text: String, onRestore: () -> Unit) {
+    Surface(shape = PrismCorner.Block, color = Surfaces.raisedColor, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRestore) { Text("恢复") }
+        }
+    }
+}
+
+/** 回收站记录 → 详情页提示文字；不在回收站时为 null。 */
+internal fun trashNoticeOf(entries: List<com.acgcompass.domain.model.TrashEntry>): String? {
+    if (entries.isEmpty()) return null
+    val latest = entries.maxBy { it.removedAt }
+    val date = java.time.Instant.ofEpochMilli(latest.removedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    val what = entries.joinToString("和") {
+        if (it.kind == com.acgcompass.domain.model.TrashKind.BACKLOG) "待补池记录" else "「${it.status ?: "收藏"}」记录"
+    }
+    return "在回收站中：$date 移除的$what，恢复后加入时间和状态保持原样"
+}
+
 @Composable
 private fun PersonalSection(
     personal: PersonalUiModel,
@@ -523,6 +560,7 @@ private fun PersonalSection(
     var showEdit by remember { mutableStateOf(false) }
     SectionCard(title = "我的记录", modifier = modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.trashNotice?.let { TrashNotice(it, actions.onRestoreFromTrash) }
             // 作品归属徽章——我的库状态 / 是否在待补池 / 是否在吃灰区，互不混淆。
             MembershipBadges(personal = personal)
             if (personal.recordEditable) {
@@ -1025,16 +1063,19 @@ private data class PersonalSectionActions(
     val onToggleBacklog: () -> Unit,
     val onUpdateMyRecord: (String?, Int?, Int?, String?, List<String>?, Boolean) -> Unit,
     val onSyncToBangumi: () -> Unit,
+    val onRestoreFromTrash: () -> Unit,
 )
 
 private data class PersonalSectionOptions(
     val recordMessage: String?,
+    val trashNotice: String?,
     val localOnly: Boolean,
     val canSyncToBangumi: Boolean,
 )
 
 data class DetailScreenActions(
     val onToggleBacklog: () -> Unit = {},
+    val onRestoreFromTrash: () -> Unit = {},
     val onOpenWork: (String) -> Unit = {},
     val onOpenVndbProducer: (String, String) -> Unit = { _, _ -> },
     val onAddMainline: () -> Unit = {},

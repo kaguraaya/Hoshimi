@@ -80,6 +80,10 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
 
     @Inject lateinit var tasteProfileValidationScheduler: Lazy<TasteProfileValidationScheduler>
 
+    @Inject lateinit var outboxScheduler: Lazy<com.acgcompass.data.sync.BangumiOutboxScheduler>
+
+    @Inject lateinit var trashRepository: Lazy<com.acgcompass.domain.repository.TrashRepository>
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override val workManagerConfiguration: Configuration
@@ -165,6 +169,9 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             runCatching { bangumiWishSync.get().resumeOnStartup() }
             // Bangumi OAuth token 启动期自动续期（best-effort，静默；无 refresh_token 时跳过）。
             runCatching { bangumiTokenRefresher.get().refreshIfNeeded() }
+            // 本地改了还没推到 Bangumi 的收藏继续推送；清理超过保留期的回收站记录。
+            runCatching { outboxScheduler.get().enqueue() }
+            runCatching { trashRepository.get().purgeExpired() }
         }
     }
 
