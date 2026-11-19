@@ -295,7 +295,7 @@ constructor(
                         _message.value =
                             buildString {
                                 append("已从 Bangumi 导入：新增 ${rep.added} · 更新 ${rep.updated} · 跳过 ${rep.skipped} · ")
-                                append("失败 ${rep.failed}（共 ${rep.total}）。$snapResult")
+                                append("失败 ${rep.failed}（共 ${rep.total}）${rep.incompleteNote.orEmpty()}。$snapResult")
                             }
                     }
                 }

@@ -40,7 +40,13 @@ data class SyncReport(
     val removed: Int = 0,
     /** 本地更新、推到 Bangumi 的条数。 */
     val pushed: Int = 0,
+    /** 这次没写进本地的部分（如「标签」「待补池」），收藏本身已经同步。 */
+    val incomplete: List<String> = emptyList(),
 ) {
+    /** 有部分资料没写进本地时的一句说明，没有时为 null。 */
+    val incompleteNote: String?
+        get() = incomplete.takeIf { it.isNotEmpty() }?.let { "，${it.joinToString("、")}没写进去" }
+
     fun summary(username: String): String = buildString {
         append("已从 Bangumi @$username 同步：新增 $added · 更新 $updated")
         if (removed > 0) append(" · 移入回收站 $removed")
@@ -48,6 +54,7 @@ data class SyncReport(
         if (skipped > 0) append(" · 跳过 $skipped")
         if (failed > 0) append(" · 失败 $failed")
         append("（共 $total）")
+        incompleteNote?.let(::append)
     }
 }
 
@@ -172,13 +179,7 @@ class BangumiSyncManager @Inject constructor(
         return AppResult.Success(report)
     }
 
-    /** 一次拉取的结果：全部收藏、接口报的总数，以及有没有分页失败。 */
-    private data class Fetched(val items: List<BangumiUserSubjectCollectionDto>, val total: Int, val failedPages: Int) {
-        /** 确实拿全了：没有分页失败，条数等于总数。只有这时才处理「Bangumi 上已删除」。 */
-        val complete: Boolean get() = failedPages == 0 && items.size >= total
-    }
-
-    private suspend fun fetchAll(username: String): AppResult<Fetched> {
+    private suspend fun fetchAll(username: String): AppResult<FetchedCollections> {
         val items = mutableListOf<BangumiUserSubjectCollectionDto>()
         var total = 0
         var failedPages = 0
@@ -204,11 +205,11 @@ class BangumiSyncManager @Inject constructor(
             }
         }
         if (pages >= MAX_PAGES && items.size < total) failedPages += 1
-        return AppResult.Success(Fetched(items, total, failedPages))
+        return AppResult.Success(FetchedCollections.of(items, total, failedPages))
     }
 
     @Suppress("LongMethod") // 按合并计划依次写入作品、特征、收藏、待补池、回收站并推送，拆开反而难核对顺序
-    private suspend fun applyMerge(fetched: Fetched, now: Long): SyncReport {
+    private suspend fun applyMerge(fetched: FetchedCollections, now: Long): SyncReport {
         val dtoByWork = LinkedHashMap<String, BangumiUserSubjectCollectionDto>()
         val remote = fetched.items.mapNotNull { dto ->
             dto.toCollectionEntity(now)?.let { entity ->
@@ -240,8 +241,12 @@ class BangumiSyncManager @Inject constructor(
         val removed = plan.remoteRemoved.count {
             trash.trashCollection(it, com.acgcompass.domain.model.TrashReason.REMOTE_REMOVED, batchId, now)
         }
-        runCatching { workTagWriter.persist(syncedWorks.distinctBy { it.id }) }
-        if (backlogWorks.isNotEmpty()) runCatching { backlogRepository.addAll(backlogWorks.distinctBy { it.id }) }
+        val incomplete = buildList {
+            val works = syncedWorks.distinctBy { it.id }
+            if (!retryLocalWrite { workTagWriter.persist(works) }) add("标签")
+            val backlog = backlogWorks.distinctBy { it.id }
+            if (backlog.isNotEmpty() && !retryLocalWrite { backlogRepository.addAll(backlog) }) add("待补池")
+        }
         val pushed = if (plan.pushLocal.isEmpty()) {
             0
         } else {
@@ -255,6 +260,7 @@ class BangumiSyncManager @Inject constructor(
             total = fetched.total,
             removed = removed,
             pushed = pushed,
+            incomplete = incomplete,
         )
     }
 
@@ -358,3 +364,39 @@ class BangumiSyncManager @Inject constructor(
 }
 
 private fun String?.isWishOrWatching(): Boolean = this == "想看" || this == "在看"
+
+/**
+ * 一次拉取的收藏：按条目编号去重后的全部收藏、接口报的总数，以及有没有分页失败。
+ * 分页过程中有人增删收藏时，同一条可能出现在两页里、也可能被挤到没取到的位置，所以按去重后的条数判断有没有拿全。
+ */
+internal data class FetchedCollections(
+    val items: List<BangumiUserSubjectCollectionDto>,
+    val total: Int,
+    val failedPages: Int,
+) {
+    /** 确实拿全了：没有分页失败，去重后的条数不少于总数。只有这时才处理「Bangumi 上已删除」。 */
+    val complete: Boolean get() = failedPages == 0 && items.size >= total
+
+    companion object {
+        fun of(raw: List<BangumiUserSubjectCollectionDto>, total: Int, failedPages: Int) =
+            FetchedCollections(raw.distinctBy { it.subjectId }, total, failedPages)
+    }
+}
+
+private val syncLogger = com.acgcompass.core.common.logging.RedactingLogger()
+
+/** 写本地数据库失败时再试一次；仍失败返回 false 并记日志（不影响其它部分的同步）。 */
+@Suppress("TooGenericExceptionCaught") // 任何写库异常都只记为「这部分没写进去」
+private suspend fun retryLocalWrite(block: suspend () -> Unit): Boolean {
+    repeat(2) { attempt ->
+        try {
+            block()
+            return true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (attempt > 0) syncLogger.w("BangumiSync", "同步时写入本地数据失败：${e::class.simpleName}")
+        }
+    }
+    return false
+}

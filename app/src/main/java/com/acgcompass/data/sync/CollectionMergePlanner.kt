@@ -34,7 +34,8 @@ data class CollectionMergePlan(
  *
  * 远端每一条：
  * - 在应用里移除过：远端更新时间晚于移除时间 → 以远端为准（加回来，删掉移除标记）；否则保持移除。
- * - 本地有还没推上去的修改（`updatedAt > syncedAt`）：远端更晚 → 用远端覆盖；否则保留本地并推送。
+ * - 本地有还没推上去的修改（`updatedAt > syncedAt`）：远端自上次同步以来没变过（按 Bangumi 的时间比，不受手机时钟影响）
+ *   → 保留本地并推送；远端也变了 → 较新的一方为准。
  * - 其它 → 用远端覆盖本地。
  *
  * 本地有、远端没有的 Bangumi 收藏，只有在 [complete]（这次确实拿全了全部收藏）时才处理：
@@ -79,7 +80,7 @@ private class MergePlanBuilder {
                 upserts += r.entity
             }
             removal != null -> keptRemoved += r.workId
-            l != null && l.isUnsynced() && (remoteAt == null || remoteAt <= l.updatedAt) -> pushLocal += r.workId
+            l != null && l.isUnsynced() && keepLocal(l, remoteAt) -> pushLocal += r.workId
             else -> upserts += r.entity
         }
     }
@@ -90,6 +91,17 @@ private class MergePlanBuilder {
             l.sourceUpdatedAt == null -> Unit
             else -> remoteRemoved += l.localWorkId
         }
+    }
+
+    /**
+     * 本地有没推上去的修改时，要不要保留本地：远端没有时间、远端自上次同步以来没变过（按 Bangumi 自己的时间比，
+     * 不受手机时钟影响），或者远端变了但本地改得更晚，都保留本地。
+     */
+    private fun keepLocal(l: UserCollectionEntity, remoteAt: Long?): Boolean {
+        if (remoteAt == null) return true
+        val lastSeen = parseBangumiTime(l.sourceUpdatedAt)
+        val remoteChanged = lastSeen == null || remoteAt > lastSeen
+        return !remoteChanged || remoteAt <= l.updatedAt
     }
 
     fun build() = CollectionMergePlan(upserts, pushLocal, keptRemoved, clearRemovals, remoteRemoved, obsoleteMarkers)
