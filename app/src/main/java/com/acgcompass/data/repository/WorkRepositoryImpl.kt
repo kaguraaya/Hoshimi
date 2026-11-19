@@ -50,6 +50,7 @@ import com.acgcompass.domain.matching.ResolvedLink
 import com.acgcompass.domain.matching.decideMatch
 import com.acgcompass.domain.matching.matchConfidence
 import com.acgcompass.domain.matching.resolveLink
+import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingAggregate
 import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.SourceRef
@@ -171,6 +172,9 @@ class WorkRepositoryImpl @Inject constructor(
         .flowOn(dispatchers.io)
 
     override fun observeWorks(): Flow<List<Work>> = mapWorks(workDao.observeAll())
+
+    override fun observeWorksByMediaType(mediaType: MediaType): Flow<List<Work>> =
+        mapWorks(workDao.observeByMediaType(mediaType.name))
 
     override fun observeRatings(workId: String): Flow<UiState<RatingAggregate>> = ratingDao.observeByWork(workId)
         .map { rows -> UiState.Success(aggregateRatingsUseCase(rows.toRatingAggregate().perSource)) }
@@ -908,6 +912,16 @@ class WorkRepositoryImpl @Inject constructor(
         aggregateRatingsUseCase(perSource)
     }
 
+    override suspend fun aggregateRatingsCached(workIds: List<String>): Map<String, RatingAggregate> =
+        withContext(dispatchers.io) {
+            val rows = workIds.distinct().chunked(SQL_IN_CHUNK)
+                .flatMap { ratingDao.getByWorks(it) }
+                .groupBy { it.workId }
+            workIds.associateWith { id ->
+                aggregateRatingsUseCase(rows[id].orEmpty().toRatingAggregate().perSource)
+            }
+        }
+
     /**
      * 尽力刷新作品全部来源的评分，并使用主来源更新作品资料字段。
      * 任何失败都被吞掉以保持韧性（绝不崩溃，缺失即「暂无数据」）。
@@ -1350,6 +1364,9 @@ class WorkRepositoryImpl @Inject constructor(
         }
 
     private companion object {
+        /** `IN (...)` 查询每批的 id 数，避开 SQLite 变量上限。 */
+        const val SQL_IN_CHUNK = 900
+
         /** 首页本季热门取的条数（本季排行一页）。 */
         const val HOME_SEASONAL_LIMIT = 30
 

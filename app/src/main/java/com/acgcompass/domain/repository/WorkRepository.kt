@@ -2,12 +2,14 @@ package com.acgcompass.domain.repository
 
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingAggregate
 import com.acgcompass.domain.model.SourceRef
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.WorkMatch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 /**
  * 作品仓库契约（领域层，纯 Kotlin）。负责规范化作品的观察、多源搜索 / 匹配、评分聚合与手动纠正。
@@ -42,6 +44,10 @@ interface WorkRepository {
      * @return 本地作品列表流；为空时发射空列表（由调用方决定空态展示）。
      */
     fun observeWorks(): Flow<List<Work>>
+
+    /** 只观察某一媒介类型的作品（含标签），在数据库里筛选，不读其它类型的作品和标签。 */
+    fun observeWorksByMediaType(mediaType: MediaType): Flow<List<Work>> =
+        observeWorks().map { works -> works.filter { it.mediaType == mediaType } }
 
     /**
      * 多源搜索并合并，返回带匹配置信度的候选。
@@ -79,6 +85,10 @@ interface WorkRepository {
      * @return 本地评分聚合；无缓存评分时各源为 `null`（不伪造）。
      */
     suspend fun aggregateRatingsCached(workId: String): RatingAggregate
+
+    /** 一次读出多部作品的本地评分聚合（不联网），键为作品 id；比逐部调用 [aggregateRatingsCached] 少很多次查库。 */
+    suspend fun aggregateRatingsCached(workIds: List<String>): Map<String, RatingAggregate> =
+        workIds.associateWith { aggregateRatingsCached(it) }
 
     /**
      * 手动纠正某本地作品的源匹配。写入后置 `userOverridden=true`，
