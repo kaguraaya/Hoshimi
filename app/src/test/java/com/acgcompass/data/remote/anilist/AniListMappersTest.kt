@@ -104,7 +104,7 @@ class AniListMappersTest : StringSpec({
             coverImage = AniListCoverImageDto(extraLarge = "cover"),
         ).toWork()
 
-        work.id shouldBe "16498"
+        work.id shouldBe "ANILIST:16498"
         work.titles.en shouldBe "Attack on Titan"
         work.titles.romaji shouldBe "Shingeki no Kyojin"
         work.titles.ja shouldBe "進撃の巨人"
@@ -130,7 +130,7 @@ class AniListMappersTest : StringSpec({
         ).toWorkMatch(matchConfidence = 0.66f)
         match.matchConfidence shouldBe 0.66f
         match.sourceTag shouldBe SourceId.ANILIST
-        match.work.id shouldBe "5"
+        match.work.id shouldBe "ANILIST:5"
         AniListMediaDto(id = 5).toWorkMatch().matchConfidence shouldBe 1f
     }
 })

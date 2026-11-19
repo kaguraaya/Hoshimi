@@ -8,6 +8,7 @@ import com.acgcompass.core.common.runCatchingApp
 import com.acgcompass.data.backup.BackupEnvelope
 import com.acgcompass.data.backup.BackupMerger
 import com.acgcompass.data.backup.BackupSerializer
+import com.acgcompass.data.backup.BackupSettings
 import com.acgcompass.data.backup.CsvExporter
 import com.acgcompass.data.backup.RatedWorkCsvRow
 import com.acgcompass.data.backup.TasteTagCsvRow
@@ -15,6 +16,7 @@ import com.acgcompass.data.backup.toBackup
 import com.acgcompass.data.backup.toEntity
 import com.acgcompass.data.backup.toSettingsState
 import com.acgcompass.data.credential.CredentialStore
+import com.acgcompass.data.credential.RedactedCredentials
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.AcgCompassDatabase
 import com.acgcompass.data.local.dao.BacklogDao
@@ -25,6 +27,7 @@ import com.acgcompass.data.local.dao.SourceLinkDao
 import com.acgcompass.data.local.dao.TagDao
 import com.acgcompass.data.local.dao.TagDimensionDao
 import com.acgcompass.data.local.dao.TasteDao
+import com.acgcompass.data.local.dao.TrashDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkDao
 import com.acgcompass.data.local.dao.WorkFeatureDao
@@ -73,6 +76,7 @@ class BackupRepositoryImpl @Inject constructor(
     private val userCollectionDao: UserCollectionDao,
     private val workFeatureDao: WorkFeatureDao,
     private val tagDimensionDao: TagDimensionDao,
+    private val trashDao: TrashDao,
     private val database: AcgCompassDatabase,
     private val settingsDataStore: SettingsDataStore,
     private val credentialStore: CredentialStore,
@@ -88,38 +92,48 @@ class BackupRepositoryImpl @Inject constructor(
         }
     }
 
-    /** 从各 DAO + 设置读出当前本地业务数据，组装为备份信封。默认不含凭据。 */
+    /**
+     * 从各 DAO + 设置读出当前本地业务数据，组装为备份信封。默认不含凭据。
+     * 各表在同一个数据库事务里读，导出时即使同步或清理在写库，备份里的各表也来自同一时刻。
+     */
     private suspend fun readLocalEnvelope(includeCredentials: Boolean): BackupEnvelope {
         val settings = settingsDataStore.settings.first()
         // 仅在显式要求时附带脱敏凭据；否则恒为 null。
         val redacted = if (includeCredentials) credentialStore.exportRedacted() else null
 
-        return BackupEnvelope(
-            schemaVersion = BackupEnvelope.CURRENT_SCHEMA_VERSION,
-            exportedAt = System.currentTimeMillis(),
-            appVersion = BuildConfig.VERSION_NAME,
-            includesCredentials = includeCredentials,
-            works = workDao.getAll().map { it.toBackup() },
-            sourceLinks = sourceLinkDao.getAll().map { it.toBackup() },
-            recommendationCounts = workDao.getAllRecommendationCounts().map { it.toBackup() },
-            backlog = backlogDao.getAll().map { it.toBackup() },
-            ratings = ratingDao.getAll().map { it.toBackup() },
-            reviews = emptyList(),
-            tags = tagDao.getAll().map { it.toBackup() },
-            workTags = workDao.getAllWorkTags().map { it.toBackup() },
-            importBatches = importDao.getAllBatches().map { it.toBackup() },
-            importItems = importDao.getAllItems().map { it.toBackup() },
-            snapshots = snapshotDao.getAllSnapshots().map { it.toBackup() },
-            changeLogs = snapshotDao.getAllChangeLogs().map { it.toBackup() },
-            tasteProfiles = tasteDao.getAllProfiles().map { it.toBackup() },
-            tasteTagStats = tasteDao.getAllTagStats().map { it.toBackup() },
-            userCollections = userCollectionDao.getAll().map { it.toBackup() },
-            workFeatures = workFeatureDao.getAll(limit = Int.MAX_VALUE).map { it.toBackup() },
-            tagDimensions = tagDimensionDao.getAll().map { it.toBackup() },
-            settings = settings.toBackup(),
-            credentials = redacted,
-        )
+        return database.withTransaction { readTables(settings.toBackup(), redacted, includeCredentials) }
     }
+
+    private suspend fun readTables(
+        settings: BackupSettings,
+        redacted: RedactedCredentials?,
+        includeCredentials: Boolean,
+    ): BackupEnvelope = BackupEnvelope(
+        schemaVersion = BackupEnvelope.CURRENT_SCHEMA_VERSION,
+        exportedAt = System.currentTimeMillis(),
+        appVersion = BuildConfig.VERSION_NAME,
+        includesCredentials = includeCredentials,
+        works = workDao.getAll().map { it.toBackup() },
+        sourceLinks = sourceLinkDao.getAll().map { it.toBackup() },
+        recommendationCounts = workDao.getAllRecommendationCounts().map { it.toBackup() },
+        backlog = backlogDao.getAll().map { it.toBackup() },
+        ratings = ratingDao.getAll().map { it.toBackup() },
+        reviews = emptyList(),
+        tags = tagDao.getAll().map { it.toBackup() },
+        workTags = workDao.getAllWorkTags().map { it.toBackup() },
+        importBatches = importDao.getAllBatches().map { it.toBackup() },
+        importItems = importDao.getAllItems().map { it.toBackup() },
+        snapshots = snapshotDao.getAllSnapshots().map { it.toBackup() },
+        changeLogs = snapshotDao.getAllChangeLogs().map { it.toBackup() },
+        tasteProfiles = tasteDao.getAllProfiles().map { it.toBackup() },
+        tasteTagStats = tasteDao.getAllTagStats().map { it.toBackup() },
+        userCollections = userCollectionDao.getAll().map { it.toBackup() },
+        workFeatures = workFeatureDao.getAll(limit = Int.MAX_VALUE).map { it.toBackup() },
+        tagDimensions = tagDimensionDao.getAll().map { it.toBackup() },
+        trashItems = trashDao.getAll().map { it.toBackup() },
+        settings = settings,
+        credentials = redacted,
+    )
 
     // --- importBackup (merge-not-overwrite) -----------------------
 
@@ -279,6 +293,7 @@ class BackupRepositoryImpl @Inject constructor(
         userCollectionDao.upsertAll(envelope.userCollections.map { it.toEntity() })
         workFeatureDao.upsertAll(envelope.workFeatures.map { it.toEntity() })
         tagDimensionDao.upsertAll(envelope.tagDimensions.map { it.toEntity() })
+        trashDao.upsertAll(envelope.trashItems.map { it.toEntity() })
     }
 }
 

@@ -45,6 +45,8 @@ data class BackupEnvelope(
     val userCollections: List<BackupUserCollection> = emptyList(),
     val workFeatures: List<BackupWorkFeature> = emptyList(),
     val tagDimensions: List<BackupTagDimension> = emptyList(),
+    /** 回收站（含已过保留期、只留作「已移除」标记的收藏记录），恢复后同步不会把移除的收藏加回来。 */
+    val trashItems: List<BackupTrashItem> = emptyList(),
     val settings: BackupSettings = BackupSettings(),
     /** 默认 `null`：绝不导出凭据明文。仅显式脱敏导出时为非 null。 */
     val credentials: RedactedCredentials? = null,
@@ -76,6 +78,9 @@ data class BackupWork(
     val completionCostBucket: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
+    val titleCn: String? = null,
+    val summary: String? = null,
+    val airDate: String? = null,
 )
 
 /** 多源标识链接（source_links 表）。 */
@@ -109,6 +114,8 @@ data class BackupBacklogItem(
     val addedAt: Long,
     val dustDays: Int,
     val inDustMuseum: Boolean,
+    /** 放进吃灰馆前的收藏状态，移出时还原。 */
+    val prevStatus: String? = null,
 )
 
 /** 每源评分（ratings 表）。个人评分/短评亦以此建模。 */
@@ -254,6 +261,23 @@ data class BackupWorkFeature(
     val extendedDataUpdatedAt: Long? = null,
     val completeness: String = "EXTENDED",
     val updatedAt: Long,
+    val coverUrl: String? = null,
+    val airDate: String? = null,
+)
+
+/** 回收站记录（trash_items 表）。 */
+@Serializable
+data class BackupTrashItem(
+    val id: String,
+    val kind: String,
+    val workId: String,
+    val batchId: String,
+    val title: String,
+    val coverUrl: String? = null,
+    val payloadJson: String? = null,
+    val reason: String,
+    val removedAt: Long,
+    val purged: Boolean = false,
 )
 
 @Serializable

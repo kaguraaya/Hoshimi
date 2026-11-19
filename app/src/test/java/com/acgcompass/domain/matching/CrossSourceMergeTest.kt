@@ -29,6 +29,20 @@ class CrossSourceMergeTest : StringSpec({
         primarySource = source,
     )
 
+    "不同平台的相同数字 id 不算同一作品，同一平台的相同 id 算" {
+        val bangumi = work("21", "进击的巨人", year = 2013, source = SourceId.BANGUMI)
+        val anilist = work("21", "One Piece", year = 1999, source = SourceId.ANILIST)
+        sameWork(bangumi, anilist) shouldBe false
+        sameWork(bangumi, bangumi.copy(titles = Titles(canonical = "别的写法"))) shouldBe true
+        val clusters = clusterMatches(
+            listOf(
+                WorkMatch(work = bangumi, matchConfidence = 0.9f, sourceTag = SourceId.BANGUMI),
+                WorkMatch(work = anilist, matchConfidence = 0.8f, sourceTag = SourceId.ANILIST),
+            ),
+        )
+        clusters.size shouldBe 2
+    }
+
     "9nine 与 9-nine 仅空格/连字符差异应合并（紧凑归一）" {
         val a = work("1", "9nine", source = SourceId.BANGUMI)
         val b = work("2", "9-nine", source = SourceId.ANILIST)

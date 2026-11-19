@@ -56,6 +56,7 @@ import com.acgcompass.domain.model.SourceRef
 import com.acgcompass.domain.model.Tag
 import com.acgcompass.domain.model.TagCategory
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.model.WorkIds
 import com.acgcompass.domain.model.WorkMatch
 import com.acgcompass.domain.repository.CacheFillController
 import com.acgcompass.domain.repository.HomeSeasonal
@@ -391,16 +392,17 @@ class WorkRepositoryImpl @Inject constructor(
             val representative = com.acgcompass.domain.matching.representativeOf(cluster)
             val repId = representative.work.id
             cluster.forEach { match ->
+                val itemId = WorkIds.sourceItemId(match.work.id, match.sourceTag)
                 val recomputed = ResolvedLink(
                     sourceRef = SourceRef(
                         sourceId = match.sourceTag,
-                        sourceItemId = match.work.id,
+                        sourceItemId = itemId,
                         matchConfidence = match.matchConfidence,
                         userOverridden = false,
                     ),
                     userOverridden = false,
                 )
-                val existing = sourceLinkDao.getBySourceItem(match.sourceTag.name, match.work.id)
+                val existing = sourceLinkDao.getBySourceItem(match.sourceTag.name, itemId)
                 val resolved = existing?.toSourceRef()
                     ?.let { current ->
                         resolveLink(
@@ -411,7 +413,7 @@ class WorkRepositoryImpl @Inject constructor(
                     ?: recomputed
                 sourceLinkDao.upsert(
                     resolved.sourceRef.toEntity(
-                        id = existing?.id ?: linkId(repId, match.sourceTag, match.work.id),
+                        id = existing?.id ?: linkId(repId, match.sourceTag, itemId),
                         workId = repId,
                         linkedAt = now,
                     ),
@@ -1028,6 +1030,8 @@ class WorkRepositoryImpl @Inject constructor(
             )
             workDao.upsert(
                 refreshedEntity.copy(
+                    // 平台返回的作品 id 可能和本地这一行的写法不同（旧行没带来源前缀），写回原来这一行。
+                    id = workId,
                     status = refreshed.data.status.takeUnless {
                         it == com.acgcompass.domain.model.ReleaseStatus.UNKNOWN
                     }?.name ?: entity.status,
@@ -1110,9 +1114,9 @@ class WorkRepositoryImpl @Inject constructor(
 
     private fun fallbackSourceItemId(workId: String, source: SourceId): String? = when (source) {
         SourceId.BANGUMI -> workId.takeIf { it.toIntOrNull() != null }
-        SourceId.ANILIST -> workId.removePrefix("ANILIST:").takeIf { it != workId && it.toIntOrNull() != null }
         SourceId.VNDB -> workId.takeIf { !it.contains(':') }
-        SourceId.TENRAI, SourceId.JIKAN, SourceId.MAL -> workId.takeIf { it.toIntOrNull() != null }
+        SourceId.ANILIST, SourceId.TENRAI, SourceId.JIKAN, SourceId.MAL ->
+            WorkIds.sourceItemId(workId, source).takeIf { it.toIntOrNull() != null }
     }
 
     /** 从持久化来源名解析 [SourceId]；未知返回 `null`（不臆造）。 */
@@ -1301,13 +1305,14 @@ class WorkRepositoryImpl @Inject constructor(
             .map { (sid, list) ->
                 async {
                     val bestOfSource = com.acgcompass.domain.matching.representativeOf(list)
-                    persistSourceLink(workId, sid, bestOfSource.work.id, bestOfSource.matchConfidence.toDouble())
+                    val itemId = WorkIds.sourceItemId(bestOfSource.work.id, sid)
+                    persistSourceLink(workId, sid, itemId, bestOfSource.matchConfidence.toDouble())
                     if (sid == SourceId.BANGUMI) {
                         val subjectId = bestOfSource.work.id.toIntOrNull()
                         val bundle = subjectId?.let { bangumi.getSubjectBundle(it, priority) }
                         if (bundle is AppResult.Success) persistBangumiBundle(workId, bundle.data)
                     } else {
-                        persistRatingResult(workId, sid, fetchSourceRating(sid, bestOfSource.work.id, priority))
+                        persistRatingResult(workId, sid, fetchSourceRating(sid, itemId, priority))
                     }
                 }
             }.forEach { it.await() }

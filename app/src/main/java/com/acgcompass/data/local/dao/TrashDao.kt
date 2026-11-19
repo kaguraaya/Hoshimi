@@ -7,6 +7,7 @@ import com.acgcompass.data.local.entity.TrashItemEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@Suppress("TooManyFunctions") // 每个查询一个函数
 interface TrashDao {
     /** 回收站里可见的记录（未过保留期），最近移除的在前。 */
     @Query("SELECT * FROM trash_items WHERE purged = 0 ORDER BY removedAt DESC")
@@ -14,6 +15,9 @@ interface TrashDao {
 
     @Query("SELECT * FROM trash_items WHERE workId = :workId AND purged = 0")
     fun observeVisibleByWork(workId: String): Flow<List<TrashItemEntity>>
+
+    @Query("SELECT * FROM trash_items")
+    suspend fun getAll(): List<TrashItemEntity>
 
     @Query("SELECT * FROM trash_items WHERE id = :id")
     suspend fun getById(id: String): TrashItemEntity?

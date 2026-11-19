@@ -158,6 +158,8 @@ abstract class AcgCompassDatabase : RoomDatabase() {
 
     abstract fun trashDao(): TrashDao
 
+    abstract fun workIdMigrationDao(): com.acgcompass.data.local.dao.WorkIdMigrationDao
+
     abstract fun tasteTagProcessingDao(): TasteTagProcessingDao
 
     companion object {

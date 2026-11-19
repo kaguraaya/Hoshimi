@@ -94,7 +94,7 @@ class JikanMappersTest : StringSpec({
             images = JikanImagesDto(jpg = JikanImageSetDto(largeImageUrl = "cover")),
         ).toWork()
 
-        work.id shouldBe "1"
+        work.id shouldBe "JIKAN:1"
         work.titles.canonical shouldBe "Cowboy Bebop"
         work.titles.ja shouldBe "カウボーイビバップ"
         work.titles.en shouldBe "Cowboy Bebop"
@@ -124,7 +124,7 @@ class JikanMappersTest : StringSpec({
         val match = JikanAnimeDto(malId = 5, title = "测试").toWorkMatch(matchConfidence = 0.66f)
         match.matchConfidence shouldBe 0.66f
         match.sourceTag shouldBe SourceId.JIKAN
-        match.work.id shouldBe "5"
+        match.work.id shouldBe "JIKAN:5"
         JikanAnimeDto(malId = 5).toWorkMatch().matchConfidence shouldBe 1f
     }
 })

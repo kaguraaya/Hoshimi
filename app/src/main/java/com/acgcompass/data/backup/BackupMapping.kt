@@ -14,6 +14,7 @@ import com.acgcompass.data.local.entity.TagDimensionEntity
 import com.acgcompass.data.local.entity.TagEntity
 import com.acgcompass.data.local.entity.TasteProfileEntity
 import com.acgcompass.data.local.entity.TasteTagStatEntity
+import com.acgcompass.data.local.entity.TrashItemEntity
 import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.data.local.entity.WorkEntity
 import com.acgcompass.data.local.entity.WorkFeatureEntity
@@ -48,6 +49,9 @@ fun WorkEntity.toBackup(): BackupWork = BackupWork(
     completionCostBucket = completionCostBucket,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    titleCn = titleCn,
+    summary = summary,
+    airDate = airDate,
 )
 
 fun BackupWork.toEntity(): WorkEntity = WorkEntity(
@@ -69,6 +73,9 @@ fun BackupWork.toEntity(): WorkEntity = WorkEntity(
     completionCostBucket = completionCostBucket,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    titleCn = titleCn,
+    summary = summary,
+    airDate = airDate,
 )
 
 // --- SourceLink ------------------------------------------------------------
@@ -118,6 +125,7 @@ fun BacklogItemEntity.toBackup(): BackupBacklogItem = BackupBacklogItem(
     addedAt = addedAt,
     dustDays = dustDays,
     inDustMuseum = inDustMuseum,
+    prevStatus = prevStatus,
 )
 
 fun BackupBacklogItem.toEntity(): BacklogItemEntity = BacklogItemEntity(
@@ -129,6 +137,7 @@ fun BackupBacklogItem.toEntity(): BacklogItemEntity = BacklogItemEntity(
     addedAt = addedAt,
     dustDays = dustDays,
     inDustMuseum = inDustMuseum,
+    prevStatus = prevStatus,
 )
 
 // --- Rating ----------------------------------------------------------------
@@ -360,11 +369,41 @@ fun BackupUserCollection.toEntity(): UserCollectionEntity = UserCollectionEntity
 fun WorkFeatureEntity.toBackup(): BackupWorkFeature = BackupWorkFeature(
     subjectId, tagCountsJson, staff, characters, cv, bangumiScore, bangumiVotes, eps,
     durationMin, platform, mediaType, titles, baseDataUpdatedAt, extendedDataUpdatedAt, completeness, updatedAt,
+    coverUrl, airDate,
 )
 
 fun BackupWorkFeature.toEntity(): WorkFeatureEntity = WorkFeatureEntity(
     subjectId, tagCountsJson, staff, characters, cv, bangumiScore, bangumiVotes, eps,
     durationMin, platform, mediaType, titles, baseDataUpdatedAt, extendedDataUpdatedAt, completeness, updatedAt,
+    coverUrl, airDate,
+)
+
+// --- Trash -----------------------------------------------------------------
+
+fun TrashItemEntity.toBackup(): BackupTrashItem = BackupTrashItem(
+    id = id,
+    kind = kind,
+    workId = workId,
+    batchId = batchId,
+    title = title,
+    coverUrl = coverUrl,
+    payloadJson = payloadJson,
+    reason = reason,
+    removedAt = removedAt,
+    purged = purged,
+)
+
+fun BackupTrashItem.toEntity(): TrashItemEntity = TrashItemEntity(
+    id = id,
+    kind = kind,
+    workId = workId,
+    batchId = batchId,
+    title = title,
+    coverUrl = coverUrl,
+    payloadJson = payloadJson,
+    reason = reason,
+    removedAt = removedAt,
+    purged = purged,
 )
 
 fun TagDimensionEntity.toBackup(): BackupTagDimension = BackupTagDimension(
