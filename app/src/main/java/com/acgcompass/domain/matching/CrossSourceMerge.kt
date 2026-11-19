@@ -58,7 +58,7 @@ private fun maxVariantSimilarity(a: List<String>, b: List<String>): Double {
  * 4. 否则最大跨变体相似度 ≥ [MERGE_THRESHOLD] → 是。
  */
 public fun sameWork(a: Work, b: Work): Boolean {
-    if (a.id == b.id) return true
+    if (sameSourceItem(a, b)) return true
     // 明确的季度或衍生类型不一致时，不使用标题相似度强行合并。
     if (seasonNumberOf(a.formalTitleVariants()) != seasonNumberOf(b.formalTitleVariants())) return false
     if (editionMarkersOf(a.formalTitleVariants()) != editionMarkersOf(b.formalTitleVariants())) return false
@@ -83,6 +83,9 @@ public fun sameWork(a: Work, b: Work): Boolean {
     if (orderedAnchorMatch(ta, tb)) return true
     return maxVariantSimilarity(ta, tb) >= MERGE_THRESHOLD
 }
+
+/** 各平台的数字 id 互不相关（Bangumi 的 21 和 AniList 的 21 不是同一部），只有同一来源的相同 id 才直接算同一作品。 */
+private fun sameSourceItem(a: Work, b: Work): Boolean = a.id == b.id && a.primarySource == b.primarySource
 
 /** 判断标题变体是否存在较长核心被另一标题完整包含的关系，并排除过短前缀。 */
 private const val MIN_CORE_LEN: Int = 10
