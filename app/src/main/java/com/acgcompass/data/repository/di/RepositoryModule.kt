@@ -110,6 +110,11 @@ abstract class RepositoryModule {
     ): com.acgcompass.data.remote.bangumi.BangumiSubjectSink
 
     @Binds
+    abstract fun bindWatchReportRepository(
+        impl: com.acgcompass.data.report.WatchReportRepositoryImpl,
+    ): com.acgcompass.domain.report.WatchReportRepository
+
+    @Binds
     @Singleton
     abstract fun bindTasteRankingRepository(
         impl: com.acgcompass.data.taste.TasteRankingRepositoryImpl,
