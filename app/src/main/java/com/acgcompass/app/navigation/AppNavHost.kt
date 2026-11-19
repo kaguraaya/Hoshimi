@@ -277,6 +277,7 @@ fun AppNavHost(
                 share = com.acgcompass.feature.mine.MineShareActions(
                     onOpenTasteCode = { navController.navigateOnce(AppDestination.TasteCode.route) },
                     onOpenTasteCodeReader = { navController.navigateOnce(AppDestination.TasteCodeOpen.route) },
+                    onOpenReport = { navController.navigateOnce(AppDestination.WatchReport.route) },
                 ),
             )
         }
@@ -505,6 +506,12 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
             onOpenSettings = { navController.navigateOnce(AppDestination.Settings.route) },
             onOpenManualReview = { navController.navigateOnce(AppDestination.TagManualReview.route) },
             onOpenRanking = { navController.navigateOnce(AppDestination.TasteRanking.route) },
+        )
+    }
+    composable(AppDestination.WatchReport.route) {
+        com.acgcompass.feature.report.WatchReportRoute(
+            onBack = { navController.popBackOnce() },
+            onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
         )
     }
     composable(AppDestination.TasteRanking.route) {

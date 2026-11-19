@@ -103,6 +103,7 @@ fun MineRoute(
 data class MineShareActions(
     val onOpenTasteCode: () -> Unit = {},
     val onOpenTasteCodeReader: () -> Unit = {},
+    val onOpenReport: () -> Unit = {},
 )
 
 /**

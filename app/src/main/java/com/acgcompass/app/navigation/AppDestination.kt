@@ -109,6 +109,11 @@ sealed interface AppDestination {
         override val route: String = "taste_code/compat?code={code}"
     }
 
+    /** 番剧回顾：本季 / 上季 / 今年 / 去年看完的作品和分享图。 */
+    data object WatchReport : AppDestination {
+        override val route: String = "watch_report"
+    }
+
     /** 口味排行：本地作品库按口味匹配度排序。 */
     data object TasteRanking : AppDestination {
         override val route: String = "taste_ranking"
