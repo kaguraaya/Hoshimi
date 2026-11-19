@@ -71,6 +71,7 @@ fun MineRoute(
     modifier: Modifier = Modifier,
     onOpenLibrary: (String?) -> Unit = {},
     onOpenTrash: () -> Unit = {},
+    share: MineShareActions = MineShareActions(),
     viewModel: MineViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -93,9 +94,16 @@ fun MineRoute(
         onOpenAbout = onOpenAbout,
         onOpenLibrary = onOpenLibrary,
         onOpenTrash = onOpenTrash,
+        share = share,
         modifier = modifier,
     )
 }
+
+/** 「分享与回顾」分组的入口。 */
+data class MineShareActions(
+    val onOpenTasteCode: () -> Unit = {},
+    val onOpenTasteCodeReader: () -> Unit = {},
+)
 
 /**
  * 无状态「我的」界面（Material 3）。展示账号状态、数据统计，
@@ -115,6 +123,7 @@ fun MineScreen(
     onSyncBangumi: () -> Unit = {},
     onOpenLibrary: (String?) -> Unit = {},
     onOpenTrash: () -> Unit = {},
+    share: MineShareActions = MineShareActions(),
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -150,6 +159,7 @@ fun MineScreen(
                         )
                     }
                     item(key = "stats") { StatisticsCard(stats = ui.stats) }
+                    item(key = "share") { ShareCard(share) }
                     item(key = "actions") {
                         ActionsCard(
                             onOpenTasteProfile = onOpenTasteProfile,

@@ -94,6 +94,21 @@ sealed interface AppDestination {
         override val route: String = "onboarding"
     }
 
+    /** 我的口味码：生成并分享。 */
+    data object TasteCode : AppDestination {
+        override val route: String = "taste_code"
+    }
+
+    /** 打开别人的口味码（粘贴 / 相册二维码）。 */
+    data object TasteCodeOpen : AppDestination {
+        override val route: String = "taste_code/open"
+    }
+
+    /** 口味相性：和对方的口味码对比。也能从 `hoshimi://taste/<口味码>` 链接直接打开。 */
+    data object TasteCompatibility : AppDestination {
+        override val route: String = "taste_code/compat?code={code}"
+    }
+
     /** 回收站：移出待补池 / 清空的记录与 Bangumi 上已删除的收藏，可恢复。 */
     data object Trash : AppDestination {
         override val route: String = "trash"

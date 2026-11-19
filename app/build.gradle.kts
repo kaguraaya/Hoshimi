@@ -278,6 +278,8 @@ dependencies {
 
     // Images
     implementation(libs.coil.compose)
+    // 口味码二维码：本地生成、识别相册里的二维码图片（不需要相机权限）。
+    implementation(libs.zxing.core)
     // 顶栏背景模糊（Android 12 起真模糊，更早的系统退回半透明底色）。
     implementation(libs.haze)
 
