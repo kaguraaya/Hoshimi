@@ -23,33 +23,45 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
     private val scheduler: WorkFeatureEnrichmentScheduler,
 ) : CoroutineWorker(appContext, params) {
     /**
-     * 先把个人收藏 / 待补池里资料不全的作品补成完整资料（含 Staff、角色），再给本地作品池里还没有资料的作品
-     * 补基础资料（标签、评分、封面）。每次一小批；这一批有进展且还有剩余时再排下一批。
+     * 每次一小批，顺序是：
+     * 1. 个人收藏 / 待补池里资料不全的作品补成完整资料（含 Staff、角色）；
+     * 2. 本地作品池里还没有资料的作品补基础资料（标签和标注人数、评分、封面，一次请求一部）——这些作品补完才能参与口味排行；
+     * 3. 其余只有基础资料的作品再补成完整资料。
+     * 第 3 步的作品永远不少，所以必须放在第 2 步之后，否则没有资料的作品一直轮不到。
+     * 这一批有进展且还有剩余时再排下一批。
      */
     override suspend fun doWork(): Result = runCatching {
         val priorityIds = buildSet {
             userCollectionDao.getAll().forEach { add(it.sourceItemId.ifBlank { it.localWorkId }) }
             backlogDao.getAll().forEach { add(it.workId) }
         }.filter { it.toIntOrNull() != null }
-        val priorityBatch = if (priorityIds.isEmpty()) {
+        val personal = if (priorityIds.isEmpty()) {
             emptyList()
         } else {
             workFeatureDao.getIncompleteIds(priorityIds, BATCH_SIZE)
         }
-        val incomplete = priorityBatch.ifEmpty { workFeatureDao.getIncompleteIds(BATCH_SIZE) }
-        val progressed = if (incomplete.isNotEmpty()) {
-            workFeatureRepository.getFeatures(incomplete, networkBudget = incomplete.size)
-            workFeatureDao.getIncompleteIds(incomplete, incomplete.size).size < incomplete.size
+        val missing = if (personal.isEmpty()) {
+            workFeatureDao.getPoolIdsWithoutFeature(MediaType.ANIME.name, POOL_BATCH_SIZE)
         } else {
-            val missing = workFeatureDao.getPoolIdsWithoutFeature(MediaType.ANIME.name, POOL_BATCH_SIZE)
-            if (missing.isEmpty()) return@runCatching Result.success()
-            workFeatureRepository.ensureBasic(missing, networkBudget = missing.size, background = true).isNotEmpty()
+            emptyList()
+        }
+        val progressed = when {
+            personal.isNotEmpty() -> upgrade(personal)
+            missing.isNotEmpty() ->
+                workFeatureRepository.ensureBasic(missing, networkBudget = missing.size, background = true).isNotEmpty()
+            else -> workFeatureDao.getIncompleteIds(BATCH_SIZE).takeIf { it.isNotEmpty() }?.let { upgrade(it) } ?: false
         }
         val remaining = workFeatureDao.getIncompleteIds(1).isNotEmpty() ||
             workFeatureDao.getPoolIdsWithoutFeature(MediaType.ANIME.name, 1).isNotEmpty()
         if (progressed && remaining) scheduler.enqueue()
         Result.success()
     }.getOrElse { Result.retry() }
+
+    /** 把这批补成完整资料，返回是否至少补完一部。 */
+    private suspend fun upgrade(ids: List<String>): Boolean {
+        workFeatureRepository.getFeatures(ids, networkBudget = ids.size)
+        return workFeatureDao.getIncompleteIds(ids, ids.size).size < ids.size
+    }
 
     companion object {
         const val UNIQUE_WORK_NAME = "work_feature_enrichment"

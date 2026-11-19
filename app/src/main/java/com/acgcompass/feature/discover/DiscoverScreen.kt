@@ -253,7 +253,9 @@ fun DiscoverScreen(
                 .fillMaxSize(),
         ) {
             // 筛选只在本地数据上进行；搜索框为空时没有可刷新的结果。
-            val pullEnabled = tab != DiscoverTab.FILTER && !(tab == DiscoverTab.SEARCH && query.isBlank())
+            // 为你排行有自己的下拉（重新计算），外层不处理。
+            val pullEnabled = tab != DiscoverTab.FILTER && tab != DiscoverTab.TASTE &&
+                !(tab == DiscoverTab.SEARCH && query.isBlank())
             com.acgcompass.core.designsystem.AcgPullRefreshBox(
                 refreshing = refreshing,
                 onRefresh = onPullRefresh,
@@ -304,6 +306,17 @@ fun DiscoverScreen(
                                 onLoadMoreRanking = onLoadMoreRanking,
                                 onLoadPool = onLoadPool,
                                 onOpenWork = onOpenWork,
+                            )
+
+                            DiscoverTab.TASTE -> com.acgcompass.feature.tasteranking.TasteRankingBoard(
+                                onOpenWork = onOpenWork,
+                                contentPadding = PaddingValues(
+                                    start = ScreenContentPadding.Horizontal,
+                                    end = ScreenContentPadding.Horizontal,
+                                    top = ScreenContentPadding.UnderBarTop,
+                                    bottom = ScreenContentPadding.Bottom,
+                                ),
+                                indicatorTopPadding = innerPadding.calculateTopPadding(),
                             )
 
                             DiscoverTab.SCORE_DIFF -> ScoreDiffSection(

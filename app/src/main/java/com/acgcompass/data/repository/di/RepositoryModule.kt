@@ -105,6 +105,18 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindBangumiSubjectSink(
+        impl: com.acgcompass.data.taste.LocalPoolSubjectSink,
+    ): com.acgcompass.data.remote.bangumi.BangumiSubjectSink
+
+    @Binds
+    @Singleton
+    abstract fun bindTasteRankingRepository(
+        impl: com.acgcompass.data.taste.TasteRankingRepositoryImpl,
+    ): com.acgcompass.domain.taste.TasteRankingRepository
+
+    @Binds
+    @Singleton
     abstract fun bindTrashRepository(
         impl: com.acgcompass.data.repository.TrashRepositoryImpl,
     ): com.acgcompass.domain.repository.TrashRepository

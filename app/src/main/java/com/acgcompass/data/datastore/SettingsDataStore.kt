@@ -336,6 +336,20 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it[Keys.SEARCH_HISTORY_ENABLED] = enabled }
     }
 
+    /** 「补充作品库」已经按 Bangumi 排行补到第几名（下次从这里接着往后补）。 */
+    val localPoolExpandOffset: Flow<Int> = dataStore.data.map { it[Keys.LOCAL_POOL_EXPAND_OFFSET] ?: 0 }
+
+    suspend fun setLocalPoolExpandOffset(offset: Int) {
+        dataStore.edit { it[Keys.LOCAL_POOL_EXPAND_OFFSET] = offset }
+    }
+
+    /** 口味排行页的作品库说明卡是否已被用户关掉。 */
+    val tasteRankHintDismissed: Flow<Boolean> = dataStore.data.map { it[Keys.TASTE_RANK_HINT_DISMISSED] ?: false }
+
+    suspend fun setTasteRankHintDismissed(dismissed: Boolean) {
+        dataStore.edit { it[Keys.TASTE_RANK_HINT_DISMISSED] = dismissed }
+    }
+
     /**
      * 番剧信息自动缓存目标上限（部数）。0 = 未设置（由 App 智能决定，用 [SettingsState.AUTO_CACHE_DEFAULT_TARGET]）。
      * 仅影响「公共发现池番剧信息」自动缓存规模，不影响封面等其他缓存。
@@ -696,6 +710,8 @@ class SettingsDataStore @Inject constructor(
         val AUTO_SYNC_INTERVAL_MINUTES = intPreferencesKey("auto_sync_interval_minutes")
         val BACKLOG_GRID_MODE = booleanPreferencesKey("backlog_grid_mode")
         val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
+        val LOCAL_POOL_EXPAND_OFFSET = intPreferencesKey("local_pool_expand_offset")
+        val TASTE_RANK_HINT_DISMISSED = booleanPreferencesKey("taste_rank_hint_dismissed")
         val RECOMMEND_MIN_COMMUNITY_SCORE = floatPreferencesKey("recommend_min_community_score")
         val TASTE_MATCH_THRESHOLD = floatPreferencesKey("taste_match_threshold")
         val AUTO_CACHE_MAX_COUNT = intPreferencesKey("auto_cache_max_count")

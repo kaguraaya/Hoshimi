@@ -47,6 +47,8 @@ data class BangumiSubjectBundle(
 class BangumiRemoteDataSource @Inject constructor(
     private val api: BangumiApi,
     private val nextApi: BangumiNextApi,
+    /** 搜索和榜单结果顺带存进本地作品库（基础资料）。 */
+    private val subjectSink: BangumiSubjectSink = BangumiSubjectSink {},
 ) {
 
     private val auth: SourceAuth = SourceAuths.bangumi
@@ -145,6 +147,7 @@ class BangumiRemoteDataSource @Inject constructor(
     ): AppResult<List<WorkMatch>> = runCatchingApp {
         val request = BangumiSearchRequestDto(keyword = keyword, sort = sort, filter = filter)
         val paged = api.searchSubjects(request, limit, offset, auth.withPriority(priority)).bodyOrThrow()
+        subjectSink.accept(paged.data)
         paged.data.map { it.toWorkMatch() }
     }
 
@@ -174,12 +177,30 @@ class BangumiRemoteDataSource @Inject constructor(
             filter = filter,
         )
         val (subjects, total) = collectSearchPages(request, limit, offset, auth.withPriority(priority))
+        subjectSink.accept(subjects)
         // 按真实 rank 升序（排名越小越靠前）客户端兜底排序，nulls/0 视为最差。
         val items = subjects
             .sortedBy { it.rating?.rank?.takeIf { r -> r > 0 } ?: Int.MAX_VALUE }
             .map { it.toWorkMatch() to it.rating.toRatingEntry() }
         // 携带过滤后总数，供分页判定是否还有更多（不依赖返回数 >= limit）。
         BangumiRankedPage(items = items, total = total)
+    }
+
+    /**
+     * 按 Bangumi 排行取一段条目的原始结果（带完整标签和标注人数），供「补充作品库」直接存作品资料；
+     * 返回 (条目, 过滤后总数)。不经过 [subjectSink]，由调用方同步写库。
+     */
+    suspend fun rankedSubjectDtos(
+        offset: Int,
+        limit: Int,
+        priority: RequestPriority = RequestPriority.FOREGROUND,
+    ): AppResult<Pair<List<BangumiSubjectDto>, Int>> = runCatchingApp {
+        val request = BangumiSearchRequestDto(
+            keyword = "",
+            sort = BangumiSearchSort.RANK,
+            filter = BangumiSearchFilterDto(type = listOf(BangumiSubjectType.ANIME), rank = listOf(">0"), nsfw = false),
+        )
+        collectSearchPages(request, limit, offset, auth.withPriority(priority))
     }
 
     /**

@@ -182,7 +182,7 @@ class DiscoverViewModel @Inject constructor(
                         backfillScoreDiffRatings()
                     }
                     DiscoverTab.SEARCH -> onRetry()
-                    DiscoverTab.FILTER -> Unit
+                    DiscoverTab.FILTER, DiscoverTab.TASTE -> Unit
                 }
             }
             _refreshing.value = false

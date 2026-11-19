@@ -179,6 +179,10 @@ private class MemoryWorkFeatureDao(initial: List<WorkFeatureEntity> = emptyList(
 
     override suspend fun count(): Int = rows.value.size
 
+    override suspend fun countAnime(): Int = rows.value.size
+
+    override suspend fun countPoolWithoutFeature(mediaType: String): Int = 0
+
     override suspend fun countVerified(): Int =
         rows.value.values.count { it.completeness != WorkFeatureCompleteness.EMBEDDED.name }
 

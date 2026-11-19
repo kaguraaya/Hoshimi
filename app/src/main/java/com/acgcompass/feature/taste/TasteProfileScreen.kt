@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Leaderboard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -53,11 +54,13 @@ import kotlin.math.roundToInt
 
 /** 口味画像路由入口。 */
 @Composable
+@Suppress("LongParameterList") // 导航回调
 fun TasteProfileRoute(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSettings: () -> Unit = {},
     onOpenManualReview: () -> Unit = {},
+    onOpenRanking: () -> Unit = {},
     viewModel: TasteProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -102,6 +105,7 @@ fun TasteProfileRoute(
         manualReviewCount = classificationState.manualReview,
         classificationState = classificationState,
         onOpenManualReview = onOpenManualReview,
+        onOpenRanking = onOpenRanking,
         // 手动 AI 标签升维分类（细化本地兜底为题材的未知标签）。
         onClassifyTags = {
             if (classifying) viewModel.onStopClassifyingTags() else viewModel.onClassifyTags()
@@ -133,6 +137,7 @@ fun TasteProfileScreen(
     onRefreshAnalysis: () -> Unit = {},
     onClassifyTags: () -> Unit = {},
     onOpenManualReview: () -> Unit = {},
+    onOpenRanking: () -> Unit = {},
 ) {
     AcgScreenScaffold(
         title = "口味画像",
@@ -140,6 +145,11 @@ fun TasteProfileScreen(
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
+        },
+        actions = {
+            IconButton(onClick = onOpenRanking) {
+                Icon(Icons.Outlined.Leaderboard, contentDescription = "口味排行")
             }
         },
     ) { _ ->
