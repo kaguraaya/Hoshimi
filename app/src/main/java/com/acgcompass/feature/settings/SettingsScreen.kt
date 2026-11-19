@@ -1357,6 +1357,13 @@ private fun PrivacyToggles(card: PrivacyCardState, actions: SettingsActions) {
         enabled = true,
         onCheckedChange = { actions.onToggleChange(ToggleKeys.RECORD_TIME_MACHINE_SNAPSHOTS, it) },
     )
+    ToggleRow(
+        label = "记录最近搜索",
+        description = "在发现页的搜索框下面显示最近搜过的关键词，只存在本机。关掉后停止记录，并清空已有记录。",
+        checked = card.searchHistoryEnabled,
+        enabled = true,
+        onCheckedChange = { actions.onToggleChange(ToggleKeys.SEARCH_HISTORY, it) },
+    )
 }
 
 @Composable

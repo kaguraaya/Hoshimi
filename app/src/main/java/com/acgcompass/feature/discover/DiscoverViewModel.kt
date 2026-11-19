@@ -99,9 +99,11 @@ class DiscoverViewModel @Inject constructor(
         _query.value = query
     }
 
-    /** 最近搜索历史（最新在前），供搜索页空态展示。 */
+    /** 最近搜索历史（最新在前），供搜索页空态展示；设置里关掉「记录最近搜索」时为空。 */
     val searchHistory: StateFlow<List<String>> =
-        settingsDataStore.searchHistory.stateIn(
+        combine(settingsDataStore.searchHistory, settingsDataStore.searchHistoryEnabled) { history, enabled ->
+            if (enabled) history else emptyList()
+        }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
@@ -123,13 +125,19 @@ class DiscoverViewModel @Inject constructor(
     fun onSearchSubmit() {
         val q = _query.value.trim()
         if (q.isEmpty()) return
-        viewModelScope.launch { settingsDataStore.addSearchHistory(q) }
+        recordHistory(q)
     }
 
     /** 点击历史项后填入搜索框、触发搜索并将该词置顶。 */
     fun onSelectHistory(query: String) {
         _query.value = query
-        viewModelScope.launch { settingsDataStore.addSearchHistory(query) }
+        recordHistory(query)
+    }
+
+    private fun recordHistory(query: String) {
+        viewModelScope.launch {
+            if (settingsDataStore.searchHistoryEnabled.first()) settingsDataStore.addSearchHistory(query)
+        }
     }
 
     /** 删除单条搜索历史。 */
