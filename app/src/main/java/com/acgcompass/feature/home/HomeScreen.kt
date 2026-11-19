@@ -295,7 +295,7 @@ private fun HomeContent(
         // 时间表：显示当前时刻之后的下一组放送。
         if (HOME_MOD_SEASONAL in data.enabledModules) {
             item(key = "schedule_title") {
-                SectionHeader("时间表") {
+                SectionHeader("时间表", onClick = onOpenSchedule) {
                     IconButton(onClick = onOpenSchedule) {
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "查看完整时间表")
                     }

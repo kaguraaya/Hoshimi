@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,11 +26,11 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.AlertDialog
@@ -1052,7 +1051,7 @@ private fun ScoreSpreadBar(sources: List<SourceScore>, modifier: Modifier = Modi
 /** 高级筛选分区：多组 chips 驱动筛选状态，应用到结果列表。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FilterSection(
+internal fun FilterSection(
     filter: DiscoverFilter,
     facets: FilterFacets,
     results: List<RankedWork>,
@@ -1060,6 +1059,8 @@ private fun FilterSection(
     onClearFilter: () -> Unit,
     onOpenWork: (String) -> Unit,
 ) {
+    // 筛选面板默认收起；状态放在列表外面，面板滑出屏幕后再滑回来仍保持原样。
+    var expanded by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         // 底部留白保证筛选结果末项不被底栏遮挡（顶层页）。
@@ -1071,185 +1072,28 @@ private fun FilterSection(
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // 筛选条件默认折叠，避免顶部标签占位过大挤占结果展示空间。
-                var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        item(key = "filter_header") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val activeCount = filter.activeDimensionCount()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(PrismCorner.Badge)
-                        .clickable { expanded = !expanded },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Text(
-                        text = if (activeCount > 0) "筛选条件（已选 $activeCount 项）" else "筛选条件",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
+                        text = "公共发现池里已浏览 / 搜索过的作品 · 共 ${results.size} 部",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
                     )
-                    Text(
-                        text = if (expanded) "收起 ▲" else "展开 ▼",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-
-                if (expanded) {
-                    // 展开的筛选区限高 + 自身可滚动，避免占满屏幕把下方结果列表挤成「一点点」。
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        // 类型
-                        FilterGroup(title = "类型") {
-                            // 发现页以动画为主，不提供音乐、真人和未知类型筛选。
-                            com.acgcompass.domain.model.MediaType.entries
-                                .filter { it != com.acgcompass.domain.model.MediaType.OTHER }
-                                .forEach { type ->
-                                    ToggleChip(
-                                        label = type.filterLabel(),
-                                        selected = type in filter.types,
-                                        onToggle = {
-                                            onFilterChange(filter.copy(types = filter.types.toggle(type)))
-                                        },
-                                    )
-                                }
-                        }
-                        // 题材（传统分类：热血 / 校园 / 恋爱 …，社区标签 + 常见题材兜底）
-                        if (facets.genres.isNotEmpty()) {
-                            FilterGroup(title = "题材") {
-                                facets.genres.forEach { genre ->
-                                    ToggleChip(
-                                        label = genre,
-                                        selected = genre in filter.genres,
-                                        onToggle = {
-                                            onFilterChange(filter.copy(genres = filter.genres.toggle(genre)))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                        // 状态
-                        FilterGroup(title = "状态") {
-                            com.acgcompass.domain.model.ReleaseStatus.entries.forEach { status ->
-                                ToggleChip(
-                                    label = status.filterLabel(),
-                                    selected = status in filter.statuses,
-                                    onToggle = {
-                                        onFilterChange(filter.copy(statuses = filter.statuses.toggle(status)))
-                                    },
-                                )
-                            }
-                        }
-                        // 篇幅
-                        if (facets.lengths.isNotEmpty()) {
-                            FilterGroup(title = "篇幅") {
-                                facets.lengths.forEach { length ->
-                                    ToggleChip(
-                                        label = length,
-                                        selected = length in filter.lengths,
-                                        onToggle = {
-                                            onFilterChange(filter.copy(lengths = filter.lengths.toggle(length)))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                        // 评分：最低评分阈值（0~10 归一化）
-                        FilterGroup(title = "评分（不低于）") {
-                            listOf(6f, 7f, 8f, 9f).forEach { threshold ->
-                                ToggleChip(
-                                    label = formatScore(threshold),
-                                    selected = filter.minRating == threshold,
-                                    onToggle = {
-                                        val next = if (filter.minRating == threshold) null else threshold
-                                        onFilterChange(filter.copy(minRating = next))
-                                    },
-                                )
-                            }
-                        }
-                        // 年份
-                        if (facets.years.isNotEmpty()) {
-                            FilterGroup(title = "年份") {
-                                facets.years.forEach { year ->
-                                    ToggleChip(
-                                        label = year.toString(),
-                                        selected = year in filter.years,
-                                        onToggle = {
-                                            onFilterChange(filter.copy(years = filter.years.toggle(year)))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                        // 完结状态
-                        FilterGroup(title = "完结状态") {
-                            FinishedFilter.entries.forEach { option ->
-                                ToggleChip(
-                                    label = option.filterLabel(),
-                                    selected = filter.finished == option,
-                                    onToggle = { onFilterChange(filter.copy(finished = option)) },
-                                )
-                            }
-                        }
-                        // 来源平台
-                        FilterGroup(title = "来源平台") {
-                            com.acgcompass.domain.model.SourceId.entries.forEach { source ->
-                                ToggleChip(
-                                    label = source.discoverLabel(),
-                                    selected = source in filter.sources,
-                                    onToggle = {
-                                        onFilterChange(filter.copy(sources = filter.sources.toggle(source)))
-                                    },
-                                )
-                            }
-                        }
-                        // 风险标签
-                        if (facets.riskTags.isNotEmpty()) {
-                            FilterGroup(title = "风险标签") {
-                                facets.riskTags.forEach { tag ->
-                                    ToggleChip(
-                                        label = tag,
-                                        selected = tag in filter.riskTags,
-                                        onToggle = {
-                                            onFilterChange(filter.copy(riskTags = filter.riskTags.toggle(tag)))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                        // 心情标签
-                        if (facets.moodTags.isNotEmpty()) {
-                            FilterGroup(title = "心情标签") {
-                                facets.moodTags.forEach { tag ->
-                                    ToggleChip(
-                                        label = tag,
-                                        selected = tag in filter.moodTags,
-                                        onToggle = {
-                                            onFilterChange(filter.copy(moodTags = filter.moodTags.toggle(tag)))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-
-                        if (!filter.isEmpty) {
-                            TextButton(onClick = onClearFilter) {
-                                Text("清除全部筛选")
-                            }
-                        }
+                    TextButton(onClick = { expanded = !expanded }) {
+                        Text(if (activeCount > 0) "筛选 · $activeCount" else "筛选")
+                        Icon(
+                            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = null,
+                        )
                     }
                 }
-
-                Text(
-                    text = "筛选范围：已浏览 / 搜索过的多源作品（公共发现池）· 共 ${results.size} 部",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                // 展开后跟着列表一起滚，不在里面再套一层滚动；展开状态放在列表外面，滑远了也不会自己收起。
+                androidx.compose.animation.AnimatedVisibility(visible = expanded) {
+                    DiscoverFilterPanel(filter, facets, onFilterChange, onClearFilter)
+                }
             }
         }
 
@@ -1348,39 +1192,12 @@ private fun EmptyDataPlaceholder(message: String) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun FilterGroup(title: String, content: @Composable FlowRowScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            content = content,
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ToggleChip(label: String, selected: Boolean, onToggle: () -> Unit) {
-    FlatFilterChip(
-        selected = selected,
-        onClick = onToggle,
-        label = { Text(label) },
-    )
-}
-
 /** 卡片缺少作品 id，列表 key / 点击回调以标题兜底（界面层稳定标识，不影响领域数据）。 */
 private fun WorkCardUiModel.titleKey(): String = title
 
-private fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
+internal fun <T> Set<T>.toggle(value: T): Set<T> = if (value in this) this - value else this + value
 
-private fun com.acgcompass.domain.model.MediaType.filterLabel(): String = when (this) {
+internal fun com.acgcompass.domain.model.MediaType.filterLabel(): String = when (this) {
     com.acgcompass.domain.model.MediaType.ANIME -> "动画"
     com.acgcompass.domain.model.MediaType.MANGA -> "漫画"
     com.acgcompass.domain.model.MediaType.NOVEL -> "小说"
@@ -1389,7 +1206,7 @@ private fun com.acgcompass.domain.model.MediaType.filterLabel(): String = when (
     com.acgcompass.domain.model.MediaType.OTHER -> "其他"
 }
 
-private fun com.acgcompass.domain.model.ReleaseStatus.filterLabel(): String = when (this) {
+internal fun com.acgcompass.domain.model.ReleaseStatus.filterLabel(): String = when (this) {
     com.acgcompass.domain.model.ReleaseStatus.UNKNOWN -> "未知"
     com.acgcompass.domain.model.ReleaseStatus.NOT_RELEASED -> "未发布"
     com.acgcompass.domain.model.ReleaseStatus.RELEASING -> "连载中"
@@ -1398,7 +1215,7 @@ private fun com.acgcompass.domain.model.ReleaseStatus.filterLabel(): String = wh
     com.acgcompass.domain.model.ReleaseStatus.CANCELLED -> "腰斩"
 }
 
-private fun FinishedFilter.filterLabel(): String = when (this) {
+internal fun FinishedFilter.filterLabel(): String = when (this) {
     FinishedFilter.ALL -> "全部"
     FinishedFilter.FINISHED -> "已完结"
     FinishedFilter.ONGOING -> "未完结"

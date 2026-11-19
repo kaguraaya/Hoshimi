@@ -43,7 +43,21 @@ data class DetailExtrasData(
     @Transient val creditsFailed: Boolean = false,
     /** 短评这次没拉到（不写入缓存）。 */
     @Transient val commentsFailed: Boolean = false,
+    /** 这次没拉到的原因（不写入缓存）。 */
+    @Transient val failure: ExtrasFailure? = null,
 )
+
+/** Bangumi 扩展资料没拉到的原因，详情页按原因给不同的说明。 */
+enum class ExtrasFailure {
+    /** Bangumi 返回「请求太频繁」。 */
+    RATE_LIMITED,
+
+    /** 连不上 Bangumi（断网、超时）。 */
+    NETWORK,
+
+    /** 其它（服务器出错、返回的数据解析不了）。 */
+    OTHER,
+}
 
 object DetailCacheTtl {
     const val PERSONAL_MILLIS = 15L * 60L * 1_000L

@@ -727,6 +727,8 @@ class DetailViewModel @Inject constructor(
                 bangumiLoad = ExtrasLoad.LOADED,
                 creditsFailed = detailExtras.value.creditsFailed || completed.isFailure,
                 commentsFailed = detailExtras.value.commentsFailed || completed.isFailure,
+                failure = detailExtras.value.failure
+                    ?: com.acgcompass.domain.detail.ExtrasFailure.OTHER.takeIf { completed.isFailure },
             )
         }
     }
@@ -752,6 +754,7 @@ class DetailViewModel @Inject constructor(
                 bangumiLoad = ExtrasLoad.LOADING,
                 creditsFailed = data.creditsFailed,
                 commentsFailed = data.commentsFailed,
+                failure = data.failure,
             )
         }
     }

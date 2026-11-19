@@ -12,10 +12,13 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,8 +29,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -208,8 +211,7 @@ private fun FinishedCell(
     Column(
         modifier
             .clip(PrismCorner.Thumb)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .alpha(if (hidden) HIDDEN_ALPHA else 1f),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Box(
             Modifier
@@ -227,30 +229,36 @@ private fun FinishedCell(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+            // 不放进图里：封面压暗，中间一个「隐藏」图标，不在封面上写字。
             if (hidden) {
-                Text(
-                    "不放进图里",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                Box(Modifier.fillMaxSize().background(HIDDEN_SCRIM))
+                Icon(
+                    Icons.Outlined.VisibilityOff,
+                    contentDescription = "不放进分享图",
+                    tint = Color.White,
                     modifier = Modifier
-                        .clip(PrismCorner.Thumb)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                        .size(HIDDEN_BADGE)
+                        .clip(CircleShape)
+                        .background(HIDDEN_BADGE_FILL)
+                        .padding(7.dp),
                 )
             }
         }
+        val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Text(
             work.title,
             style = MaterialTheme.typography.labelMedium,
+            color = if (hidden) muted else Color.Unspecified,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp),
         )
-        if (!hideRatings && work.rating != null) {
-            Text(
+        when {
+            hidden -> Text("不放进图里", style = MaterialTheme.typography.labelSmall, color = muted)
+            !hideRatings && work.rating != null -> Text(
                 "${work.rating} 分",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = muted,
             )
         }
     }
@@ -269,4 +277,10 @@ private fun Note(text: String) {
 private const val GRID_COLUMNS = 4
 private const val COVER_ASPECT = 0.75f
 private const val PERCENT = 100
-private const val HIDDEN_ALPHA = 0.4f
+
+@Suppress("MagicNumber") // 半透明黑：压暗封面
+private val HIDDEN_SCRIM = Color(0x99000000)
+
+@Suppress("MagicNumber") // 半透明黑：图标底
+private val HIDDEN_BADGE_FILL = Color(0x66000000)
+private val HIDDEN_BADGE = 36.dp

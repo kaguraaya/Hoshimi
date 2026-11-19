@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -224,11 +226,32 @@ private fun FlatCardHeader(
 /**
  * 分组标题：放在卡片**外面**、成组内容的上方，左缘与卡片外缘对齐，字色用次要色。
  * 页面上的分区因此是「标题 + 一张卡片」，而不是卡片套着标题。
+ *
+ * 给了 [onClick] 时整行可点（如「时间表」点标题进入完整页面）：按压高光是圆角块，左右各多出 8dp，文字位置不变。
  */
 @Composable
-fun SectionHeader(text: String, modifier: Modifier = Modifier, trailing: @Composable (RowScope.() -> Unit)? = null) {
+fun SectionHeader(
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    trailing: @Composable (RowScope.() -> Unit)? = null,
+) {
+    val clickable = if (onClick == null) {
+        Modifier
+    } else {
+        Modifier
+            .layout { measurable, constraints ->
+                val bleed = HEADER_BLEED.roundToPx()
+                val width = constraints.maxWidth + bleed * 2
+                val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+                layout(constraints.maxWidth, placeable.height) { placeable.place(-bleed, 0) }
+            }
+            .clip(PrismCorner.Segment)
+            .clickable(onClick = onClick)
+            .padding(horizontal = HEADER_BLEED)
+    }
     Row(
-        modifier = modifier.fillMaxWidth().padding(top = 16.dp),
+        modifier = modifier.fillMaxWidth().padding(top = 16.dp).then(clickable),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -419,3 +442,5 @@ fun FlatSwitch(
 private val CHIP_ICON: Dp = 18.dp
 private const val SELECT_DURATION_MS = 240
 private const val DISABLED_ALPHA = 0.38f
+
+private val HEADER_BLEED = 8.dp
