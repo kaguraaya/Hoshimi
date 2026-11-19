@@ -4,7 +4,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,7 +15,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -108,16 +106,11 @@ fun DataSafetyScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { com.acgcompass.core.designsystem.AcgSnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding()),
-            contentPadding = PaddingValues(
-                start = ScreenContentPadding.Horizontal,
-                end = ScreenContentPadding.Horizontal,
-                top = 12.dp,
-                bottom = ScreenContentPadding.Bottom,
-            ),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = ScreenContentPadding.lazyList(innerPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "auto") { AutoBackupCard(state, actions) }

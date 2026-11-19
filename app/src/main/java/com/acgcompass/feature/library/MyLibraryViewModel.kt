@@ -38,8 +38,50 @@ class MyLibraryViewModel @Inject constructor(
     private val userCollectionDao: UserCollectionDao,
     private val workRepository: WorkRepository,
     private val backlogRepository: BacklogRepository,
+    private val syncManager: com.acgcompass.data.sync.BangumiSyncManager,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
+
+    private val _refreshing = MutableStateFlow(false)
+
+    /** 下拉同步进行中。 */
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+
+    /** 同步结果提示，显示一次后清掉。 */
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    /**
+     * 下拉同步 Bangumi 收藏：我的库就是 Bangumi 收藏的本地镜像，下拉期待的就是「和网页对齐」。
+     * 双向按较新的一方合并（与「我的」页同步按钮相同），未登录时只提示。
+     */
+    fun onPullRefresh() {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        viewModelScope.launch {
+            // 同步可能要翻好几页；指示器最多转约 3 秒，同步在后台继续，结果用底部提示告知，列表随数据库更新。
+            refreshGate.run(viewModelScope) {
+                _message.value = if (!syncManager.isConfigured()) {
+                    "还没有登录 Bangumi，登录后下拉即可同步收藏"
+                } else {
+                    when (val result = syncManager.syncCollections()) {
+                        is com.acgcompass.core.common.AppResult.Success ->
+                            "同步完成：新增 ${result.data.added} · 更新 ${result.data.updated}" +
+                                (if (result.data.removed > 0) " · 移入回收站 ${result.data.removed}" else "")
+                        is com.acgcompass.core.common.AppResult.Failure -> "同步失败：${result.error.cause}"
+                    }
+                }
+            }
+            _refreshing.value = false
+        }
+    }
+
+    private val refreshGate = com.acgcompass.core.common.RefreshGate(minIntervalMillis = SYNC_PULL_INTERVAL_MS)
+
+    fun consumeMessage() {
+        _message.value = null
+    }
 
     private val _selectedTab = MutableStateFlow(
         LibraryStatusTab.fromKey(savedStateHandle.get<String>(LIBRARY_ARG_TAB)),
@@ -100,6 +142,7 @@ class MyLibraryViewModel @Inject constructor(
     }
 
     private companion object {
+        const val SYNC_PULL_INTERVAL_MS = 5_000L
         const val STOP_TIMEOUT_MS = 5_000L
 
         /** 计算各 Tab 的条目数（含「全部」）。 */

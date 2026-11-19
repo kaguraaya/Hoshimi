@@ -64,8 +64,9 @@ class BangumiRemoteDataSource @Inject constructor(
     suspend fun getSubjectBundle(
         subjectId: Int,
         priority: RequestPriority = RequestPriority.FOREGROUND,
+        fresh: Boolean = false,
     ): AppResult<BangumiSubjectBundle> = runCatchingApp {
-        val subject = fetchSubjectDto(subjectId, priority)
+        val subject = fetchSubjectDto(subjectId, priority, fresh)
         BangumiSubjectBundle(
             work = subject.toWork(),
             rating = subject.rating.toRatingEntry(),
@@ -115,9 +116,16 @@ class BangumiRemoteDataSource @Inject constructor(
         subject.rating.toRatingEntry() ?: throw AppError.FieldMissing().asException()
     }
 
-    private suspend fun fetchSubjectDto(subjectId: Int, priority: RequestPriority): BangumiSubjectDto {
-        val result = subjectCoalescer.get("$subjectId", priority) {
-            runCatchingApp { api.getSubject(subjectId, auth.withPriority(priority)).bodyOrThrow() }
+    private suspend fun fetchSubjectDto(
+        subjectId: Int,
+        priority: RequestPriority,
+        fresh: Boolean = false,
+    ): BangumiSubjectDto {
+        // fresh：用户下拉刷新，跳过 HTTP 缓存（条目响应带 max-age）和短时结果复用，直接向服务器取最新的。
+        val result = subjectCoalescer.get("$subjectId", priority, fresh) {
+            runCatchingApp {
+                api.getSubject(subjectId, auth.withPriority(priority), if (fresh) "no-cache" else null).bodyOrThrow()
+            }
         }
         return when (result) {
             is AppResult.Success -> result.data

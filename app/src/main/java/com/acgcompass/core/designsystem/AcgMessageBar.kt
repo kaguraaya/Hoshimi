@@ -3,6 +3,8 @@ package com.acgcompass.core.designsystem
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,6 +20,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarData
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -71,6 +77,35 @@ fun AcgUndoBar(message: String?, key: Any?, onUndo: () -> Unit, onTimeout: () ->
     }
 }
 
+/**
+ * 应用里所有从底部浮起的提示都用这个宿主：外观与 [AcgUndoBar] 相同（浮起的卡片级 / 色块级底色、24dp 圆角、投影），
+ * 从下往上滑入；带动作时右侧是文字按钮。
+ */
+@Composable
+fun AcgSnackbarHost(hostState: SnackbarHostState, modifier: Modifier = Modifier) {
+    SnackbarHost(hostState = hostState, modifier = modifier) { data -> AcgSnackbar(data) }
+}
+
+@Composable
+private fun AcgSnackbar(data: SnackbarData) {
+    val offset = remember(data) { Animatable(1f) }
+    LaunchedEffect(data) {
+        offset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = SLIDE_STIFFNESS))
+    }
+    FloatingMessageSurface(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .graphicsLayer { translationY = offset.value * size.height }
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        MessageRow(
+            message = data.visuals.message,
+            actionLabel = data.visuals.actionLabel,
+            onAction = data::performAction,
+        )
+    }
+}
+
 /** 浮在内容上的提示条底色：浅色取卡片级、深色取色块级（深色下投影看不出来，要比下面的卡片亮一级）。 */
 @Composable
 private fun FloatingMessageSurface(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -113,5 +148,6 @@ private fun MessageRow(message: String, actionLabel: String?, onAction: () -> Un
 const val UNDO_DURATION_MILLIS: Int = 6_000
 
 private val MESSAGE_SHAPE = RoundedCornerShape(24.dp)
+private const val SLIDE_STIFFNESS = 600f
 private const val PROGRESS_ALPHA = 0.6f
 private const val DARK_LUMINANCE = 0.5f

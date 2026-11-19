@@ -72,10 +72,10 @@ fun TasteProfileRoute(
     val dimensionSummary by viewModel.dimensionSummary.collectAsStateWithLifecycle()
     val processingSummary by viewModel.processingSummary.collectAsStateWithLifecycle()
     val classificationState by viewModel.classificationState.collectAsStateWithLifecycle()
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val showMessage = com.acgcompass.core.ui.LocalAppMessenger.current
     androidx.compose.runtime.LaunchedEffect(message) {
         message?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            showMessage(it)
             viewModel.clearMessage()
         }
     }
@@ -142,12 +142,10 @@ fun TasteProfileScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
             }
         },
-    ) { innerPadding ->
+    ) { _ ->
         StateScaffold(
             state = state,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding()),
+            modifier = Modifier.fillMaxSize(),
             // 空态 CTA 不再是死按钮——前往设置（Bangumi/同步）导入口味数据。
             onCta = { onImportData() },
         ) { profile ->
@@ -155,7 +153,7 @@ fun TasteProfileScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    // 统一使用 AcgScreenScaffold 和 ScreenContentPadding，避免首张卡片被标题栏遮挡。
+                    // 内容铺到顶栏下面，顶部让出顶栏。
                     .padding(
                         start = ScreenContentPadding.Horizontal,
                         end = ScreenContentPadding.Horizontal,
@@ -518,7 +516,7 @@ private fun TasteCombosSection(combos: List<TopicCombo>) {
 /**
  * AI「升维」效果——本地规则把大量未知社区标签统统兜底成笼统「题材」；这里展示 AI 升维分类
  * 已把多少这类标签细化到了哪些**更精确**的维度（情节 / 角色类型 / 来源 / 年代 / 社区梗…），让用户看到
- * 「AI 标签升维分类」按钮的实际收益，而非只有一次性 Toast。噪声维度另行说明（已从画像主分剔除）。
+ * 「AI 标签升维分类」按钮的实际收益，而非只有一次性提示。噪声维度另行说明（已从画像主分剔除）。
  */
 @Composable
 private fun TagDimensionUpgradeSection(summary: TagDimensionSummary) {

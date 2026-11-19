@@ -1000,7 +1000,7 @@ class WorkRepositoryImpl @Inject constructor(
             DetailCacheTtl.COMMENTS_MILLIS
         }
         if (!forceRefresh && cached != null && System.currentTimeMillis() - cached.fetchedAt < ttl) return
-        val result = bangumi.getSubjectBundle(subjectId, priority)
+        val result = bangumi.getSubjectBundle(subjectId, priority, fresh = forceRefresh)
         if (result is AppResult.Success) persistBangumiBundle(workId, result.data)
     }
 

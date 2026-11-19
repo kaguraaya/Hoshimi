@@ -37,7 +37,7 @@ import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.LocalFloatingBarInset
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.core.ui.topBarBlurSource
+import com.acgcompass.core.ui.dockBlurSource
 import com.acgcompass.domain.cache.CachePolicy
 import com.acgcompass.domain.model.ImportItem
 import com.acgcompass.domain.model.ImportItemStatus
@@ -303,7 +303,7 @@ private fun SampleMineWithDock() {
     Box(Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalFloatingBarInset provides DOCK_SPACE) {
             MineScreen(
-                modifier = Modifier.topBarBlurSource(dockHaze),
+                modifier = Modifier.dockBlurSource(dockHaze),
                 state = UiState.Success(
                     MineUiState(
                         stats = MineStats(

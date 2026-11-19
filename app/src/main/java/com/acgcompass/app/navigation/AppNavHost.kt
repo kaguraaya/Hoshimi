@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -31,8 +30,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.acgcompass.core.designsystem.AcgSnackbarHost
+import com.acgcompass.core.ui.LocalAppMessenger
 import com.acgcompass.core.ui.LocalFloatingBarInset
-import com.acgcompass.core.ui.topBarBlurSource
+import com.acgcompass.core.ui.dockBlurSource
 import com.acgcompass.core.ui.withoutTop
 import com.acgcompass.feature.backlog.BacklogRoute
 import com.acgcompass.feature.cache.CacheItemCleanupScreen
@@ -98,11 +99,14 @@ fun AcgApp(
         // 外层只替页面消费底部 inset（导航条），状态栏交给各页顶栏自己包住。底栏不放进 bottomBar 槽（那样会
         // 留出一整条矩形空带），而是叠在内容之上；可滚动内容通过 LocalFloatingBarInset 让出底栏的位置。
         snackbarHost = {
-            SnackbarHost(snackbarHostState, Modifier.padding(bottom = if (showDock) dockContentSpace() else 0.dp))
+            AcgSnackbarHost(snackbarHostState, Modifier.padding(bottom = if (showDock) dockContentSpace() else 0.dp))
         },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize()) {
-            CompositionLocalProvider(LocalFloatingBarInset provides if (showDock) dockContentSpace() else 0.dp) {
+            CompositionLocalProvider(
+                LocalFloatingBarInset provides if (showDock) dockContentSpace() else 0.dp,
+                LocalAppMessenger provides rememberMessenger(snackbarHostState),
+            ) {
                 AppNavHost(
                     navController = navController,
                     predictiveBackEnabled = predictiveBackEnabled,
@@ -113,7 +117,7 @@ fun AcgApp(
                         .consumeWindowInsets(innerPadding.withoutTop())
                         // 只有显示底栏的页面才需要取样：取样会把整页录进一个图层再画，
                         // 没有底栏的页面（探索队列等带拖动变换的页面）直接绘制。
-                        .then(if (showDock) Modifier.topBarBlurSource(dockHaze) else Modifier),
+                        .then(if (showDock) Modifier.dockBlurSource(dockHaze) else Modifier),
                 )
             }
             if (showDock) {

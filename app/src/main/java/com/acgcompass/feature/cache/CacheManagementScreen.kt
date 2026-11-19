@@ -2,7 +2,6 @@ package com.acgcompass.feature.cache
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,7 +18,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -38,6 +36,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.AcgTopBarHeight
+import com.acgcompass.core.ui.ScreenContentPadding
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 import kotlinx.coroutines.launch
@@ -65,6 +66,8 @@ fun CacheManagementScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("缓存管理") },
                 navigationIcon = {
@@ -74,11 +77,11 @@ fun CacheManagementScreen(
                 },
             )
         },
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = { com.acgcompass.core.designsystem.AcgSnackbarHost(snackbar) },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = ScreenContentPadding.lazyList(padding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {

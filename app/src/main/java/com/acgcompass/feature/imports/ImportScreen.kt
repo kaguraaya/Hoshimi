@@ -42,6 +42,8 @@ import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.TagPill
 import com.acgcompass.core.designsystem.TagPillRow
 import com.acgcompass.core.designsystem.TagPillTone
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 import com.acgcompass.domain.model.ImportItem
 import com.acgcompass.domain.model.ImportItemStatus
 
@@ -78,6 +80,8 @@ fun ImportScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 title = { Text("批量导入") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {

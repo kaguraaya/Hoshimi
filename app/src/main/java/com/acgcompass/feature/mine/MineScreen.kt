@@ -23,7 +23,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,9 +43,7 @@ import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.data.credential.SourceId
-import dev.chrisbanes.haze.HazeState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -79,10 +76,10 @@ fun MineRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val syncMessage by viewModel.syncMessage.collectAsStateWithLifecycle()
     val syncing by viewModel.syncing.collectAsStateWithLifecycle()
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val showMessage = com.acgcompass.core.ui.LocalAppMessenger.current
     androidx.compose.runtime.LaunchedEffect(syncMessage) {
         syncMessage?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            showMessage(it)
             viewModel.clearSyncMessage()
         }
     }
@@ -119,22 +116,19 @@ fun MineScreen(
     onOpenLibrary: (String?) -> Unit = {},
     onOpenTrash: () -> Unit = {},
 ) {
-    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { AcgTopLevelTopBar(title = "我的", hazeState = hazeState) },
+        topBar = { AcgTopLevelTopBar(title = "我的") },
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
+        Box(Modifier.fillMaxSize()) {
             StateScaffold(
                 state = state,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+                modifier = Modifier.fillMaxSize(),
             ) { ui ->
                 androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    // 父级 StateScaffold 已消费标题栏 innerPadding；此处只叠加统一留白（顶部 16dp 呼吸 + 底部 96dp 不被底栏遮挡）。
+                    // 列表铺到顶栏下面：顶部让出顶栏，底部让出悬浮底栏。
                     contentPadding = PaddingValues(
                         start = ScreenContentPadding.Horizontal,
                         end = ScreenContentPadding.Horizontal,

@@ -48,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 
 /**
@@ -536,6 +537,7 @@ private fun RevealSecretsToggle(revealSecrets: Boolean, onToggleReveal: () -> Un
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(PrismCorner.Badge)
             .clickable { onToggleReveal() }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

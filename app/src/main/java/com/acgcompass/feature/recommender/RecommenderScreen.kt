@@ -73,6 +73,8 @@ import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 
 /** 推荐器路由参数键——首页「今日状态」预填的「想看标签」（逗号分隔）。 */
 const val RECOMMENDER_ARG_TAGS: String = "presetTags"
@@ -164,6 +166,8 @@ fun RecommenderScreen(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             androidx.compose.material3.TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("今晚看什么", fontWeight = FontWeight.SemiBold) },
                 // 这是从首页进入的二级页面，需要显式的返回入口（此前只能靠系统返回手势）。
@@ -196,8 +200,9 @@ fun RecommenderScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(bottom = innerPadding.calculateBottomPadding())
                 .verticalScroll(rememberScrollState())
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(16.dp)
                 // 标题栏下方额外 8dp 呼吸（共约 24dp），底部额外留白避免末项贴边。
                 .padding(top = 8.dp, bottom = 8.dp),

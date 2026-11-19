@@ -1,6 +1,7 @@
 package com.acgcompass.feature.library
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,6 +59,15 @@ fun MyLibraryRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val snackbar = androidx.compose.runtime.remember { androidx.compose.material3.SnackbarHostState() }
+    androidx.compose.runtime.LaunchedEffect(message) {
+        message?.let {
+            snackbar.showSnackbar(it)
+            viewModel.consumeMessage()
+        }
+    }
     MyLibraryScreen(
         state = state,
         selectedTab = selectedTab,
@@ -65,8 +76,16 @@ fun MyLibraryRoute(
         onOpenWork = onOpenWork,
         onBack = onBack,
         modifier = modifier,
+        refresh = LibraryRefresh(refreshing, viewModel::onPullRefresh, snackbar),
     )
 }
+
+/** 下拉同步：进行中状态、触发回调和结果提示。 */
+data class LibraryRefresh(
+    val refreshing: Boolean = false,
+    val onRefresh: () -> Unit = {},
+    val snackbarHostState: androidx.compose.material3.SnackbarHostState? = null,
+)
 
 /**
  * 无状态「我的库」界面（Material 3）。统一 [AcgScreenScaffold]（标题「我的库」+ 返回）+
@@ -74,6 +93,7 @@ fun MyLibraryRoute(
  * 并显示各组计数；每条以统一作品卡片展示，想看 / 在看 提供「加入待补池」。
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList") // 分组切换、加入待补池、打开详情、返回和下拉同步各一个回调
 @Composable
 fun MyLibraryScreen(
     state: UiState<MyLibraryData>,
@@ -83,10 +103,12 @@ fun MyLibraryScreen(
     onOpenWork: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    refresh: LibraryRefresh = LibraryRefresh(),
 ) {
     AcgScreenScaffold(
         title = "我的库",
         modifier = modifier,
+        snackbarHost = { refresh.snackbarHostState?.let { com.acgcompass.core.designsystem.AcgSnackbarHost(it) } },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(
@@ -95,63 +117,77 @@ fun MyLibraryScreen(
                 )
             }
         },
+        // 分组药丸固定在顶栏下面、和顶栏共用一层遮罩（同发现页的分区药丸），列表从它们下面滚过。
+        header = (state as? UiState.Success)?.data?.let { data ->
+            { StatusTabs(selectedTab = selectedTab, counts = data.counts, onSelectTab = onSelectTab) }
+        },
     ) { innerPadding ->
-        StateScaffold(
-            state = state,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding()),
-        ) { data ->
+        com.acgcompass.core.designsystem.AcgPullRefreshBox(
+            refreshing = refresh.refreshing,
+            onRefresh = refresh.onRefresh,
+            indicatorTopPadding = innerPadding.calculateTopPadding(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            StateScaffold(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+            ) { data ->
+                LibraryList(data, selectedTab, innerPadding.calculateTopPadding(), onOpenWork, onAddToBacklog)
+            }
+        }
+    }
+}
+
+/** 当前分组的作品列表；整个库为空或分组为空时显示可下拉的空状态。 */
+@Composable
+private fun LibraryList(
+    data: MyLibraryData,
+    selectedTab: LibraryStatusTab,
+    headerHeight: Dp,
+    onOpenWork: (String) -> Unit,
+    onAddToBacklog: (String) -> Unit,
+) {
+    val visible = data.itemsFor(selectedTab)
+    when {
+        data.items.isEmpty() -> PullableEmpty { LibraryEmptyState() }
+        visible.isEmpty() -> PullableEmpty {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = LIBRARY_TOP_GAP),
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                StatusTabs(
-                    selectedTab = selectedTab,
-                    counts = data.counts,
-                    onSelectTab = onSelectTab,
+                Text(
+                    "「${selectedTab.label}」分组下暂无作品",
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
                 )
-                val visible = data.itemsFor(selectedTab)
-                if (data.items.isEmpty()) {
-                    LibraryEmptyState()
-                } else if (visible.isEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(
-                            "「${selectedTab.label}」分组下暂无作品",
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        // 与上方分组药丸拉开一点距离，首张卡片不贴着顶部。
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            start = ScreenContentPadding.Horizontal,
-                            end = ScreenContentPadding.Horizontal,
-                            top = LIBRARY_LIST_GAP,
-                            bottom = ScreenContentPadding.Bottom,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(visible, key = { it.workId }) { item ->
-                            LibraryListItem(
-                                item = item,
-                                onOpenWork = onOpenWork,
-                                onAddToBacklog = onAddToBacklog,
-                            )
-                        }
-                    }
-                }
             }
         }
+        else -> LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            // 与上方分组药丸拉开一点距离，首张卡片不贴着顶部。
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                start = ScreenContentPadding.Horizontal,
+                end = ScreenContentPadding.Horizontal,
+                top = headerHeight + LIBRARY_LIST_GAP,
+                bottom = ScreenContentPadding.Bottom,
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(visible, key = { it.workId }) { item ->
+                LibraryListItem(item = item, onOpenWork = onOpenWork, onAddToBacklog = onAddToBacklog)
+            }
+        }
+    }
+}
+
+/** 空状态也放进可滚动容器：库还是空的时候同样能下拉同步。 */
+@Composable
+private fun PullableEmpty(content: @Composable () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize()) {
+        item { Box(Modifier.fillParentMaxSize()) { content() } }
     }
 }
 
@@ -169,7 +205,11 @@ private fun StatusTabs(
         selected = selectedTab,
         onSelect = onSelectTab,
         label = { tab -> "${tab.label} ${counts[tab] ?: 0}" },
-        modifier = Modifier.padding(horizontal = ScreenContentPadding.Horizontal, vertical = 8.dp),
+        modifier = Modifier.padding(
+            start = ScreenContentPadding.Horizontal,
+            end = ScreenContentPadding.Horizontal,
+            bottom = 8.dp,
+        ),
         scrollable = true,
     )
 }
@@ -281,5 +321,4 @@ private fun MyLibraryScreenPreview() {
 }
 
 /** 我的库自己的间距：顶栏到分组药丸、药丸到第一张卡片。 */
-private val LIBRARY_TOP_GAP = 28.dp
-private val LIBRARY_LIST_GAP = 20.dp
+private val LIBRARY_LIST_GAP = 10.dp

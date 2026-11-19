@@ -36,7 +36,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,9 +68,7 @@ import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.domain.schedule.BroadcastScheduleEntry
-import dev.chrisbanes.haze.HazeState
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -107,12 +104,13 @@ fun HomeRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val syncMessage by viewModel.syncMessage.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val needsConfig by viewModel.needsBangumiConfig.collectAsStateWithLifecycle()
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val showMessage = com.acgcompass.core.ui.LocalAppMessenger.current
     val lifecycleOwner = LocalLifecycleOwner.current
     androidx.compose.runtime.LaunchedEffect(syncMessage) {
         syncMessage?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            showMessage(it)
             viewModel.clearSyncMessage()
         }
     }
@@ -140,6 +138,8 @@ fun HomeRoute(
         onOpenHomeModules = onOpenHomeModules,
         onOpenSchedule = onOpenSchedule,
         modifier = modifier,
+        refreshing = refreshing,
+        onPullRefresh = viewModel::onPullRefresh,
     )
 }
 
@@ -160,15 +160,15 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     onOpenHomeModules: () -> Unit = {},
     onOpenSchedule: () -> Unit = {},
+    refreshing: Boolean = false,
+    onPullRefresh: () -> Unit = {},
 ) {
-    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             AcgTopLevelTopBar(
                 title = "首页",
-                hazeState = hazeState,
                 actions = {
                     IconButton(onClick = onOpenHomeModules) {
                         Icon(Icons.Filled.Tune, contentDescription = "首页模块设置")
@@ -183,21 +183,26 @@ fun HomeScreen(
             )
         },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
-            StateScaffold(
-                state = state,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                onCta = { onOpenImport() },
-            ) { data ->
-                HomeContent(
-                    data = data,
-                    onManualSync = onManualSync,
-                    onOpenRecommender = onOpenRecommender,
-                    onOpenWork = onOpenWork,
-                    onOpenSchedule = onOpenSchedule,
-                )
+        Box(Modifier.fillMaxSize()) {
+            com.acgcompass.core.designsystem.AcgPullRefreshBox(
+                refreshing = refreshing,
+                onRefresh = onPullRefresh,
+                indicatorTopPadding = innerPadding.calculateTopPadding(),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                StateScaffold(
+                    state = state,
+                    modifier = Modifier.fillMaxSize(),
+                    onCta = { onOpenImport() },
+                ) { data ->
+                    HomeContent(
+                        data = data,
+                        onManualSync = onManualSync,
+                        onOpenRecommender = onOpenRecommender,
+                        onOpenWork = onOpenWork,
+                        onOpenSchedule = onOpenSchedule,
+                    )
+                }
             }
         }
     }
@@ -215,7 +220,7 @@ private fun HomeContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        // 父级已消费标题栏 innerPadding；顶部 16dp 呼吸 + 底部 96dp 保证末项不被底栏遮挡（顶层页）。
+        // 列表铺到顶栏下面：顶部让出顶栏，底部让出悬浮底栏。
         contentPadding = PaddingValues(
             start = ScreenContentPadding.Horizontal,
             end = ScreenContentPadding.Horizontal,

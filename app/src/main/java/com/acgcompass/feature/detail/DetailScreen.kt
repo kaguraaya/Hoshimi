@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -120,30 +122,40 @@ fun DetailRoute(
     val aiMatch by viewModel.aiMatch.collectAsStateWithLifecycle()
     val recordMessage by viewModel.recordMessage.collectAsStateWithLifecycle()
     val trashEntries by viewModel.trashEntries.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     StateScaffold(
         state = state,
         modifier = modifier.fillMaxSize(),
         onRetry = viewModel::retry,
         onOpenDoc = onOpenDoc,
     ) { detail ->
-        DetailScreen(
-            state = detail,
-            aiMatch = aiMatch,
-            recordMessage = recordMessage,
-            trashNotice = trashNoticeOf(trashEntries),
-            actions = DetailScreenActions(
-                onToggleBacklog = viewModel::onToggleBacklog,
-                onRestoreFromTrash = viewModel::onRestoreFromTrash,
-                onOpenWork = onOpenWork,
-                onOpenVndbProducer = onOpenVndbProducer,
-                onAddMainline = viewModel::onAddMainlineToBacklog,
-                onAddAllSeries = viewModel::onAddAllSeriesToBacklog,
-                onAnalyzeMatchWithAi = viewModel::onAnalyzeMatchWithAi,
-                onUpdateMyRecord = viewModel::onUpdateMyRecord,
-                onSyncVndbRecordToBangumi = viewModel::onSyncVndbRecordToBangumi,
-                onRetry = viewModel::retry,
-            ),
-        )
+        // 详情页没有顶栏，指示器从状态栏下沿滑出。
+        com.acgcompass.core.designsystem.AcgPullRefreshBox(
+            refreshing = refreshing,
+            onRefresh = viewModel::onPullRefresh,
+            indicatorTopPadding = androidx.compose.foundation.layout.WindowInsets.statusBars
+                .asPaddingValues().calculateTopPadding(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            DetailScreen(
+                state = detail,
+                aiMatch = aiMatch,
+                recordMessage = recordMessage,
+                trashNotice = trashNoticeOf(trashEntries),
+                actions = DetailScreenActions(
+                    onToggleBacklog = viewModel::onToggleBacklog,
+                    onRestoreFromTrash = viewModel::onRestoreFromTrash,
+                    onOpenWork = onOpenWork,
+                    onOpenVndbProducer = onOpenVndbProducer,
+                    onAddMainline = viewModel::onAddMainlineToBacklog,
+                    onAddAllSeries = viewModel::onAddAllSeriesToBacklog,
+                    onAnalyzeMatchWithAi = viewModel::onAnalyzeMatchWithAi,
+                    onUpdateMyRecord = viewModel::onUpdateMyRecord,
+                    onSyncVndbRecordToBangumi = viewModel::onSyncVndbRecordToBangumi,
+                    onRetry = viewModel::retry,
+                ),
+            )
+        }
     }
 }
 
@@ -250,6 +262,7 @@ private fun WatchRouteSection(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(PrismCorner.Badge)
                             .clickable { onOpenWork(row.workId) }
                             .padding(vertical = 4.dp),
                     )
@@ -1264,6 +1277,7 @@ private fun VndbProducerSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(PrismCorner.Badge)
                     .clickable { onOpenProducer(producer.id, producer.name) }
                     .padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1314,6 +1328,7 @@ private fun VndbRelationsSection(detail: VisualNovelDetail, onOpenWork: (String)
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(PrismCorner.Badge)
                     .clickable { onOpenWork(relation.id) }
                     .padding(vertical = 6.dp),
             )
@@ -1328,7 +1343,7 @@ private fun ExpandableVndbSection(title: String, body: String, initiallyExpanded
         Text(
             text = if (expanded) "收起" else "展开",
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { expanded = !expanded },
+            modifier = Modifier.clip(PrismCorner.Badge).clickable { expanded = !expanded },
         )
         if (expanded) Text(body.ifBlank { NO_DATA })
     }

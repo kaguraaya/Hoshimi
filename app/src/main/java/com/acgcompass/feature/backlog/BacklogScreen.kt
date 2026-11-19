@@ -78,14 +78,12 @@ import com.acgcompass.core.ui.LocalFloatingBarInset
 import com.acgcompass.core.ui.LocalHeaderInset
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.core.ui.topBarBlurSource
 import com.acgcompass.core.ui.withoutTop
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.Priority
 import com.acgcompass.domain.repository.BacklogFilter
 import com.acgcompass.domain.repository.BacklogSort
 import com.acgcompass.domain.repository.BulkOp
-import dev.chrisbanes.haze.HazeState
 
 /**
  * 待补池路由入口。连接 [BacklogViewModel] 并把
@@ -180,14 +178,12 @@ fun BacklogScreen(
         // 仅当切到「全部」(null) 或「仅吃灰」(true) 才算激活，便于「清除筛选」回到默认。
         filter.inDustMuseum != false
     // 列表 / 网格排版切换（网格=3 列只显示封面）；形态由 DataStore 持久化记忆。
-    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
             AcgTopLevelTopBar(
                 title = if (selectionMode) "已选 ${selectedIds.size} 项" else "待补池",
-                hazeState = hazeState,
                 actions = {
                     // 多选仅在有内容时有意义。
                     if (!isEmpty) {
@@ -220,7 +216,7 @@ fun BacklogScreen(
     ) { innerPadding ->
         // 列表铺到毛玻璃顶栏下面滚过；顶部空间由列表留白（LocalHeaderInset）和空状态各自让出。
         val topInset = innerPadding.calculateTopPadding() + 8.dp
-        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
+        Box(Modifier.fillMaxSize()) {
             CompositionLocalProvider(LocalHeaderInset provides topInset) {
                 Column(
                     modifier = Modifier
@@ -416,7 +412,7 @@ private fun BacklogGridItem(
 ) {
     val model = card.toWorkCardUiModel()
     Column(
-        modifier = Modifier.clickable {
+        modifier = Modifier.clip(PrismCorner.Poster).clickable {
             if (selectionMode) onToggleSelect(card.workId) else onOpenDetail(card.workId)
         },
         verticalArrangement = Arrangement.spacedBy(4.dp),

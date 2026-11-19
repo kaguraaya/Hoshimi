@@ -139,6 +139,12 @@ class HomeViewModel @Inject constructor(
     /** 同步结果一次性提示；`需配置` 时提示去设置。消费后调用 [clearSyncMessage]。 */
     val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
 
+    private val _refreshing = MutableStateFlow(false)
+
+    /** 下拉刷新进行中。 */
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+    private val refreshGate = com.acgcompass.core.common.RefreshGate()
+
     private val _needsBangumiConfig = MutableStateFlow(false)
 
     /** 触发后置 true，提示界面跳转设置页 Bangumi 配置；消费后置回 false。 */
@@ -235,6 +241,28 @@ class HomeViewModel @Inject constructor(
 
     fun clearNeedsBangumiConfig() {
         _needsBangumiConfig.value = false
+    }
+
+    /**
+     * 下拉刷新：重新拉取近期放送和本季公共资料（忽略缓存时效）。不同步 Bangumi 收藏——那是「我的」里的同步按钮
+     * 和「我的库」下拉做的事，首页下拉只刷新首页看得到的公共内容。
+     */
+    fun onPullRefresh() {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        viewModelScope.launch {
+            refreshGate.run(viewModelScope) {
+                // 本季公共资料可能排在后台缓存补充后面，不让指示器等它。
+                viewModelScope.launch { runCatching { workRepository.loadPublicDiscovery(background = false) } }
+                val result = runCatching { scheduleRepository.refreshUpcoming(force = true) }
+                    .getOrElse { Result.failure(it) }
+                scheduleRefreshState.value = HomeScheduleRefreshState(
+                    refreshing = false,
+                    errorMessage = result.exceptionOrNull()?.message,
+                )
+            }
+            _refreshing.value = false
+        }
     }
 
     /** Refreshes on first display and after returning home; repository TTL prevents unnecessary requests. */

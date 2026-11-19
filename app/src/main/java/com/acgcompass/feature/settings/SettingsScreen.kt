@@ -38,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,15 +75,13 @@ import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.core.ui.blurredTopBarColors
-import com.acgcompass.core.ui.topBarBlur
-import com.acgcompass.core.ui.topBarBlurSource
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 import com.acgcompass.data.credential.SourceId
 import com.acgcompass.data.datastore.SettingsState
 import com.acgcompass.data.datastore.ThemeMode
 import com.acgcompass.domain.model.ThemePreset
 import com.acgcompass.domain.taste.TasteMatchBranch
-import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 
 /**
@@ -239,11 +236,10 @@ fun SettingsSourceScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { innerPadding ->
+        snackbarHost = { com.acgcompass.core.designsystem.AcgSnackbarHost(snackbarHostState) },
+    ) { _ ->
         StateScaffold(
             state = state,
-            modifier = Modifier.padding(innerPadding),
             onOpenDoc = actions.onOpenDoc,
         ) { data ->
             SettingsSourceDetail(sourceKey = sourceKey, data = data, actions = actions)
@@ -252,7 +248,7 @@ fun SettingsSourceScreen(
 }
 
 /**
- * 装配 [SettingsActions]：备份 / 导入 / CSV 的 SAF 启动器、官方文档打开兜底、数据操作结果 Toast。
+ * 装配 [SettingsActions]：备份 / 导入 / CSV 的 SAF 启动器、官方文档打开兜底、数据操作结果提示。
  * 主设置页与二级页共用同一实现和凭据处理逻辑。
  */
 // 把 ViewModel 方法、文件选择器和导航回调组装成一个 SettingsActions，逐项对应，没有分支逻辑可拆。
@@ -322,11 +318,12 @@ private fun rememberSettingsActions(
         }
     }
 
-    // 数据操作结果提示（Toast 形式，避免打断）。
+    // 数据操作结果用底部提示，不打断操作。
     val dataOpMessage by viewModel.dataOpMessage.collectAsStateWithLifecycle()
+    val showMessage = com.acgcompass.core.ui.LocalAppMessenger.current
     androidx.compose.runtime.LaunchedEffect(dataOpMessage) {
         dataOpMessage?.let {
-            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+            showMessage(it)
             viewModel.clearDataOpMessage()
         }
     }
@@ -353,11 +350,7 @@ private fun rememberSettingsActions(
                                 android.content.ClipData.newPlainText("doc-url", url),
                             )
                         }
-                        android.widget.Toast.makeText(
-                            context,
-                            "未找到可用浏览器，链接已复制到剪贴板：$url",
-                            android.widget.Toast.LENGTH_LONG,
-                        ).show()
+                        showMessage("未找到可用浏览器，链接已复制到剪贴板：$url")
                     }
                 }
             }
@@ -479,8 +472,6 @@ fun SettingsScreenContent(
             actions.onDismissSaveNotice()
         }
     }
-
-    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
@@ -488,8 +479,8 @@ fun SettingsScreenContent(
             TopAppBar(
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("设置") },
-                colors = blurredTopBarColors(),
-                modifier = Modifier.topBarBlur(hazeState),
+                colors = transparentTopBarColors(),
+                modifier = Modifier.topBarScrim(),
                 navigationIcon = {
                     IconButton(onClick = actions.onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -498,12 +489,11 @@ fun SettingsScreenContent(
                 windowInsets = TopAppBarDefaults.windowInsets,
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) {
+        snackbarHost = { com.acgcompass.core.designsystem.AcgSnackbarHost(snackbarHostState) },
+    ) { _ ->
+        Box(Modifier.fillMaxSize()) {
             StateScaffold(
                 state = state,
-                modifier = Modifier.padding(padding),
                 onOpenDoc = actions.onOpenDoc,
             ) { data ->
                 SettingsList(data = data, actions = actions, onOpenSource = onOpenSource)
@@ -525,7 +515,7 @@ private fun SettingsList(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        // 父级已消费标题栏 innerPadding；统一留白（顶部 16dp 呼吸 + 底部 96dp 不被底栏/手势条遮挡）。
+        // 列表铺到顶栏下面：顶部让出顶栏，底部留出手势条空间。
         contentPadding = PaddingValues(
             start = ScreenContentPadding.Horizontal,
             end = ScreenContentPadding.Horizontal,

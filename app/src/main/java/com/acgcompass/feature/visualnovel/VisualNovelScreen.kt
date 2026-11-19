@@ -1,6 +1,5 @@
 package com.acgcompass.feature.visualnovel
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +47,9 @@ import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.ui.AcgTopBarHeight
+import com.acgcompass.core.ui.ScreenContentPadding
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import com.acgcompass.domain.visualnovel.VisualNovelSort
@@ -64,6 +66,8 @@ fun VisualNovelRoute(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("视觉小说 · Galgame") },
                 navigationIcon = {
@@ -79,8 +83,14 @@ fun VisualNovelRoute(
             )
         },
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            VisualNovelList(state, viewModel, onOpenWork)
+        // 下拉与顶栏的刷新按钮相同：重新拉取当前榜单（随机榜会换一批），列表保持显示到新结果到手。
+        com.acgcompass.core.designsystem.AcgPullRefreshBox(
+            refreshing = state.refreshing,
+            onRefresh = viewModel::refresh,
+            indicatorTopPadding = padding.calculateTopPadding(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            VisualNovelList(state, viewModel, onOpenWork, topPadding = padding.calculateTopPadding())
             if (state.loading && state.items.isEmpty()) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             }
@@ -89,7 +99,12 @@ fun VisualNovelRoute(
 }
 
 @Composable
-private fun VisualNovelList(state: VisualNovelUiState, viewModel: VisualNovelViewModel, onOpenWork: (String) -> Unit) {
+private fun VisualNovelList(
+    state: VisualNovelUiState,
+    viewModel: VisualNovelViewModel,
+    onOpenWork: (String) -> Unit,
+    topPadding: androidx.compose.ui.unit.Dp,
+) {
     val listState = rememberLazyListState()
     LaunchedEffect(listState, state.items.size, state.hasMore, state.loadingMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -102,6 +117,10 @@ private fun VisualNovelList(state: VisualNovelUiState, viewModel: VisualNovelVie
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            top = topPadding + ScreenContentPadding.TopGap,
+            bottom = ScreenContentPadding.Bottom,
+        ),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item { VisualNovelControls(state, viewModel) }
@@ -193,7 +212,8 @@ private fun RankingRefreshStatus(state: VisualNovelUiState) {
 @Composable
 private fun VisualNovelCard(item: VisualNovelListItem, onClick: () -> Unit) {
     PrismCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable(onClick = onClick),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
     ) {
         Row(Modifier.padding(12.dp)) {
             AsyncImage(

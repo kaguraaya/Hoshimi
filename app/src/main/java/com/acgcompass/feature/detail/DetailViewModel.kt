@@ -46,6 +46,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -356,9 +357,45 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    /** 重试入口（错误态「重试」/ 用户下拉）：重新拉取评分与雷达；作品流由 Room 自动刷新。 */
+    /** 重试入口（错误态「重试」）：重新拉取评分与雷达；作品流由 Room 自动刷新。 */
     fun retry() {
         loadRatings(forceRefresh = true)
+    }
+
+    private val _refreshing = MutableStateFlow(false)
+
+    /** 下拉刷新进行中。 */
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+    private val refreshGate = com.acgcompass.core.common.RefreshGate()
+
+    /**
+     * 下拉刷新：跳过缓存重新拉取条目资料与标签、各平台评分、自己在 Bangumi 上的记录（视觉小说另拉 VNDB 详情），
+     * 随后刷新角色 · Staff / 关联作品。口味匹配随作品标签更新自动重算；不重新调用 AI（雷达和 AI 分析保持原样）。
+     */
+    fun onPullRefresh() {
+        if (_refreshing.value || workId.isBlank()) return
+        _refreshing.value = true
+        viewModelScope.launch {
+            refreshGate.run(viewModelScope) {
+                // 各平台评分按来源逐条落库、页面逐条更新；指示器最多转约 3 秒，较慢的跨源匹配继续在后台完成。
+                launch { runCatching { workRepository.aggregateRatings(workId, forceRefresh = true) } }
+                launch { runCatching { refreshPersonalState(forceRefresh = true) } }
+                if (workId.startsWith("v", ignoreCase = true)) launch { refreshVndbDetail() }
+                loadExtras(forceRefresh = true)
+            }
+            _refreshing.value = false
+        }
+    }
+
+    private suspend fun refreshVndbDetail() {
+        val result = runCatching { visualNovelRepository.detail(workId, forceRefresh = true) }.getOrNull()
+        if (result is AppResult.Success) {
+            detailExtras.value = detailExtras.value.copy(
+                vndbDetail = result.data,
+                vndbLoading = false,
+                vndbError = null,
+            )
+        }
     }
 
     /**

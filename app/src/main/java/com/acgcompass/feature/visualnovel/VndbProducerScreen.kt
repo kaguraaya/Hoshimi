@@ -1,6 +1,5 @@
 package com.acgcompass.feature.visualnovel
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +38,9 @@ import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.ui.AcgTopBarHeight
+import com.acgcompass.core.ui.ScreenContentPadding
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 import com.acgcompass.domain.repository.VisualNovelRepository
 import com.acgcompass.domain.visualnovel.VisualNovelListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -127,6 +129,8 @@ fun VndbProducerRoute(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("厂商作品 · ${state.producerName ?: state.producerId}") },
                 navigationIcon = {
@@ -139,7 +143,11 @@ fun VndbProducerRoute(
     ) { padding ->
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = ScreenContentPadding.top(padding),
+                bottom = ScreenContentPadding.Bottom,
+            ),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             state.error?.let { message ->
@@ -165,7 +173,7 @@ fun VndbProducerRoute(
 
 @Composable
 private fun ProducerWorkCard(item: VisualNovelListItem, onClick: () -> Unit) {
-    PrismCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clickable(onClick = onClick)) {
+    PrismCard(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             androidx.compose.foundation.layout.Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

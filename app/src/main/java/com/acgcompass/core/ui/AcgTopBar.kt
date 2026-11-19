@@ -8,9 +8,9 @@ import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
 
 /** 顶栏内容区高度（不含状态栏），与 FlClash 页面顶栏一致。 */
 val AcgTopBarHeight = 72.dp
@@ -33,12 +33,12 @@ fun AcgTopLevelTopBar(
     modifier: Modifier = Modifier,
     colors: TopAppBarColors = TopAppBarDefaults.topAppBarColors(),
     actions: @Composable (androidx.compose.foundation.layout.RowScope.() -> Unit) = {},
-    /** 传入时顶栏变成毛玻璃（见 TopBarBlur.kt）。 */
-    hazeState: HazeState? = null,
+    /** false 时不画遮罩：顶栏和下面的分区药丸放在同一个 Column 里、由 Column 统一加遮罩时用。 */
+    scrim: Boolean = true,
 ) {
     TopAppBar(
         expandedHeight = AcgTopBarHeight,
-        modifier = if (hazeState != null) modifier.topBarBlur(hazeState) else modifier,
+        modifier = if (scrim) modifier.topBarScrim() else modifier,
         title = {
             Text(
                 text = title,
@@ -46,7 +46,7 @@ fun AcgTopLevelTopBar(
                 fontWeight = FontWeight.Bold,
             )
         },
-        colors = if (hazeState != null) blurredTopBarColors() else colors,
+        colors = colors.copy(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
         actions = actions,
         // 顶栏自己包住状态栏区域。
         windowInsets = TopAppBarDefaults.windowInsets,

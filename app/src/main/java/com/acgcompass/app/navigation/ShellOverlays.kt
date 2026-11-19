@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -23,6 +24,7 @@ import com.acgcompass.data.backup.toInfo
 import com.acgcompass.data.local.migration.DatabaseHealth
 import com.acgcompass.feature.safety.SafeModeCallbacks
 import com.acgcompass.feature.safety.SafeModeScreen
+import kotlinx.coroutines.launch
 
 /**
  * 首启引导门控：DataStore 表明尚未展示引导时导航到引导页。
@@ -57,6 +59,13 @@ internal fun databaseReady(shell: AppShellViewModel, modifier: Modifier): Boolea
         }
         else -> true
     }
+}
+
+/** 页面里发一次性底部提示用的回调（见 [com.acgcompass.core.ui.LocalAppMessenger]）。 */
+@Composable
+internal fun rememberMessenger(hostState: SnackbarHostState): (String) -> Unit {
+    val scope = rememberCoroutineScope()
+    return remember(hostState) { { message -> scope.launch { hostState.showSnackbar(message) } } }
 }
 
 /** 根部的提示条宿主；Bangumi 登录失效等一次性提示到达时显示。 */

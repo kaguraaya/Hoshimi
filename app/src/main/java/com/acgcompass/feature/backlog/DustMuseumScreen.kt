@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -64,12 +63,10 @@ fun DustMuseumScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
             }
         },
-    ) { innerPadding ->
+    ) { _ ->
         StateScaffold(
             state = state,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+            modifier = Modifier.fillMaxSize(),
         ) { cards ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

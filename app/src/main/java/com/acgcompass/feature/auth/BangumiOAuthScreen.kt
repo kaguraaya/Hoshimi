@@ -43,6 +43,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.ui.AcgTopBarHeight
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 
 /**
  * Bangumi OAuth2 授权登录页。
@@ -88,6 +90,8 @@ private fun BangumiOAuthScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("用 Bangumi 登录") },
                 navigationIcon = {

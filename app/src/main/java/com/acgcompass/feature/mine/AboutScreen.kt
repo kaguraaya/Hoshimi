@@ -55,6 +55,8 @@ import com.acgcompass.core.designsystem.SectionHeader
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.core.ui.copyOnLongPress
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 
 /**
  * 关于页。展示应用与版本信息，并提供数据来源、开源许可和免责声明的独立入口。
@@ -72,16 +74,7 @@ fun AboutScreen(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                expandedHeight = AcgTopBarHeight,
-                title = { Text("关于") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                windowInsets = TopAppBarDefaults.windowInsets,
-            )
+            AboutTopBar(title = "关于", onBack = onBack)
         },
     ) { innerPadding ->
         Column(
@@ -223,15 +216,7 @@ fun AboutDocumentScreen(title: String, paragraphs: List<String>, onBack: () -> U
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                expandedHeight = AcgTopBarHeight,
-                title = { Text(title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-            )
+            AboutTopBar(title = title, onBack = onBack)
         },
     ) { innerPadding ->
         Column(
@@ -261,15 +246,7 @@ fun AboutLicenseScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                expandedHeight = AcgTopBarHeight,
-                title = { Text("开源许可") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-            )
+            AboutTopBar(title = "开源许可", onBack = onBack)
         },
     ) { innerPadding ->
         Column(
@@ -343,4 +320,22 @@ private fun AboutScreenPreview() {
     AcgCompassTheme {
         AboutScreen(onBack = {})
     }
+}
+
+/** 关于页及其子页共用的顶栏：返回 + 标题，带顶栏遮罩。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AboutTopBar(title: String, onBack: () -> Unit) {
+    TopAppBar(
+        modifier = Modifier.topBarScrim(),
+        colors = transparentTopBarColors(),
+        expandedHeight = AcgTopBarHeight,
+        title = { Text(title) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
+        },
+        windowInsets = TopAppBarDefaults.windowInsets,
+    )
 }

@@ -35,6 +35,9 @@ import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.AcgTopBarHeight
+import com.acgcompass.core.ui.ScreenContentPadding
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.model.SourceId
 
@@ -51,6 +54,8 @@ fun CacheItemCleanupScreen(onBack: () -> Unit, viewModel: CacheManagementViewMod
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("选择作品缓存") },
                 navigationIcon = {
@@ -62,7 +67,11 @@ fun CacheItemCleanupScreen(onBack: () -> Unit, viewModel: CacheManagementViewMod
         },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = ScreenContentPadding.top(padding),
+                bottom = ScreenContentPadding.Bottom,
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {

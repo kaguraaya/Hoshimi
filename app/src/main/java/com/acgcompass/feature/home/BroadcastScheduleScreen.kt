@@ -44,6 +44,9 @@ import coil.compose.AsyncImage
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.core.ui.AcgTopBarHeight
+import com.acgcompass.core.ui.ScreenContentPadding
+import com.acgcompass.core.ui.topBarScrim
+import com.acgcompass.core.ui.transparentTopBarColors
 import com.acgcompass.domain.schedule.BroadcastScheduleEntry
 import com.acgcompass.domain.schedule.BroadcastScheduleRepository
 import com.acgcompass.domain.schedule.WeeklyBroadcastSchedule
@@ -124,6 +127,8 @@ private fun BroadcastScheduleScreen(
     Scaffold(
         topBar = {
             androidx.compose.material3.TopAppBar(
+                modifier = Modifier.topBarScrim(),
+                colors = transparentTopBarColors(),
                 expandedHeight = AcgTopBarHeight,
                 title = { Text("放送时间表") },
                 navigationIcon = {
@@ -135,11 +140,9 @@ private fun BroadcastScheduleScreen(
         },
     ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            contentPadding = ScreenContentPadding.lazyList(padding),
         ) {
             DayOfWeek.entries.forEach { day ->
                 item(key = "day_${day.value}") {
@@ -216,6 +219,7 @@ private fun ScheduleEntryRow(entry: BroadcastScheduleEntry, onClick: () -> Unit)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(PrismCorner.Badge)
             .clickable(onClick = onClick)
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,

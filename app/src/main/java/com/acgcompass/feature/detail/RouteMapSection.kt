@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.Surfaces
 import com.acgcompass.domain.ai.RouteRecommendation
 import com.acgcompass.domain.model.RouteNode
@@ -190,6 +192,7 @@ private fun RouteNodeRow(node: RouteNodeUiModel, onOpenWork: (String) -> Unit, m
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .clip(PrismCorner.Badge)
             .clickable { onOpenWork(node.workId) }
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

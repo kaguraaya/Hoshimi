@@ -13,7 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.acgcompass.core.designsystem.PrismCorner
 
 @Composable
 internal fun OnboardingToggleRow(
@@ -25,6 +27,7 @@ internal fun OnboardingToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(PrismCorner.Badge)
             .clickable { onCheckedChange(!checked) }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.Top,

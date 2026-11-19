@@ -68,13 +68,20 @@ class MainActivity : ComponentActivity() {
             ) {
                 val supportsPredictiveBack =
                     android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
-                AcgApp(
-                    predictiveBackEnabled = predictiveBackEnabled && supportsPredictiveBack,
-                    bangumiAuthNotice = bangumiAuthNotice,
-                    onBangumiAuthNoticeShown = {
-                        lifecycleScope.launch { settingsDataStore.clearBangumiAuthNotice() }
-                    },
-                )
+                // 关掉 Android 12+ 的拉伸回弹：列表滑到顶 / 底时整页被拉长，快速连续上滑时还会盖过下拉刷新；
+                // 到边直接停住（照 FlClash 的手感），到顶继续下拉交给下拉刷新。
+                @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.foundation.LocalOverscrollConfiguration provides null,
+                ) {
+                    AcgApp(
+                        predictiveBackEnabled = predictiveBackEnabled && supportsPredictiveBack,
+                        bangumiAuthNotice = bangumiAuthNotice,
+                        onBangumiAuthNoticeShown = {
+                            lifecycleScope.launch { settingsDataStore.clearBangumiAuthNotice() }
+                        },
+                    )
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.acgcompass.core.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -17,13 +18,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
 
 /** 页面内容区统一内边距；各页在此基础上叠加 [PaddingValues]。 */
 /**
@@ -48,20 +47,22 @@ object ScreenContentPadding {
     /** 横向留白。 */
     val Horizontal: Dp = 16.dp
 
+    /** 第一项内容与顶栏底边之间的呼吸间距。 */
+    val TopGap: Dp = 12.dp
+
     /**
-     * 内容与标题栏之间的顶部留白（用于「直接位于顶部标题栏下方」的列表：首页 / 我的 / 设置 / 我的库 / 口味画像）。
-     * 父级已用 `.padding(innerPadding)` 让出标题栏高度，本值是标题栏下方的额外呼吸间距。
-     * 默认值保持各页面顶部内容与系统栏的统一间距。
+     * 铺在标准顶栏（状态栏 + [AcgTopBarHeight]）下面的列表的顶部留白。
+     * 页面内容一律**不**加顶部内边距、铺到顶栏下面（顶栏遮罩才看得到下面滚过的内容），由列表用这个值让出顶栏。
      */
     val Top: Dp
         @Composable
-        get() = BASE_TOP + statusBarTop()
+        get() = statusBarTop() + AcgTopBarHeight + TopGap
 
-    private val BASE_TOP: Dp = 76.dp
+    /** 按 Scaffold 下发的实际顶部高度（顶栏可能带分区药丸）算列表顶部留白。 */
+    fun top(innerPadding: PaddingValues, gap: Dp = TopGap): Dp = innerPadding.calculateTopPadding() + gap
 
     /**
-     * 位于「中间栏（TabRow / 同步动作栏）下方」的列表（发现各 Tab、时光机）使用的顶部留白。
-     * 这些列表上方已有中间栏提供分隔，再叠加大段 [Top] 会整体过度下沉，故仅留小段呼吸间距。
+     * 顶栏下面带分区药丸 / 动作栏的页面（发现各分区、时光机），顶部高度由 [LocalHeaderInset] 提供。
      */
     val UnderBarTop: Dp
         @Composable @ReadOnlyComposable
@@ -79,15 +80,12 @@ object ScreenContentPadding {
 
     private val BASE_BOTTOM: Dp = 28.dp
 
-    /**
-     * 把 [AcgScreenScaffold] 下发的 [innerPadding]（已含标题栏高度）与统一留白合并，
-     * 供 LazyColumn `contentPadding` 使用。
-     */
+    /** [AcgScreenScaffold] 页面的列表内边距：顶部让出顶栏（含 [header]），底部让出底栏。 */
     @Composable
     fun lazyList(innerPadding: PaddingValues, extraBottom: Dp = 0.dp): PaddingValues = PaddingValues(
         start = Horizontal,
         end = Horizontal,
-        top = innerPadding.calculateTopPadding() + Top,
+        top = top(innerPadding),
         bottom = Bottom + extraBottom,
     )
 }
@@ -95,17 +93,15 @@ object ScreenContentPadding {
 /**
  * 全应用统一页面脚手架。
  *
- * inset 单一来源模型：外层 [com.acgcompass.app.navigation.AcgApp] 的 Scaffold 已消费状态栏 / 导航栏，
- * 并以 `consumeWindowInsets` 标记。本脚手架的 [Scaffold] 与 [TopAppBar] 一律使用**零 windowInsets**，
- * 不再各自消费状态栏，避免「首张卡片贴顶 / 被裁切」的反复问题。
- *
- * 内容通过 [content] 接收 `innerPadding`（仅标题栏高度），各页应用 [ScreenContentPadding.lazyList]
- * 把它叠加到 LazyColumn 的 `contentPadding`，确保内容从标题栏下方开始、底部不被遮挡。
+ * 顶栏自己包住状态栏，带 [topBarScrim] 遮罩；内容区铺满整个页面（包括顶栏下面），不加顶部内边距。
+ * [content] 收到的 `innerPadding.top` 是顶栏（含 [header]）的实际高度，列表用 [ScreenContentPadding.lazyList]
+ * 或 [ScreenContentPadding.top] 把它加进 `contentPadding`，第一项从顶栏下方开始，滚动时从遮罩下面经过。
  *
  * @param title 页面标题。
  * @param largeTitle 是否使用顶层页大标题（headlineSmall 加粗）。
  * @param navigationIcon 左上角导航图标槽（如返回）。
  * @param actions 右上角动作槽。
+ * @param header 顶栏下方固定的一排内容（如分组药丸），和顶栏共用一层遮罩。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList") // 通用页面骨架：每个参数都对应 Material Scaffold / TopAppBar 的一个可选部件
@@ -119,39 +115,43 @@ fun AcgScreenScaffold(
     actions: @Composable RowScope.() -> Unit = {},
     snackbarHost: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
+    header: (@Composable () -> Unit)? = null,
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    // 顶栏一律是毛玻璃：内容铺在顶栏下面滚过时能透出来（不铺在下面的页面，看起来就是页面底色）。
-    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                expandedHeight = AcgTopBarHeight,
-                title = {
-                    Text(
-                        text = title,
-                        style = if (largeTitle) {
-                            MaterialTheme.typography.headlineSmall
-                        } else {
-                            MaterialTheme.typography.titleLarge
-                        },
-                        fontWeight = if (largeTitle) FontWeight.Bold else FontWeight.SemiBold,
-                    )
-                },
-                navigationIcon = navigationIcon,
-                actions = actions,
-                // 底色交给毛玻璃画；调用方给的标题 / 图标颜色保留。
-                colors = colors.copy(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
-                // 顶栏自己包住状态栏区域，毛玻璃因此能一直延伸到屏幕顶端。
-                windowInsets = TopAppBarDefaults.windowInsets,
-                modifier = Modifier.topBarBlur(hazeState),
-            )
+            Column(Modifier.topBarScrim()) {
+                TopAppBar(
+                    expandedHeight = AcgTopBarHeight,
+                    title = {
+                        Text(
+                            text = title,
+                            style = if (largeTitle) {
+                                MaterialTheme.typography.headlineSmall
+                            } else {
+                                MaterialTheme.typography.titleLarge
+                            },
+                            fontWeight = if (largeTitle) FontWeight.Bold else FontWeight.SemiBold,
+                        )
+                    },
+                    navigationIcon = navigationIcon,
+                    actions = actions,
+                    // 底色交给遮罩画；调用方给的标题 / 图标颜色保留。
+                    colors = colors.copy(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                    ),
+                    // 顶栏自己包住状态栏区域，遮罩因此一直延伸到屏幕顶端。
+                    windowInsets = TopAppBarDefaults.windowInsets,
+                )
+                header?.invoke()
+            }
         },
         snackbarHost = snackbarHost,
         floatingActionButton = floatingActionButton,
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().topBarBlurSource(hazeState)) { content(innerPadding) }
+        Box(Modifier.fillMaxSize()) { content(innerPadding) }
     }
 }

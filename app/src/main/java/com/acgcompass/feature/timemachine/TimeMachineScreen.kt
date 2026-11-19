@@ -14,7 +14,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -35,16 +35,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.FlatDivider
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.ui.AcgTopLevelTopBar
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.LocalHeaderInset
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.core.ui.blurredTopBarColors
-import com.acgcompass.core.ui.topBarBlur
-import com.acgcompass.core.ui.topBarBlurSource
-import dev.chrisbanes.haze.HazeState
+import com.acgcompass.core.ui.topBarScrim
 
 /**
  * 时光机路由入口。连接 [TimeMachineViewModel] 并把状态下发给无状态 [TimeMachineScreen]。
@@ -95,21 +93,19 @@ fun TimeMachineScreen(
         }
     }
     // 同步按钮随列表滚动，不固定在顶栏里。
-    val hazeState = remember { HazeState() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            Column(Modifier.topBarBlur(hazeState)) {
-                AcgTopLevelTopBar(title = "时光机", colors = blurredTopBarColors())
+            Column(Modifier.topBarScrim()) {
+                AcgTopLevelTopBar(title = "时光机", scrim = false)
             }
         },
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { com.acgcompass.core.designsystem.AcgSnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .topBarBlurSource(hazeState),
+                .fillMaxSize(),
         ) {
             CompositionLocalProvider(LocalHeaderInset provides innerPadding.calculateTopPadding()) {
                 val syncBar: @Composable () -> Unit = {
@@ -263,31 +259,31 @@ private fun OverviewMetric(label: String, value: String, modifier: Modifier = Mo
 private fun BaselineGroupCard(group: BaselineGroupUi, onOpenWork: (String) -> Unit = {}) {
     var expanded by rememberSaveable(group.statusLabel) { mutableStateOf(false) }
     PrismCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
+        // 标题行铺满卡片宽度，按压涟漪由卡片的圆角裁切（收起时就是整张卡片）。
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { expanded = !expanded }
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Text(
+                "${group.statusLabel} · ${group.works.size}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                if (expanded) "收起 ▴" else "展开 ▾",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (expanded) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    "${group.statusLabel} · ${group.works.size}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    if (expanded) "收起 ▴" else "展开 ▾",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            if (expanded) {
                 group.works.forEachIndexed { index, work ->
                     if (index > 0) FlatDivider()
                     BaselineWorkRow(work = work, onOpenWork = onOpenWork)
@@ -303,6 +299,7 @@ private fun BaselineWorkRow(work: BaselineWorkUi, onOpenWork: (String) -> Unit =
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(PrismCorner.Badge)
             .let { if (work.workId.isNotBlank()) it.clickable { onOpenWork(work.workId) } else it },
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -359,9 +356,9 @@ private fun ReportCard(report: TimeMachineReportUi) {
 private fun TimelineRow(entry: TimelineEntryUi, onOpenWork: (String) -> Unit = {}) {
     val wid = entry.workId
     PrismCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .let { if (!wid.isNullOrBlank()) it.clickable { onOpenWork(wid) } else it },
+        onClick = { if (!wid.isNullOrBlank()) onOpenWork(wid) },
+        enabled = !wid.isNullOrBlank(),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier

@@ -25,8 +25,16 @@ internal class RequestCoalescer<T>(
     private val inFlight = ConcurrentHashMap<String, InFlight<T>>()
     private val recent = ConcurrentHashMap<String, Pair<Long, T>>()
 
-    suspend fun get(key: String, priority: RequestPriority, fetch: suspend () -> AppResult<T>): AppResult<T> {
-        recent[key]?.takeIf { clock() - it.first <= ttlMillis }?.let { return AppResult.Success(it.second) }
+    /** [fresh] 为 true 时不复用 [ttlMillis] 内的结果（用户下拉刷新），正在进行的同一请求仍然合并。 */
+    suspend fun get(
+        key: String,
+        priority: RequestPriority,
+        fresh: Boolean = false,
+        fetch: suspend () -> AppResult<T>,
+    ): AppResult<T> {
+        if (!fresh) {
+            recent[key]?.takeIf { clock() - it.first <= ttlMillis }?.let { return AppResult.Success(it.second) }
+        }
         val running = inFlight[key]
         val reuse = running != null &&
             (running.priority == RequestPriority.FOREGROUND || priority == RequestPriority.BACKGROUND)

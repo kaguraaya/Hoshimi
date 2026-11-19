@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,7 +20,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -106,20 +104,15 @@ fun TrashScreen(
         actions = {
             if (!entries.isNullOrEmpty()) TextButton(onClick = { confirmEmpty = true }) { Text("清空") }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { com.acgcompass.core.designsystem.AcgSnackbarHost(snackbarHostState) },
     ) { innerPadding ->
-        Box(Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding())) {
+        Box(Modifier.fillMaxSize()) {
             when {
                 entries == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 entries.isEmpty() -> EmptyTrash()
                 else -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = ScreenContentPadding.Horizontal,
-                        end = ScreenContentPadding.Horizontal,
-                        top = 12.dp,
-                        bottom = ScreenContentPadding.Bottom,
-                    ),
+                    contentPadding = ScreenContentPadding.lazyList(innerPadding),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item(key = "hint") { RetentionHint() }

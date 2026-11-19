@@ -39,6 +39,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -276,6 +277,8 @@ fun <T> PillTabs(
             Surface(
                 modifier = (if (scrollable) Modifier else Modifier.weight(1f))
                     .height(PrismMetrics.SegmentHeight)
+                    // 按压涟漪跟着圆角走：先裁成药丸形状再响应点击。
+                    .clip(PrismCorner.Segment)
                     .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(option) }),
                 shape = PrismCorner.Segment,
                 color = container,
@@ -323,6 +326,7 @@ fun FlatFilterChip(
     Surface(
         modifier = modifier
             .height(PrismMetrics.ChipHeight)
+            .clip(CircleShape)
             .selectable(selected = selected, enabled = enabled, role = Role.Checkbox, onClick = onClick),
         shape = CircleShape,
         color = container,

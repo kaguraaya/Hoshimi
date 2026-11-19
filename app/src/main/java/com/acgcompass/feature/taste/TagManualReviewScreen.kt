@@ -102,7 +102,7 @@ fun TagManualReviewRoute(onBack: () -> Unit, viewModel: TagManualReviewViewModel
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = padding.calculateTopPadding())
+                .padding(top = ScreenContentPadding.top(padding))
                 .padding(horizontal = ScreenContentPadding.Horizontal),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

@@ -26,7 +26,11 @@ interface BangumiApi {
 
     /** 条目详情（缓存 300s）。 */
     @GET("v0/subjects/{id}")
-    suspend fun getSubject(@Path("id") subjectId: Int, @Tag auth: SourceAuth): Response<BangumiSubjectDto>
+    suspend fun getSubject(
+        @Path("id") subjectId: Int,
+        @Tag auth: SourceAuth,
+        @retrofit2.http.Header("Cache-Control") cacheControl: String? = null,
+    ): Response<BangumiSubjectDto>
 
     /** 搜索条目（实验性 API）：body 携带 keyword/sort/filter，limit/offset 走 query。 */
     @POST("v0/search/subjects")

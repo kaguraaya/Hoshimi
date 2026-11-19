@@ -142,6 +142,42 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch { settingsDataStore.clearSearchHistory() }
     }
 
+    private val _refreshing = MutableStateFlow(false)
+
+    /** 下拉刷新进行中。 */
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+    private val refreshGate = com.acgcompass.core.common.RefreshGate()
+
+    /**
+     * 下拉刷新当前分区：榜单重新拉取当前范围首页（列表保持显示，到手后原地替换）和公共池；
+     * 评分差异重新拉取公共池并再补一轮第二平台评分；搜索对当前关键词重搜。筛选只在本地数据上进行，不提供下拉。
+     */
+    fun onPullRefresh() {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        viewModelScope.launch {
+            refreshGate.run(viewModelScope) {
+                when (_tab.value) {
+                    DiscoverTab.RANKING -> {
+                        // 公共池较慢，在后台补；指示器只等当前榜单首页。
+                        viewModelScope.launch { fetchPublicPool() }
+                        rankingGeneration += 1L
+                        scopeStates.remove(_rankingScope.value)
+                        fetchInitialRanking(_rankingScope.value, rankingGeneration)
+                    }
+                    DiscoverTab.SCORE_DIFF -> {
+                        fetchPublicPool()
+                        scoreDiffBackfilledOnce = false
+                        backfillScoreDiffRatings()
+                    }
+                    DiscoverTab.SEARCH -> onRetry()
+                    DiscoverTab.FILTER -> Unit
+                }
+            }
+            _refreshing.value = false
+        }
+    }
+
     /** 「重试」：对当前关键词重新触发搜索（错误态 ）。 */
     fun onRetry() {
         val current = _query.value
@@ -350,46 +386,48 @@ class DiscoverViewModel @Inject constructor(
         }
         _rankingLoadingMore.value = false
         _rankingCanLoadMore.value = true
-        viewModelScope.launch {
-            // 冷启动缓存——立即展示上次持久化的榜单顺序，避免白屏等待网络。
-            val cached = workRepository.getCachedRanking(scope.name)
-            if (cached.isNotEmpty()) {
-                if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
-                    _scopedRanking.value = UiState.Success(cached.map { (w, e) -> rankedCardOf(w, e) })
-                }
-            } else if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
-                _scopedRanking.value = UiState.Loading
+        viewModelScope.launch { fetchInitialRanking(scope, generation) }
+    }
+
+    private suspend fun fetchInitialRanking(scope: RankingScope, generation: Long) {
+        // 冷启动缓存——立即展示上次持久化的榜单顺序，避免白屏等待网络。
+        val cached = workRepository.getCachedRanking(scope.name)
+        if (cached.isNotEmpty()) {
+            if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
+                _scopedRanking.value = UiState.Success(cached.map { (w, e) -> rankedCardOf(w, e) })
             }
-            // 联网刷新首页。
-            when (
-                val r = workRepository.loadBangumiRankingPage(
-                    airDateOf(scope),
-                    offset = 0,
-                    limit = RANKING_PAGE_SIZE,
+        } else if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
+            _scopedRanking.value = UiState.Loading
+        }
+        // 联网刷新首页。
+        when (
+            val r = workRepository.loadBangumiRankingPage(
+                airDateOf(scope),
+                offset = 0,
+                limit = RANKING_PAGE_SIZE,
+            )
+        ) {
+            is AppResult.Success -> {
+                val page = r.data
+                val items = page.items.map { (w, e) -> rankedCardOf(w, e) }
+                val state = RankingScopeState(
+                    items = items,
+                    // offset 按实际返回数推进（某页短返回也不跳号）；canLoadMore 用 total 判定。
+                    nextOffset = items.size,
+                    canLoadMore = items.isNotEmpty() && items.size < page.total,
                 )
-            ) {
-                is AppResult.Success -> {
-                    val page = r.data
-                    val items = page.items.map { (w, e) -> rankedCardOf(w, e) }
-                    val state = RankingScopeState(
-                        items = items,
-                        // offset 按实际返回数推进（某页短返回也不跳号）；canLoadMore 用 total 判定。
-                        nextOffset = items.size,
-                        canLoadMore = items.isNotEmpty() && items.size < page.total,
-                    )
-                    scopeStates[scope] = state
-                    workRepository.saveRankingCache(scope.name, items.map { it.workId })
-                    if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
-                        publishScopeState(state)
-                    }
+                scopeStates[scope] = state
+                workRepository.saveRankingCache(scope.name, items.map { it.workId })
+                if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration)) {
+                    publishScopeState(state)
                 }
-                is AppResult.Failure -> {
-                    // 已用缓存秒开则保留缓存内容，仅在无缓存时显示错误态。
-                    if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration) &&
-                        _scopedRanking.value !is UiState.Success
-                    ) {
-                        _scopedRanking.value = r.error.toUiState()
-                    }
+            }
+            is AppResult.Failure -> {
+                // 已用缓存秒开则保留缓存内容，仅在无缓存时显示错误态。
+                if (shouldPublishRankingResult(scope, _rankingScope.value, generation, rankingGeneration) &&
+                    _scopedRanking.value !is UiState.Success
+                ) {
+                    _scopedRanking.value = r.error.toUiState()
                 }
             }
         }
@@ -475,21 +513,24 @@ class DiscoverViewModel @Inject constructor(
     /** 加载公共发现池（本季 / Top 榜单）。成功后 observeWorks 流自动刷新榜单/差异/筛选。 */
     fun loadPublicPool() {
         if (_poolLoading.value) return
+        viewModelScope.launch { fetchPublicPool() }
+    }
+
+    private suspend fun fetchPublicPool() {
+        if (_poolLoading.value) return
         _poolLoading.value = true
         _poolError.value = null
-        viewModelScope.launch {
-            when (val r = workRepository.loadPublicDiscovery()) {
-                is AppResult.Success -> {
-                    publicPoolLoadedOnce = true
-                    // 公共池写库完成后刷新一次筛选快照，保证首次进入即可看到洗牌后的内容。
-                    if (_tab.value == DiscoverTab.FILTER) refreshFilterSnapshot()
-                }
-                is AppResult.Failure -> {
-                    _poolError.value = r.error.cause
-                }
+        when (val r = workRepository.loadPublicDiscovery()) {
+            is AppResult.Success -> {
+                publicPoolLoadedOnce = true
+                // 公共池写库完成后刷新一次筛选快照，保证首次进入即可看到洗牌后的内容。
+                if (_tab.value == DiscoverTab.FILTER) refreshFilterSnapshot()
             }
-            _poolLoading.value = false
+            is AppResult.Failure -> {
+                _poolError.value = r.error.cause
+            }
         }
+        _poolLoading.value = false
     }
 
     private var scoreDiffBackfilledOnce = false

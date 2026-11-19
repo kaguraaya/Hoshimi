@@ -75,6 +75,7 @@ import com.acgcompass.core.designsystem.FlatAssistChip
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.designsystem.PillTabs
 import com.acgcompass.core.designsystem.PrismCard
+import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.core.designsystem.PrismMetrics
 import com.acgcompass.core.designsystem.SectionHeader
 import com.acgcompass.core.designsystem.Surfaces
@@ -85,10 +86,7 @@ import com.acgcompass.core.ui.LocalHeaderInset
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.core.ui.StateScaffold
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.core.ui.blurredTopBarColors
-import com.acgcompass.core.ui.topBarBlur
-import com.acgcompass.core.ui.topBarBlurSource
-import dev.chrisbanes.haze.HazeState
+import com.acgcompass.core.ui.topBarScrim
 
 /** 发现页分区（Tab）横滑切换动画时长（ms）：快速、有方向感、不拖沓。 */
 private const val TAB_ANIM_MS = 220
@@ -125,6 +123,7 @@ fun DiscoverRoute(
     val rankingCanLoadMore by viewModel.rankingCanLoadMore.collectAsStateWithLifecycle()
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
     val recentlyViewed by viewModel.recentlyViewedWorks.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
 
     DiscoverScreen(
         state = state,
@@ -162,6 +161,8 @@ fun DiscoverRoute(
         onFilterChange = viewModel::onFilterChange,
         onClearFilter = viewModel::onClearFilter,
         modifier = modifier,
+        refreshing = refreshing,
+        onPullRefresh = viewModel::onPullRefresh,
     )
 }
 
@@ -213,17 +214,18 @@ fun DiscoverScreen(
     onClearFilter: () -> Unit,
     modifier: Modifier = Modifier,
     scoreDiffBackfill: ScoreDiffBackfillUi = ScoreDiffBackfillUi(),
+    refreshing: Boolean = false,
+    onPullRefresh: () -> Unit = {},
 ) {
-    // 顶栏 + 分区药丸一起做成毛玻璃，内容从下面滚过；搜索框是列表的第一项，跟着内容一起滚走。
-    val hazeState = remember { HazeState() }
+    // 顶栏 + 分区药丸共用一层遮罩，内容从下面滚过；搜索框是列表的第一项，跟着内容一起滚走。
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
-            Column(Modifier.topBarBlur(hazeState)) {
+            Column(Modifier.topBarScrim()) {
                 AcgTopLevelTopBar(
                     title = "发现",
-                    colors = blurredTopBarColors(),
+                    scrim = false,
                     actions = {
                         IconButton(onClick = onOpenVisualNovels) {
                             Icon(Icons.Outlined.AutoStories, contentDescription = "视觉小说")
@@ -238,71 +240,80 @@ fun DiscoverScreen(
     ) { innerPadding ->
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .topBarBlurSource(hazeState),
+                .fillMaxSize(),
         ) {
-            CompositionLocalProvider(LocalHeaderInset provides innerPadding.calculateTopPadding()) {
-                // 分区切换动画（去掉淡入淡出，纯整屏横滑，更自然，参考 Kotatsu / ViewPager）：
-                // 序号增大（如 搜索→榜单）新内容自右整屏滑入、旧内容整屏向左滑出；序号减小则反向——与顶部 Tab
-                // 左右位置一致，符合直觉。整屏位移（dir*w）而非小位移，避免去 fade 后新旧内容重叠显脏。
-                AnimatedContent(
-                    targetState = tab,
-                    transitionSpec = {
-                        val forward = targetState.ordinal > initialState.ordinal
-                        val dir = if (forward) 1 else -1
-                        slideInHorizontally(tween(TAB_ANIM_MS)) { w -> dir * w }
-                            .togetherWith(slideOutHorizontally(tween(TAB_ANIM_MS)) { w -> -dir * w })
-                    },
-                    label = "discoverTab",
-                ) { current ->
-                    when (current) {
-                        DiscoverTab.SEARCH -> SearchSection(
-                            state = state,
-                            query = query,
-                            searchHistory = searchHistory,
-                            recentlyViewed = recentlyViewed,
-                            onQueryChange = onQueryChange,
-                            onSearchSubmit = onSearchSubmit,
-                            onSelectHistory = onSelectHistory,
-                            onRemoveHistory = onRemoveHistory,
-                            onClearHistory = onClearHistory,
-                            onRetry = onRetry,
-                            onOpenWork = onOpenWork,
-                            onOverrideMatch = onOverrideMatch,
-                        )
+            // 筛选只在本地数据上进行；搜索框为空时没有可刷新的结果。
+            val pullEnabled = tab != DiscoverTab.FILTER && !(tab == DiscoverTab.SEARCH && query.isBlank())
+            com.acgcompass.core.designsystem.AcgPullRefreshBox(
+                refreshing = refreshing,
+                onRefresh = onPullRefresh,
+                enabled = pullEnabled,
+                indicatorTopPadding = innerPadding.calculateTopPadding(),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                CompositionLocalProvider(LocalHeaderInset provides innerPadding.calculateTopPadding()) {
+                    // 分区切换动画（去掉淡入淡出，纯整屏横滑，更自然，参考 Kotatsu / ViewPager）：
+                    // 序号增大（如 搜索→榜单）新内容自右整屏滑入、旧内容整屏向左滑出；序号减小则反向——与顶部 Tab
+                    // 左右位置一致，符合直觉。整屏位移（dir*w）而非小位移，避免去 fade 后新旧内容重叠显脏。
+                    AnimatedContent(
+                        targetState = tab,
+                        transitionSpec = {
+                            val forward = targetState.ordinal > initialState.ordinal
+                            val dir = if (forward) 1 else -1
+                            slideInHorizontally(tween(TAB_ANIM_MS)) { w -> dir * w }
+                                .togetherWith(slideOutHorizontally(tween(TAB_ANIM_MS)) { w -> -dir * w })
+                        },
+                        label = "discoverTab",
+                    ) { current ->
+                        when (current) {
+                            DiscoverTab.SEARCH -> SearchSection(
+                                state = state,
+                                query = query,
+                                searchHistory = searchHistory,
+                                recentlyViewed = recentlyViewed,
+                                onQueryChange = onQueryChange,
+                                onSearchSubmit = onSearchSubmit,
+                                onSelectHistory = onSelectHistory,
+                                onRemoveHistory = onRemoveHistory,
+                                onClearHistory = onClearHistory,
+                                onRetry = onRetry,
+                                onOpenWork = onOpenWork,
+                                onOverrideMatch = onOverrideMatch,
+                            )
 
-                        DiscoverTab.RANKING -> RankingSection(
-                            boards = rankingBoards,
-                            poolLoading = poolLoading,
-                            poolError = poolError,
-                            rankingScope = rankingScope,
-                            scopedRanking = scopedRanking,
-                            rankingLoadingMore = rankingLoadingMore,
-                            rankingCanLoadMore = rankingCanLoadMore,
-                            onSelectRankingScope = onSelectRankingScope,
-                            onRetryRanking = onRetryRanking,
-                            onLoadMoreRanking = onLoadMoreRanking,
-                            onLoadPool = onLoadPool,
-                            onOpenWork = onOpenWork,
-                        )
+                            DiscoverTab.RANKING -> RankingSection(
+                                boards = rankingBoards,
+                                poolLoading = poolLoading,
+                                poolError = poolError,
+                                rankingScope = rankingScope,
+                                scopedRanking = scopedRanking,
+                                rankingLoadingMore = rankingLoadingMore,
+                                rankingCanLoadMore = rankingCanLoadMore,
+                                onSelectRankingScope = onSelectRankingScope,
+                                onRetryRanking = onRetryRanking,
+                                onLoadMoreRanking = onLoadMoreRanking,
+                                onLoadPool = onLoadPool,
+                                onOpenWork = onOpenWork,
+                            )
 
-                        DiscoverTab.SCORE_DIFF -> ScoreDiffSection(
-                            items = scoreDiffItems,
-                            backfill = scoreDiffBackfill,
-                            poolLoading = poolLoading,
-                            poolError = poolError,
-                            onLoadPool = onLoadPool,
-                            onOpenWork = onOpenWork,
-                        )
+                            DiscoverTab.SCORE_DIFF -> ScoreDiffSection(
+                                items = scoreDiffItems,
+                                backfill = scoreDiffBackfill,
+                                poolLoading = poolLoading,
+                                poolError = poolError,
+                                onLoadPool = onLoadPool,
+                                onOpenWork = onOpenWork,
+                            )
 
-                        DiscoverTab.FILTER -> FilterSection(
-                            filter = filter,
-                            facets = filterFacets,
-                            results = filteredCards,
-                            onFilterChange = onFilterChange,
-                            onClearFilter = onClearFilter,
-                            onOpenWork = onOpenWork,
-                        )
+                            DiscoverTab.FILTER -> FilterSection(
+                                filter = filter,
+                                facets = filterFacets,
+                                results = filteredCards,
+                                onFilterChange = onFilterChange,
+                                onClearFilter = onClearFilter,
+                                onOpenWork = onOpenWork,
+                            )
+                        }
                     }
                 }
             }
@@ -1005,6 +1016,7 @@ private fun FilterSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clip(PrismCorner.Badge)
                         .clickable { expanded = !expanded },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
