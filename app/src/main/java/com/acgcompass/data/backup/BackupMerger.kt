@@ -65,6 +65,7 @@ object BackupMerger {
             incoming.works,
             { it.id },
             { it.updatedAt },
+            { newer, older -> newer.keepFieldsFrom(older) },
         )
         val sourceLinks = acc.mergeTable(
             "source_links",
@@ -170,6 +171,7 @@ object BackupMerger {
             incoming.workFeatures,
             { it.subjectId },
             { it.updatedAt },
+            { newer, older -> newer.keepFieldsFrom(older) },
         )
         val tagDimensions = acc.mergeTable(
             "tag_dimensions",
@@ -177,6 +179,13 @@ object BackupMerger {
             incoming.tagDimensions,
             { it.tag },
             { it.updatedAt },
+        )
+        val trashItems = acc.mergeTable(
+            "trash_items",
+            local.trashItems,
+            incoming.trashItems,
+            { it.id },
+            { it.removedAt },
         )
 
         val merged = local.copy(
@@ -199,6 +208,7 @@ object BackupMerger {
             userCollections = userCollections,
             workFeatures = workFeatures,
             tagDimensions = tagDimensions,
+            trashItems = trashItems,
             // Schema 1 did not carry a complete settings snapshot; preserve local values for it.
             settings = if (incoming.schemaVersion >= 2) incoming.settings else local.settings,
             credentials = null,
@@ -223,13 +233,16 @@ object BackupMerger {
          *
          * @param key 业务主键提取器。
          * @param timestamp 用于冲突解决的时间戳提取器；返回 `null` 表示该表无时间戳，冲突时一律保留本地。
+         * @param fill 采用导入数据时，用本地数据补上导入数据里缺的字段（旧版本备份没有的字段）。
          */
+        @Suppress("LongParameterList") // 表名、两组数据和三个按表不同的取值函数
         fun <T> mergeTable(
             table: String,
             local: List<T>,
             incoming: List<T>,
             key: (T) -> String,
             timestamp: (T) -> Long?,
+            fill: (newer: T, older: T) -> T = { newer, _ -> newer },
         ): List<T> {
             // 本地按主键索引（后者覆盖前者，与本地自身一致性无关——仅作查找）。
             val byKey = LinkedHashMap<String, T>(local.size)
@@ -251,7 +264,7 @@ object BackupMerger {
                 val incomingTs = timestamp(incomingItem)
                 val useIncoming = localTs != null && incomingTs != null && incomingTs > localTs
                 if (useIncoming) {
-                    byKey[k] = incomingItem
+                    byKey[k] = fill(incomingItem, localItem)
                     updated++
                     conflicts += Conflict(table, k, Resolution.USED_INCOMING)
                 } else {
@@ -263,3 +276,16 @@ object BackupMerger {
         }
     }
 }
+
+/** 较旧的备份没有中文名、简介、放送日期：导入它时不要把本地已有的这些字段清空。 */
+private fun BackupWork.keepFieldsFrom(older: BackupWork): BackupWork = copy(
+    titleCn = titleCn ?: older.titleCn,
+    summary = summary ?: older.summary,
+    airDate = airDate ?: older.airDate,
+)
+
+/** 较旧的备份没有封面和放送日期：导入它时保留本地已有的值。 */
+private fun BackupWorkFeature.keepFieldsFrom(older: BackupWorkFeature): BackupWorkFeature = copy(
+    coverUrl = coverUrl ?: older.coverUrl,
+    airDate = airDate ?: older.airDate,
+)

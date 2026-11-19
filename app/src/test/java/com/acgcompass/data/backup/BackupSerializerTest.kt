@@ -31,6 +31,9 @@ class BackupSerializerTest : StringSpec({
                     primarySource = "BANGUMI",
                     createdAt = 1000,
                     updatedAt = 2000,
+                    titleCn = "作品一中文名",
+                    summary = "简介",
+                    airDate = "2021-04-01",
                 ),
             ),
             backlog = listOf(
@@ -42,7 +45,8 @@ class BackupSerializerTest : StringSpec({
                     note = "记得看",
                     addedAt = 1500,
                     dustDays = 3,
-                    inDustMuseum = false,
+                    inDustMuseum = true,
+                    prevStatus = "在看",
                 ),
             ),
             ratings = listOf(
@@ -75,6 +79,21 @@ class BackupSerializerTest : StringSpec({
                     titles = listOf("作品一"),
                     completeness = "BASIC",
                     updatedAt = 2_000,
+                    coverUrl = "https://example.com/cover.jpg",
+                    airDate = "2021-04-01",
+                ),
+            ),
+            trashItems = listOf(
+                BackupTrashItem(
+                    id = "COLLECTION:w2",
+                    kind = "COLLECTION",
+                    workId = "w2",
+                    batchId = "b1",
+                    title = "移除的作品",
+                    payloadJson = null,
+                    reason = "USER",
+                    removedAt = 1_900,
+                    purged = true,
                 ),
             ),
             tagDimensions = listOf(
@@ -200,5 +219,60 @@ class BackupSerializerTest : StringSpec({
         val result = BackupMerger.merge(local = local, incoming = incoming)
 
         result.merged.settings shouldBe local.settings
+    }
+
+    "older backups without the newer fields still import" {
+        val json = """{"schemaVersion":2,"works":[{"id":"w9","canonicalTitle":"旧作","mediaType":"ANIME",
+            "status":"FINISHED","primarySource":"BANGUMI","createdAt":1,"updatedAt":2}],
+            "backlog":[{"workId":"w9","priority":"HIGH","addedAt":1,"dustDays":0,"inDustMuseum":false}]}"""
+
+        val restored = BackupSerializer.deserialize(json)
+
+        restored.works.single().titleCn shouldBe null
+        restored.backlog.single().prevStatus shouldBe null
+        restored.trashItems shouldBe emptyList()
+    }
+
+    "newer incoming work from an older backup keeps local titleCn, summary and airDate" {
+        val local = sampleEnvelope()
+        val olderFormat = sampleEnvelope().works.first().copy(
+            canonicalTitle = "新标题",
+            updatedAt = 3_000,
+            titleCn = null,
+            summary = null,
+            airDate = null,
+        )
+        val feature = sampleEnvelope().workFeatures.first().copy(updatedAt = 3_000, coverUrl = null, airDate = null)
+
+        val merged = BackupMerger.merge(
+            local = local,
+            incoming = sampleEnvelope().copy(works = listOf(olderFormat), workFeatures = listOf(feature)),
+        ).merged
+
+        merged.works.first().canonicalTitle shouldBe "新标题"
+        merged.works.first().titleCn shouldBe "作品一中文名"
+        merged.works.first().summary shouldBe "简介"
+        merged.works.first().airDate shouldBe "2021-04-01"
+        merged.workFeatures.first().coverUrl shouldBe "https://example.com/cover.jpg"
+    }
+
+    "trash items are merged by id and imported when missing locally" {
+        val local = sampleEnvelope().copy(trashItems = emptyList())
+
+        val result = BackupMerger.merge(local = local, incoming = sampleEnvelope())
+
+        result.merged.trashItems.map { it.id } shouldBe listOf("COLLECTION:w2")
+        result.merged.trashItems.single().purged shouldBe true
+    }
+
+    "entity mappings keep every backed-up field" {
+        val work = sampleEnvelope().works.first()
+        work.toEntity().toBackup() shouldBe work
+        val feature = sampleEnvelope().workFeatures.first()
+        feature.toEntity().toBackup() shouldBe feature
+        val backlog = sampleEnvelope().backlog.first()
+        backlog.toEntity().toBackup() shouldBe backlog
+        val trash = sampleEnvelope().trashItems.first()
+        trash.toEntity().toBackup() shouldBe trash
     }
 })
