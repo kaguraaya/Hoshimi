@@ -274,6 +274,39 @@ fun AppNavHost(
                     navController.navigateOnce(libraryRoute(tab))
                 },
                 onOpenTrash = { navController.navigateOnce(AppDestination.Trash.route) },
+                share = com.acgcompass.feature.mine.MineShareActions(
+                    onOpenTasteCode = { navController.navigateOnce(AppDestination.TasteCode.route) },
+                    onOpenTasteCodeReader = { navController.navigateOnce(AppDestination.TasteCodeOpen.route) },
+                ),
+            )
+        }
+        composable(AppDestination.TasteCode.route) {
+            com.acgcompass.feature.tastecode.TasteCodeRoute(onBack = { navController.popBackOnce() })
+        }
+        composable(AppDestination.TasteCodeOpen.route) {
+            com.acgcompass.feature.tastecode.OpenTasteCodeScreen(
+                onBack = { navController.popBackOnce() },
+                onOpen = { code ->
+                    navController.navigateOnce(
+                        "taste_code/compat?code=${android.net.Uri.encode(code)}",
+                    )
+                },
+            )
+        }
+        composable(
+            route = AppDestination.TasteCompatibility.route,
+            arguments = listOf(
+                navArgument(com.acgcompass.feature.tastecode.TASTE_CODE_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+            deepLinks = listOf(androidx.navigation.navDeepLink { uriPattern = "hoshimi://taste/{code}" }),
+        ) {
+            com.acgcompass.feature.tastecode.TasteCompatibilityRoute(
+                onBack = { navController.popBackOnce() },
+                onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
             )
         }
         composable(AppDestination.Trash.route) {

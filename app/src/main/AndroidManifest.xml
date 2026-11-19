@@ -27,6 +27,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 口味码链接 hoshimi://taste/HSM1.… 直接打开口味相性页。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="hoshimi" android:host="taste" />
+            </intent-filter>
         </activity>
 
         <!-- Application 自带 WorkManager Configuration（Hilt WorkerFactory），移除默认初始化器。 -->

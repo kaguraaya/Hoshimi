@@ -99,6 +99,12 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindTasteCodeRepository(
+        impl: com.acgcompass.data.tastecode.TasteCodeRepositoryImpl,
+    ): com.acgcompass.domain.tastecode.TasteCodeRepository
+
+    @Binds
+    @Singleton
     abstract fun bindTrashRepository(
         impl: com.acgcompass.data.repository.TrashRepositoryImpl,
     ): com.acgcompass.domain.repository.TrashRepository

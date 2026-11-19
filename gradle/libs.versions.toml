@@ -40,6 +40,7 @@ apollo = "3.8.5"
 
 # Images
 coil = "2.7.0"
+zxing = "3.5.3"
 haze = "1.1.1"
 
 # Background work
@@ -108,6 +109,7 @@ apollo-runtime = { group = "com.apollographql.apollo3", name = "apollo-runtime",
 
 # Images
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 
 # Background work
