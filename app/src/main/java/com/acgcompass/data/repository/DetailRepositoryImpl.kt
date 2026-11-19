@@ -1,6 +1,8 @@
 package com.acgcompass.data.repository
 
+import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.logging.RedactingLogger
 import com.acgcompass.data.local.dao.CacheDao
 import com.acgcompass.data.local.entity.DetailCacheEntity
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
@@ -10,6 +12,7 @@ import com.acgcompass.domain.detail.DetailComment
 import com.acgcompass.domain.detail.DetailExtrasData
 import com.acgcompass.domain.detail.DetailRelation
 import com.acgcompass.domain.detail.DetailStaff
+import com.acgcompass.domain.detail.ExtrasFailure
 import com.acgcompass.domain.repository.DetailRepository
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -43,11 +46,19 @@ class DetailRepositoryImpl @Inject constructor(
                 it.copy(credits = it.credits || cachedMerged.looksIncomplete())
             }
             if (!plan.hasWork) return@flow
-            val refreshed = refreshSections(subjectId, plan, cachedMerged)
+            val errors = java.util.concurrent.ConcurrentLinkedQueue<AppError>()
+            val refreshed = refreshSections(subjectId, plan, cachedMerged, errors)
             persistRefresh(workId, refreshed, now)
+            val creditsFailed = plan.credits && refreshed.credits?.complete != true
+            val commentsFailed = plan.comments && refreshed.comments == null
+            val failure = if (creditsFailed || commentsFailed) failureOf(errors) else null
+            if (failure != null) {
+                logger.w(TAG, "条目 $subjectId 扩展资料没拉全：$failure ${errors.map { it::class.simpleName }}")
+            }
             val merged = refreshed.mergeWith(cachedMerged).copy(
-                creditsFailed = plan.credits && refreshed.credits?.complete != true,
-                commentsFailed = plan.comments && refreshed.comments == null,
+                creditsFailed = creditsFailed,
+                commentsFailed = commentsFailed,
+                failure = failure,
             )
             if (merged != cachedMerged || !cached.hasAny) emit(merged)
         }.distinctUntilChanged()
@@ -62,18 +73,23 @@ class DetailRepositoryImpl @Inject constructor(
         subjectId: Int,
         plan: RefreshPlan,
         cached: DetailExtrasData,
+        errors: MutableCollection<AppError>,
     ): RefreshedSections = coroutineScope {
-        val credits = async { if (plan.credits) refreshCredits(subjectId, cached) else null }
-        val comments = async { if (plan.comments) refreshComments(subjectId) else null }
+        val credits = async { if (plan.credits) refreshCredits(subjectId, cached, errors) else null }
+        val comments = async { if (plan.comments) refreshComments(subjectId, errors) else null }
         val base = async { if (plan.base) refreshBase(subjectId) else null }
         RefreshedSections(credits.await(), comments.await(), base.await())
     }
 
     /** 三个接口分别重试一次；失败的部分沿用缓存，不用空列表覆盖。 */
-    private suspend fun refreshCredits(subjectId: Int, cached: DetailExtrasData): CreditsFetch = coroutineScope {
-        val charactersAsync = async { retryOnce { bangumi.getSubjectCharacters(subjectId) } }
-        val staffAsync = async { retryOnce { bangumi.getSubjectPersons(subjectId) } }
-        val relationsAsync = async { retryOnce { bangumi.getSubjectRelations(subjectId) } }
+    private suspend fun refreshCredits(
+        subjectId: Int,
+        cached: DetailExtrasData,
+        errors: MutableCollection<AppError>,
+    ): CreditsFetch = coroutineScope {
+        val charactersAsync = async { retryOnce(errors) { bangumi.getSubjectCharacters(subjectId) } }
+        val staffAsync = async { retryOnce(errors) { bangumi.getSubjectPersons(subjectId) } }
+        val relationsAsync = async { retryOnce(errors) { bangumi.getSubjectRelations(subjectId) } }
         val characters = charactersAsync.await()
         val staff = staffAsync.await()
         val relations = relationsAsync.await()
@@ -92,8 +108,8 @@ class DetailRepositoryImpl @Inject constructor(
         CreditsFetch(data.takeIf { anySuccess }, complete)
     }
 
-    private suspend fun refreshComments(subjectId: Int): DetailExtrasData? =
-        retryOnce { bangumi.getSubjectComments(subjectId, limit = 20) }?.let { items ->
+    private suspend fun refreshComments(subjectId: Int, errors: MutableCollection<AppError>): DetailExtrasData? =
+        retryOnce(errors) { bangumi.getSubjectComments(subjectId, limit = 20) }?.let { items ->
             DetailExtrasData(comments = items.map { DetailComment(it.nickname, it.rate, it.text) })
         }
 
@@ -216,17 +232,32 @@ class DetailRepositoryImpl @Inject constructor(
         const val COMMENTS = "comments"
         const val BASE = "base"
         const val SCHEMA_VERSION = 1
+        const val TAG = "DetailExtras"
     }
+
+    private val logger = RedactingLogger()
 }
 
 private const val RETRY_DELAY_MILLIS = 2_500L
 
-/** 失败后隔一会儿再试一次，仍失败返回 null。 */
-private suspend fun <T> retryOnce(block: suspend () -> AppResult<T>): T? =
-    (block() as? AppResult.Success)?.data ?: run {
-        delay(RETRY_DELAY_MILLIS)
-        (block() as? AppResult.Success)?.data
+/** 失败后隔一会儿再试一次，仍失败返回 null；失败原因记进 [errors]。 */
+private suspend fun <T> retryOnce(errors: MutableCollection<AppError>, block: suspend () -> AppResult<T>): T? {
+    repeat(2) { attempt ->
+        if (attempt > 0) delay(RETRY_DELAY_MILLIS)
+        when (val result = block()) {
+            is AppResult.Success -> return result.data
+            is AppResult.Failure -> if (attempt > 0) errors += result.error
+        }
     }
+    return null
+}
+
+/** 几个请求的失败原因里，「请求太频繁」最优先说明，其次是网络。 */
+private fun failureOf(errors: Collection<AppError>): ExtrasFailure = when {
+    errors.any { it is AppError.RateLimited } -> ExtrasFailure.RATE_LIMITED
+    errors.any { it is AppError.Network } -> ExtrasFailure.NETWORK
+    else -> ExtrasFailure.OTHER
+}
 
 /** 角色和 Staff 都为空多半是之前请求失败留下的，重新拉一次。 */
 private fun DetailExtrasData.looksIncomplete(): Boolean = characters.isEmpty() && staff.isEmpty()

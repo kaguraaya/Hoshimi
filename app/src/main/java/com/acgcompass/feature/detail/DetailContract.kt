@@ -353,6 +353,8 @@ data class DetailExtras(
     val bangumiLoad: ExtrasLoad = ExtrasLoad.LOADING,
     val creditsFailed: Boolean = false,
     val commentsFailed: Boolean = false,
+    /** 没拉到的原因；null 表示没失败或原因不明。 */
+    val failure: com.acgcompass.domain.detail.ExtrasFailure? = null,
 )
 
 /** 观看路线分区；MAIN/OPTIONAL/SKIPPABLE 仅限动画，DERIVED 表示非动画衍生作品或原作。 */
@@ -1052,11 +1054,18 @@ private fun summaryTab(summary: String?, load: ExtrasLoad): DetailTabUiModel {
     }
 }
 
+private fun failureText(failure: com.acgcompass.domain.detail.ExtrasFailure?): String = when (failure) {
+    com.acgcompass.domain.detail.ExtrasFailure.RATE_LIMITED ->
+        "Bangumi 说请求太频繁了（后台可能正在补资料），等一会儿再点重新加载。"
+    com.acgcompass.domain.detail.ExtrasFailure.NETWORK -> "没连上 Bangumi，检查网络后点重新加载。"
+    else -> "Bangumi 暂时没有响应，没能加载这部分资料。"
+}
+
 /** 有内容就显示；没有内容时区分「加载中」「加载失败」「没有 Bangumi 条目」和真的没有。 */
 private fun extrasTab(title: String, body: String, extras: DetailExtras, failed: Boolean): DetailTabUiModel = when {
     body != NO_DATA -> DetailTabUiModel(title, body)
     extras.bangumiLoad == ExtrasLoad.LOADING -> DetailTabUiModel(title, "正在从 Bangumi 加载…", TabStatus.LOADING)
-    failed -> DetailTabUiModel(title, "Bangumi 暂时没有响应，没能加载这部分资料。", TabStatus.FAILED)
+    failed -> DetailTabUiModel(title, failureText(extras.failure), TabStatus.FAILED)
     extras.bangumiLoad == ExtrasLoad.NO_SOURCE ->
         DetailTabUiModel(title, "这部作品没有对应的 Bangumi 条目，暂无这部分资料。")
     else -> DetailTabUiModel(title, NO_DATA)
