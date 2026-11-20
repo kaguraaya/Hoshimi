@@ -14,8 +14,6 @@ import com.acgcompass.domain.ai.RadarSummarySource
 import com.acgcompass.domain.ai.SpoilerLevel
 import com.acgcompass.domain.ai.SpoilerRadarOutput
 import com.acgcompass.domain.ai.SpoilerRadarResult
-import com.acgcompass.domain.ai.VndbTranslationCachePolicy
-import com.acgcompass.domain.ai.VndbTranslationOutput
 import com.acgcompass.domain.detail.BangumiRecordUpdate
 import com.acgcompass.domain.detail.PersonalRecord
 import com.acgcompass.domain.model.AiResult
@@ -135,6 +133,8 @@ class DetailViewModel @Inject constructor(
     val aiMatch: StateFlow<AiMatchUi> = _aiMatch
 
     /** 详情页角色·Staff / 关联作品 / 观看路线（来自各源端点拉取后折叠的可读正文）。 */
+    private val vndbTranslator = VndbDescriptionTranslator(detailInteractions, aiRepository, aiEngine, json)
+
     private val detailExtras = MutableStateFlow(DetailExtras())
 
     /** 当前系列的 Bangumi subject id，供批量加入待补池。 */
@@ -760,63 +760,8 @@ class DetailViewModel @Inject constructor(
     }
 
     private suspend fun maybeTranslateVndbDescription(detail: com.acgcompass.domain.visualnovel.VisualNovelDetail) {
-        val enabled = detailInteractions.shouldAutoTranslateVndbDescription()
-        val source = detail.description
-            ?.trim()
-            ?.takeIf(String::isNotBlank)
-            ?.takeIf { enabled && detail.bangumiSummary.isNullOrBlank() }
-            ?.takeUnless(::containsCjk)
-        if (source == null) return
-        val fingerprint = VndbTranslationCachePolicy.fingerprint(source)
-        val cachedText = cachedVndbTranslation(detail.id, source)
-        if (cachedText != null) {
-            applyVndbTranslation(detail, cachedText)
-        } else {
-            generateVndbTranslation(detail, source, fingerprint)
-        }
+        vndbTranslator.translate(detail)?.let { applyVndbTranslation(detail, it) }
     }
-
-    private suspend fun cachedVndbTranslation(workId: String, source: String): String? {
-        val cached = (aiRepository.getCached(workId, AiTaskType.VNDB_TRANSLATION) as? AppResult.Success)?.data
-        val reusable = cached != null &&
-            VndbTranslationCachePolicy.isReusable(cached.inputFingerprint, cached.promptVersion, source)
-        return cached
-            ?.takeIf { reusable }
-            ?.let { runCatching { json.decodeFromString<VndbTranslationOutput>(it.payloadJson) }.getOrNull() }
-            ?.text
-            ?.takeIf(String::isNotBlank)
-    }
-
-    private suspend fun generateVndbTranslation(
-        detail: com.acgcompass.domain.visualnovel.VisualNovelDetail,
-        source: String,
-        fingerprint: String,
-    ) {
-        val configured = detailInteractions.isAiConfigured()
-        if (!configured) return
-        when (
-            val result = aiEngine.run(
-                AiTask.VndbTranslation(detail.id, source),
-                AiRunOptions(confirmed = true),
-            )
-        ) {
-            is AiRunResult.Success -> {
-                val translated = result.payload.text.trim()
-                if (translated.isNotBlank()) {
-                    aiRepository.put(
-                        result.result.copy(
-                            inputFingerprint = fingerprint,
-                            promptVersion = VndbTranslationCachePolicy.PROMPT_VERSION,
-                        ),
-                    )
-                    applyVndbTranslation(detail, translated)
-                }
-            }
-            else -> Unit
-        }
-    }
-
-    private fun containsCjk(value: String): Boolean = value.any { it in '\u4E00'..'\u9FFF' }
 
     private fun applyVndbTranslation(detail: com.acgcompass.domain.visualnovel.VisualNovelDetail, translated: String) {
         val current = detailExtras.value.vndbDetail ?: detail
