@@ -4,18 +4,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.runCatchingResult
-import com.acgcompass.data.local.dao.RecommendationExposureDao
-import com.acgcompass.data.local.dao.UserCollectionDao
-import com.acgcompass.data.local.entity.RecommendationExposureEntity
-import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
 import com.acgcompass.data.taste.TasteEngine
 import com.acgcompass.domain.model.MediaType
+import com.acgcompass.domain.model.RecommendationExposure
 import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.displayTitle
 import com.acgcompass.domain.recommend.ExploreRanker
 import com.acgcompass.domain.recommend.RecommendSimilarity
 import com.acgcompass.domain.repository.BacklogRepository
+import com.acgcompass.domain.repository.BangumiSummarySource
+import com.acgcompass.domain.repository.PersonalCollectionRepository
+import com.acgcompass.domain.repository.RecommendationExposureRepository
 import com.acgcompass.domain.repository.WorkRepository
 import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.WorkFeatureRepository
@@ -46,10 +46,10 @@ import kotlinx.coroutines.launch
 class ExploreQueueViewModel @Inject constructor(
     private val workRepository: WorkRepository,
     private val backlogRepository: BacklogRepository,
-    private val userCollectionDao: UserCollectionDao,
+    private val personalCollections: PersonalCollectionRepository,
     private val tasteEngine: TasteEngine,
-    private val exposureDao: RecommendationExposureDao,
-    private val bangumi: BangumiRemoteDataSource,
+    private val exposures: RecommendationExposureRepository,
+    private val summarySource: BangumiSummarySource,
     private val workFeatureRepository: WorkFeatureRepository,
 ) : ViewModel() {
 
@@ -97,10 +97,10 @@ class ExploreQueueViewModel @Inject constructor(
 
     private suspend fun buildBatch(): ExploreQueueUiState {
         val all = workRepository.observeWorks().first()
-        val collected = userCollectionDao.getAll().map { it.localWorkId }.toSet()
+        val collected = personalCollections.getAll().map { it.workId }.toSet()
         val inBacklog = backlogRepository.observeBacklog().first().map { it.workId }.toSet()
         val now = System.currentTimeMillis()
-        val history = exposureDao.exposuresInContextSince(EXPLORE_CONTEXT, now - FEEDBACK_WINDOW_MS)
+        val history = exposures.exposuresInContextSince(EXPLORE_CONTEXT, now - FEEDBACK_WINDOW_MS)
         // 冷却按「上次的结局」分档：明确划走的很久不出现；只是看过没表态的，一周后可以再来。
         val cooled = history.filter { e ->
             val window = when {
@@ -184,12 +184,12 @@ class ExploreQueueViewModel @Inject constructor(
         _state.value = newState
         val current = (newState as? ExploreQueueUiState.Ready)?.let { it.cards.getOrNull(it.index) }
         if (current != null && shownIds.add(current.workId)) {
-            viewModelScope.launch { runCatchingResult { exposureDao.upsert(exposureRow(current.workId)) } }
+            viewModelScope.launch { runCatchingResult { exposures.upsert(exposureRow(current.workId)) } }
         }
     }
 
     private fun exposureRow(workId: String, clickedAt: Long? = null, dismissedAt: Long? = null) =
-        RecommendationExposureEntity(
+        RecommendationExposure(
             id = "$EXPLORE_CONTEXT:$workId",
             subjectId = workId,
             context = EXPLORE_CONTEXT,
@@ -272,7 +272,7 @@ class ExploreQueueViewModel @Inject constructor(
         viewModelScope.launch {
             worksById[card.workId]?.let { work -> runCatchingResult { backlogRepository.addAll(listOf(work)) } }
             // 整行写入（而非 UPDATE）：不依赖「曝光行已落库」的时序。clickedAt 记录「加入」，供反馈学习。
-            runCatchingResult { exposureDao.upsert(exposureRow(card.workId, clickedAt = now)) }
+            runCatchingResult { exposures.upsert(exposureRow(card.workId, clickedAt = now)) }
         }
         likedCount++
         recordFeedback(card.workId, liked = true)
@@ -285,7 +285,7 @@ class ExploreQueueViewModel @Inject constructor(
         val card = st.cards.getOrNull(st.index) ?: return
         val now = System.currentTimeMillis()
         viewModelScope.launch {
-            runCatchingResult { exposureDao.upsert(exposureRow(card.workId, dismissedAt = now)) }
+            runCatchingResult { exposures.upsert(exposureRow(card.workId, dismissedAt = now)) }
         }
         skippedCount++
         recordFeedback(card.workId, liked = false)
@@ -333,9 +333,9 @@ class ExploreQueueViewModel @Inject constructor(
         synopsisInFlight += workId
         updateCard(workId) { it.copy(synopsisLoading = true) }
         viewModelScope.launch {
-            val res = runCatching { bangumi.getSubject(sid) }.getOrNull()
+            val res = runCatching { summarySource.summary(sid) }.getOrNull()
             synopsisInFlight -= workId
-            val summary = (res as? AppResult.Success)?.data?.summary?.trim()?.takeIf { it.isNotBlank() }
+            val summary = (res as? AppResult.Success)?.data?.trim()?.takeIf { it.isNotBlank() }
             // 仅联网成功（含确实无简介）标记已尝试，失败保留可重试。
             if (res is AppResult.Success) synopsisAttempted += workId
             updateCard(workId) { it.copy(synopsis = summary, synopsisLoading = false) }

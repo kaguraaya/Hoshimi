@@ -74,7 +74,7 @@ class HomeViewModel @Inject constructor(
     private val bangumiSyncManager: BangumiSyncManager,
     private val syncStatusRepository: SyncStatusRepository,
     private val settingsDataStore: com.acgcompass.data.datastore.SettingsDataStore,
-    private val userCollectionDao: com.acgcompass.data.local.dao.UserCollectionDao,
+    private val personalCollections: com.acgcompass.domain.repository.PersonalCollectionRepository,
     private val scheduleRepository: BroadcastScheduleRepository,
     private val aiEngine: AiEngine,
     private val aiRepository: AiRepository,
@@ -218,7 +218,7 @@ class HomeViewModel @Inject constructor(
         combine(
             syncStatusRepository.status,
             settingsDataStore.homeModules,
-            userCollectionDao.observeAll(),
+            personalCollections.observeAll(),
         ) { s, m, collections -> Triple(s, m, collections) },
         scheduleFlow,
     ) { items, works, statuses, syncModulesCollections, schedule ->
@@ -238,7 +238,7 @@ class HomeViewModel @Inject constructor(
                 syncReminder = buildSyncReminder(statuses, System.currentTimeMillis(), syncStatus),
                 dailyDraw = aiDailyDraw ?: buildDailyDraw(backlogSize = entries.size),
                 moods = buildMoodSuggestions(
-                    collections.map { MoodSignal(it.localWorkId, it.status, it.rating, it.updatedAt) },
+                    collections.map { MoodSignal(it.workId, it.status, it.rating, it.updatedAt) },
                     worksById,
                     kotlin.random.Random(moodSeed),
                 ),

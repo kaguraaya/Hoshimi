@@ -7,14 +7,14 @@ import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.datastore.SettingsDataStore
-import com.acgcompass.data.local.dao.UserCollectionDao
-import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.data.sync.BangumiSyncManager
 import com.acgcompass.data.sync.SyncStatusRepository
+import com.acgcompass.domain.detail.PersonalRecord
 import com.acgcompass.domain.model.CollectionState
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.repository.BacklogRepository
+import com.acgcompass.domain.repository.PersonalCollectionRepository
 import com.acgcompass.domain.repository.TimeMachineRepository
 import com.acgcompass.domain.repository.WorkRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,7 +52,7 @@ constructor(
     private val workRepository: WorkRepository,
     private val backlogRepository: BacklogRepository,
     private val bangumiSyncManager: BangumiSyncManager,
-    private val userCollectionDao: UserCollectionDao,
+    private val personalCollections: PersonalCollectionRepository,
     private val syncStatusRepository: SyncStatusRepository,
     private val settingsDataStore: SettingsDataStore,
 ) : ViewModel() {
@@ -72,7 +72,7 @@ constructor(
             timeMachineRepository.observeChangeLogs(),
             workRepository.observeWorks(),
             timeMachineRepository.observeSnapshots(),
-            userCollectionDao.observeAll(),
+            personalCollections.observeAll(),
             syncStatusRepository.status,
         ) { changeLogs, works, snapshots, collections, syncStatus ->
             val titlesById = works.associate { it.id to it.titles.canonical }
@@ -124,13 +124,13 @@ constructor(
         if (collectionCount > 0) "导入了 $collectionCount 部收藏" else null
 
     /** 用户收藏 → 历史时间线输入（时间优先取 Bangumi 源更新时间，回退本地同步/更新时间）。 */
-    private fun List<UserCollectionEntity>.toTimelineInputs(works: List<Work>): List<CollectionTimelineInput> {
+    private fun List<PersonalRecord>.toTimelineInputs(works: List<Work>): List<CollectionTimelineInput> {
         val titleById = works.associate { it.id to it.titles.canonical }
         return map { c ->
             val ts = c.sourceUpdatedAt?.let { parseIsoMillis(it) } ?: c.updatedAt.takeIf { it > 0 } ?: c.syncedAt
             CollectionTimelineInput(
-                workId = c.localWorkId,
-                title = titleById[c.localWorkId] ?: NO_DATA,
+                workId = c.workId,
+                title = titleById[c.workId] ?: NO_DATA,
                 status = c.status,
                 rating = c.rating,
                 comment = c.comment,
@@ -145,12 +145,12 @@ constructor(
         runCatching { java.time.Instant.parse(iso).toEpochMilli() }.getOrNull()
 
     /** 将用户收藏和作品信息映射为可浏览的基线条目。 */
-    private fun List<UserCollectionEntity>.toBaselineItems(works: List<Work>): List<BaselineItem> {
+    private fun List<PersonalRecord>.toBaselineItems(works: List<Work>): List<BaselineItem> {
         val worksById = works.associateBy { it.id }
         return map { c ->
-            val work = worksById[c.localWorkId]
+            val work = worksById[c.workId]
             BaselineItem(
-                workId = c.localWorkId,
+                workId = c.workId,
                 title = work?.titles?.canonical ?: NO_DATA,
                 typeLabel = work?.mediaType.toTypeLabel(),
                 status = c.status,
@@ -223,11 +223,11 @@ constructor(
         _syncing.value = true
         viewModelScope.launch {
             try {
-                val collections = userCollectionDao.getAll()
+                val collections = personalCollections.getAll()
                 val states: List<CollectionState> = if (collections.isNotEmpty()) {
                     collections.map { c ->
                         CollectionState(
-                            workId = c.localWorkId,
+                            workId = c.workId,
                             status = c.status,
                             rating = c.rating,
                             shortReview = c.comment,
@@ -277,9 +277,9 @@ constructor(
                     is AppResult.Success -> {
                         val rep = r.data
                         // 用入库后的收藏构建快照（与本地快照统一时间线）。
-                        val states = userCollectionDao.getAll().map { c ->
+                        val states = personalCollections.getAll().map { c ->
                             CollectionState(
-                                workId = c.localWorkId,
+                                workId = c.workId,
                                 status = c.status,
                                 rating = c.rating,
                                 shortReview = c.comment,

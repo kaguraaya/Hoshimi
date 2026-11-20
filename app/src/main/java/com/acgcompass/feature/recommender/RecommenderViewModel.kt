@@ -8,11 +8,9 @@ import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.datastore.SettingsDataStore
-import com.acgcompass.data.local.dao.RecommendationExposureDao
-import com.acgcompass.data.local.dao.UserCollectionDao
-import com.acgcompass.data.local.entity.RecommendationExposureEntity
 import com.acgcompass.data.taste.TasteEngine
 import com.acgcompass.domain.model.MediaType
+import com.acgcompass.domain.model.RecommendationExposure
 import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.TagNoise
 import com.acgcompass.domain.model.TasteProfile
@@ -28,6 +26,8 @@ import com.acgcompass.domain.recommend.intent.TagRepresentativeness
 import com.acgcompass.domain.repository.BacklogFilter
 import com.acgcompass.domain.repository.BacklogRepository
 import com.acgcompass.domain.repository.BacklogSort
+import com.acgcompass.domain.repository.PersonalCollectionRepository
+import com.acgcompass.domain.repository.RecommendationExposureRepository
 import com.acgcompass.domain.repository.TasteProfileRepository
 import com.acgcompass.domain.repository.WorkRepository
 import com.acgcompass.domain.taste.TagCount
@@ -70,10 +70,10 @@ class RecommenderViewModel @Inject constructor(
     private val workRepository: WorkRepository,
     private val tasteProfileRepository: TasteProfileRepository,
     private val personalTasteScorer: PersonalTasteScorer,
-    private val userCollectionDao: UserCollectionDao,
+    private val personalCollections: PersonalCollectionRepository,
     private val settingsDataStore: SettingsDataStore,
     private val tasteEngine: TasteEngine,
-    private val exposureDao: RecommendationExposureDao,
+    private val exposures: RecommendationExposureRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -263,9 +263,9 @@ class RecommenderViewModel @Inject constructor(
         val minScore = settingsDataStore.recommendMinCommunityScore.first()
         val tasteThreshold = settingsDataStore.tasteMatchThreshold.first()
         val excludeIds = runCatching {
-            userCollectionDao.getAll()
+            personalCollections.getAll()
                 .filter { it.status == "看过" || it.status == "抛弃" }
-                .map { it.localWorkId }
+                .map { it.workId }
                 .toSet()
         }.getOrDefault(emptySet())
 
@@ -330,7 +330,7 @@ class RecommenderViewModel @Inject constructor(
         // 更早的曝光交给排序器做随时间衰减的软惩罚；回避后候选为空则忽略冷却（绝不无结果）。
         val now = System.currentTimeMillis()
         val exposureAt: Map<String, Long> = runCatching {
-            exposureDao.exposuresInContextSince(TONIGHT_CONTEXT, now - REPEAT_COOLDOWN_MS)
+            exposures.exposuresInContextSince(TONIGHT_CONTEXT, now - REPEAT_COOLDOWN_MS)
                 .associate { it.subjectId to it.exposedAt }
         }.getOrDefault(emptyMap())
         val justShown = exposureAt.filterValues { now - it < HARD_REPEAT_MS }.keys
@@ -593,9 +593,9 @@ class RecommenderViewModel @Inject constructor(
     private suspend fun recordExposure(works: List<Work>) {
         runCatching {
             val now = System.currentTimeMillis()
-            exposureDao.upsertAll(
+            exposures.upsertAll(
                 works.map { w ->
-                    RecommendationExposureEntity(
+                    RecommendationExposure(
                         id = "$TONIGHT_CONTEXT:${w.id}",
                         subjectId = subjectIdOf(w) ?: w.id,
                         context = TONIGHT_CONTEXT,

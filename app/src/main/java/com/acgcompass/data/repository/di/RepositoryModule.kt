@@ -180,6 +180,30 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindPersonalCollectionRepository(
+        impl: com.acgcompass.data.repository.PersonalCollectionRepositoryImpl,
+    ): com.acgcompass.domain.repository.PersonalCollectionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRecommendationExposureRepository(
+        impl: com.acgcompass.data.repository.RecommendationExposureRepositoryImpl,
+    ): com.acgcompass.domain.repository.RecommendationExposureRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBangumiSummarySource(
+        impl: com.acgcompass.data.repository.BangumiSummarySourceImpl,
+    ): com.acgcompass.domain.repository.BangumiSummarySource
+
+    @Binds
+    @Singleton
+    abstract fun bindDustStatusSync(
+        impl: com.acgcompass.data.sync.DustStatusSyncImpl,
+    ): com.acgcompass.domain.repository.DustStatusSync
+
+    @Binds
+    @Singleton
     abstract fun bindTasteAnalysisController(impl: TasteAnalysisCoordinator): TasteAnalysisController
 
     @Binds

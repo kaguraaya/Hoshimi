@@ -6,10 +6,10 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.credential.CredentialStore
-import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.sync.BangumiSyncManager
 import com.acgcompass.data.sync.SyncStatusRepository
 import com.acgcompass.domain.repository.BacklogRepository
+import com.acgcompass.domain.repository.PersonalCollectionRepository
 import com.acgcompass.domain.repository.WorkRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -39,7 +39,7 @@ class MineViewModel @Inject constructor(
     private val credentialStore: CredentialStore,
     private val backlogRepository: BacklogRepository,
     private val workRepository: WorkRepository,
-    private val userCollectionDao: UserCollectionDao,
+    private val personalCollections: PersonalCollectionRepository,
     private val bangumiSyncManager: BangumiSyncManager,
     private val syncStatusRepository: SyncStatusRepository,
 ) : ViewModel() {
@@ -57,7 +57,7 @@ class MineViewModel @Inject constructor(
             credentialStore.observeStatus(),
             backlogRepository.observeBacklog(),
             workRepository.observeWorks(),
-            userCollectionDao.observeAll(),
+            personalCollections.observeAll(),
             syncStatusRepository.status,
         ) { statusMap, backlog, works, collections, syncStatus ->
             val stats = buildMineStats(
@@ -65,7 +65,7 @@ class MineViewModel @Inject constructor(
                 backlog = backlog,
                 collections = collections.map {
                     UserCollectionStat(
-                        workId = it.localWorkId,
+                        workId = it.workId,
                         status = it.status,
                         rating = it.rating,
                     )
