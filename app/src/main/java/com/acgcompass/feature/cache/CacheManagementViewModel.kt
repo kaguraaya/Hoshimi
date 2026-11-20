@@ -56,6 +56,7 @@ class CacheManagementViewModel @Inject constructor(
             items = items,
             query = query,
             fillRuns = fillRuns,
+            loaded = true,
         )
     }
 

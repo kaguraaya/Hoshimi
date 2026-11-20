@@ -17,6 +17,8 @@ data class CacheManagementUiState(
     val fillInProgress: Boolean = false,
     val message: String? = null,
     val fillRuns: List<CacheFillRun> = emptyList(),
+    /** 设置和用量都读到之后才为 true；之前不显示上限等数值，免得先闪一下默认值再跳成用户选的值。 */
+    val loaded: Boolean = false,
 ) {
     val mode: CacheLimitMode get() = policy.mode
     val utilization: Float get() = usage.utilization(policy).coerceIn(0f, 1f)
