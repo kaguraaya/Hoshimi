@@ -35,6 +35,12 @@ interface BackupRepository {
      */
     suspend fun importBackup(json: String): AppResult<ImportReport>
 
+    /** 和 [exportBackup] 相同，但直接写进 [output]（不在内存里拼出整段 JSON），调用方负责关闭流。 */
+    suspend fun exportBackupTo(output: java.io.OutputStream, includeCredentials: Boolean = false): AppResult<Unit>
+
+    /** 和 [importBackup] 相同，但直接从 [input] 解码，调用方负责关闭流。 */
+    suspend fun importBackupFrom(input: java.io.InputStream): AppResult<ImportReport>
+
     /**
      * 导出指定数据表为 CSV 文本；不包含任何凭据。
      *
@@ -52,12 +58,16 @@ enum class CsvKind { BACKLOG, RATINGS, RATED_WORKS, TIME_MACHINE, TASTE_PROFILE 
  *
  * @property added 新增行数（本地原本不存在的业务主键）。
  * @property updated 被导入数据更新的行数（导入数据严格更新于本地）。
- * @property conflicts 主键冲突明细，供 UI 提示用户（默认已按「保留较新」解决）。
+ * @property conflictCount 主键冲突总数（默认已按「保留较新」解决）。
+ * @property keptLocalCount 冲突里保留了本地数据的条数。
+ * @property conflicts 冲突样例（最多几十条），供需要展示示例的地方使用；计数以上面两项为准。
  */
 data class ImportReport(
     val added: Int,
     val updated: Int,
-    val conflicts: List<ImportConflict>,
+    val conflictCount: Int = 0,
+    val keptLocalCount: Int = 0,
+    val conflicts: List<ImportConflict> = emptyList(),
 )
 
 /**

@@ -189,6 +189,22 @@ class BackupSerializerTest : StringSpec({
         } shouldBe true
     }
 
+    "importing a backup into itself counts every conflict but keeps only a few samples" {
+        val base = sampleEnvelope().works.first()
+        val many = BackupEnvelope(
+            schemaVersion = BackupEnvelope.CURRENT_SCHEMA_VERSION,
+            exportedAt = 0L,
+            appVersion = "test",
+            works = (1..BIG_TABLE).map { base.copy(id = "w$it") },
+        )
+
+        val result = BackupMerger.merge(local = many, incoming = many)
+
+        result.conflictCount shouldBe BIG_TABLE
+        result.keptLocalCount shouldBe BIG_TABLE
+        result.conflicts.size shouldBe BackupMerger.MAX_CONFLICT_SAMPLES
+    }
+
     "merged envelope never carries credentials ()" {
         val local = sampleEnvelope()
         val incoming = sampleEnvelope()
@@ -276,3 +292,5 @@ class BackupSerializerTest : StringSpec({
         trash.toEntity().toBackup() shouldBe trash
     }
 })
+
+private const val BIG_TABLE = 500

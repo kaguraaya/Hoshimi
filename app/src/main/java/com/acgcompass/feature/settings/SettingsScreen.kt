@@ -243,12 +243,14 @@ internal fun rememberSettingsActions(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val json = viewModel.buildBackupJson()
-                if (json != null) {
-                    val written = runCatchingCancellable {
-                        context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } != null
-                    }.getOrDefault(false)
-                    if (written) viewModel.notifyExported("备份") else viewModel.notifyExportFailed("备份")
+                // 直接写进系统给的文件，不在内存里拼出整段 JSON。导出失败的提示由 ViewModel 给出。
+                val written = runCatchingCancellable {
+                    context.contentResolver.openOutputStream(uri)?.buffered()?.use { viewModel.writeBackup(it) }
+                }.getOrNull()
+                when (written) {
+                    true -> viewModel.notifyExported("备份")
+                    null -> viewModel.notifyExportFailed("备份")
+                    false -> Unit
                 }
             }
         }
@@ -259,10 +261,7 @@ internal fun rememberSettingsActions(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val json = runCatchingCancellable {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
-                }.getOrNull()
-                if (json != null) viewModel.importBackupJson(json)
+                viewModel.importBackup { context.contentResolver.openInputStream(uri) }
             }
         }
     }
