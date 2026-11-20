@@ -31,8 +31,6 @@ internal fun Work.toDecisionUiModel(
         if (completionCost.available && completionCost.bucketLabel == "今晚可看完") {
             add("篇幅短，今晚即可看完")
         }
-        // 用雷达好评点补充推荐理由（基于评论/标签分析，无剧透）。
-        radar?.output?.pros?.filter { it.isNotBlank() && !it.startsWith("（") }?.take(2)?.forEach { add(it) }
         // 社区共识较稳 → 口碑较稳定（最小数据兜底）。
         if (consensus is ConsensusUiModel.Available && consensus.stability.fraction >= 0.6f) {
             add("社区评分较稳定，口碑分歧较小")
@@ -61,9 +59,15 @@ internal fun Work.toDecisionUiModel(
         // 情绪风险标签 → 需注意；雷达争议/雷点补充。
         tags.filter { it.category == TagCategory.RISK }.map(Tag::name).take(2)
             .forEach { add("注意：$it") }
-        radar?.output?.controversies?.filter { it.isNotBlank() && !it.startsWith("（") }?.take(1)?.forEach { add(it) }
-        radar?.output?.pitfalls?.filter { it.isNotBlank() && !it.startsWith("（") }?.take(1)?.forEach { add(it) }
     }.distinct()
+    // 评论里的好评点、争议点和需留意的地方只在「评论摘要」里完整列一次（同一份无剧透分析），这里只指过去，
+    // 避免两处各摘几条、看起来说法不一致。
+    val radarPoints = radar?.output
+    val hasPros = radarPoints?.pros.orEmpty().any { it.isNotBlank() && !it.startsWith("（") }
+    val hasCons = (radarPoints?.controversies.orEmpty() + radarPoints?.pitfalls.orEmpty())
+        .any { it.isNotBlank() && !it.startsWith("（") }
+    val recommendWithPointer = if (hasPros) recommend + REVIEW_PROS_POINTER else recommend
+    val notRecommendWithPointer = if (hasCons) notRecommend + REVIEW_CONS_POINTER else notRecommend
     // 适合心情优先使用 MOOD 标签；缺失时从内容标签推断，仍为空则展示高频社区标签。
     val moodTags = tags.filter { it.category == TagCategory.MOOD }.map(Tag::name)
     val moods = (moodTags + inferMoodsFromTags(tags)).distinct().ifEmpty {
@@ -72,8 +76,8 @@ internal fun Work.toDecisionUiModel(
     val (priorityLevel, priorityReason) = computeBacklogPriority(tasteMatch, consensus, completionCost, tags)
     return DecisionUiModel(
         tasteMatch = tasteMatch,
-        recommendReasons = recommend,
-        notRecommendReasons = notRecommend,
+        recommendReasons = recommendWithPointer,
+        notRecommendReasons = notRecommendWithPointer,
         // 无剧透评价雷达：已生成时展示无剧透摘要、生成方式、剧透等级与来源标注；
         // 未生成（如配置 AI 但成本未确认）时仍标记「暂无数据」，绝不伪造。
         spoilerRadarSummary = radar.toRadarSummary(),
@@ -249,6 +253,10 @@ internal fun SpoilerRadarResult?.toRadarSummary(): String {
         else -> NO_DATA
     }
 }
+
+/** 决策助手里指向「评论摘要」的一行：完整的好评点 / 争议点只在那里列一次。 */
+internal const val REVIEW_PROS_POINTER = "评论里的好评点见下方「评论摘要」"
+internal const val REVIEW_CONS_POINTER = "争议点和需留意的地方见下方「评论摘要」"
 
 /** 文件级单例：个性化口味评分器（无状态、纯函数）。详情页与「今晚看什么」推荐共用同一打分口径。 */
 internal val personalTasteScorer = PersonalTasteScorer()
