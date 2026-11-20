@@ -88,6 +88,10 @@ interface WorkRepository {
         is AppResult.Failure -> RatingBackfillOutcome.TRANSIENT_FAILURE
     }
 
+    /** 同 [backfillRatingsOutcome]，另外带出这次没拿到结果的平台。默认实现不区分平台。 */
+    suspend fun backfillRatingsReport(workId: String): com.acgcompass.domain.model.RatingBackfillReport =
+        com.acgcompass.domain.model.RatingBackfillReport(backfillRatingsOutcome(workId))
+
     /**
      * 仅读取本地已缓存的多源评分聚合（**不触发网络刷新**）。用于发现页榜单 / 评分差异 / 筛选
      * 等需要遍历大量作品的场景，避免逐作品网络刷新造成的卡顿 / 永不收敛。

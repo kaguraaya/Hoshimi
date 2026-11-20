@@ -168,6 +168,13 @@ class RateLimiter(
         backgroundPausedUntilMillis = maxOf(backgroundPausedUntilMillis, timestampMillis)
     }
 
+    /** 后台请求还要因为限流冷却等多久（毫秒）；没有冷却时为 0。全局暂停同样会挡住后台请求，一并计入。 */
+    @Synchronized
+    fun backgroundCooldownMillis(): Long {
+        val until = maxOf(backgroundPausedUntilMillis, pausedUntilMillis)
+        return (until - clock()).coerceAtLeast(0L)
+    }
+
     @Synchronized
     fun pauseFor(delayMillis: Long) {
         if (delayMillis > 0L) pauseUntil(clock() + delayMillis)

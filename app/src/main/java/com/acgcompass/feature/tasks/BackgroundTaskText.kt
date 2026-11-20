@@ -63,10 +63,18 @@ internal fun BackgroundTaskStatus.failedLast(): Boolean {
     }
 }
 
+/** 最近一次开始之后既没成功也没失败、现在也不在运行：被系统中止或进程被回收的那次运行的开始时间。 */
+internal fun BackgroundTaskStatus.unfinishedStart(): Long? {
+    val started = lastStartedAt ?: return null
+    val finished = maxOf(lastSuccessAt ?: 0L, lastFailureAt ?: 0L)
+    return started.takeIf { !running && it > finished }
+}
+
 /** 卡片里的几行说明，按「上次成功 → 上次失败 → 结果 → 待处理 → 下次」排列。 */
 internal fun BackgroundTaskStatus.detailLines(now: Long, zone: ZoneId = ZoneId.systemDefault()): List<String> =
     buildList {
         lastSuccessAt?.let { add("上次成功：${relativeTime(it, now, zone)}") }
+        unfinishedStart()?.let { add("上次开始：${relativeTime(it, now, zone)}，没有记录到结束（可能被系统中止）") }
         if (failedLast()) {
             val at = lastFailureAt?.let { "${relativeTime(it, now, zone)}，" }.orEmpty()
             add("上次失败：$at${lastError ?: "原因不明"}")

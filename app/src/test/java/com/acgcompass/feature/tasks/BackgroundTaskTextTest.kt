@@ -73,4 +73,15 @@ class BackgroundTaskTextTest : StringSpec({
         status.badge() shouldBe TaskBadge.FAILED
         status.detailLines(now, zone) shouldContain "上次失败：空间不足"
     }
+
+    "a run that started but never recorded an end is shown, so a stopped worker is visible" {
+        val status = BackgroundTaskStatus(
+            kind = BackgroundTaskKind.RATING_BACKFILL,
+            lastStartedAt = now - 10 * minute,
+            lastSuccessAt = now - 12 * hour,
+        )
+        status.detailLines(now, zone).any { it.startsWith("上次开始：") && it.contains("没有记录到结束") } shouldBe true
+        status.copy(running = true).unfinishedStart() shouldBe null
+        status.copy(lastSuccessAt = now - minute).unfinishedStart() shouldBe null
+    }
 })

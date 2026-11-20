@@ -150,15 +150,22 @@ class WorkRatingRefresher @Inject constructor(
         }
     }
 
-    suspend fun backfillRatingsOutcome(workId: String): RatingBackfillOutcome {
+    suspend fun backfillRatingsOutcome(workId: String): RatingBackfillOutcome = backfillRatingsReport(workId).outcome
+
+    /** 补评分并带出没拿到结果的平台（[TransientFailureCounter.failedSources]），供后台任务页说明原因。 */
+    suspend fun backfillRatingsReport(workId: String): com.acgcompass.domain.model.RatingBackfillReport {
         val counter = TransientFailureCounter()
         val result = withContext(counter) { backfillRatings(workId) }
-        return when {
+        val outcome = when {
             result is AppResult.Failure && result.error.isTransient() -> RatingBackfillOutcome.TRANSIENT_FAILURE
             result is AppResult.Failure -> RatingBackfillOutcome.FAILED
             counter.count > 0 -> RatingBackfillOutcome.TRANSIENT_FAILURE
             else -> RatingBackfillOutcome.CHECKED
         }
+        return com.acgcompass.domain.model.RatingBackfillReport(
+            outcome = outcome,
+            failedSources = counter.failedSources.keys.mapTo(LinkedHashSet()) { it.name },
+        )
     }
 
     /** 仅读本地缓存评分聚合，不触发网络刷新（发现页批量场景用，避免逐作品联网卡顿）。 */
