@@ -29,6 +29,12 @@
     季度与衍生标记只看正式标题，不看别名（别名里常有「OP」这类简称）。
   - MAL 体系（Tenrai / Jikan / MAL）的 Music、PV、CM 条目与 AniList 的 MUSIC 格式归为「其他」，不参与动画匹配和推荐。
 - 每个数据源都可以在设置里单独关闭。
+- 代码分工：`WorkRepositoryImpl` 只负责观察本地作品、首页本季与榜单分页，其余交给协作类——
+  搜索 `WorkSearchCoordinator`、评分读取与刷新 `WorkRatingRefresher`、公共缓存补充 `PublicCacheFiller`、
+  跨源补齐 `CrossSourceLinker`、单源评分拉取 `SourceRatingFetcher`；所有写库（作品、源链接、评分行、公共缓存登记）经 `WorkRowWriter`，
+  主键规则（`WorkRowIds`）和「手动匹配不被覆盖」的语义只有一份。
+- 聚类时每部作品的归一化标题、季度序号和衍生标记只计算一次（`CrossSourceMerge` 的 `MergeKey`），
+  公共缓存补充一次几百条候选也在百毫秒级完成（600 条：约 4 秒 → 约 60 毫秒，JVM 实测，结果不变）。
 
 ## 2. 详情页
 
@@ -142,6 +148,7 @@ HTTP 客户端开启了 15 秒一次的 HTTP/2 心跳，长连接被中途掐断
   没有本地评分的源照常请求。哪个平台这次没拿到、为什么，记在「设置 → 后台任务 → 详情页各平台评分」。
 - 给本地作品找 Tenrai（MAL）对应条目时不带 `sfw=true`：Tenrai 的这个过滤会把 MAL 分级 R+（轻度裸露）的普通作品也去掉，带上就永远匹配不到；连通性测试仍然带。
 - 「平台上暂无评分」的负缓存：放送中或近一年的作品 1 天后再查，其余 7 天；后台任务页的说明会列出仍然没有评分的平台是已关联但暂无评分（附查询时间），还是没找到对应条目。
+- MyAnimeList 官方搜索要求关键词至少 3 个字符，更短的标题（如「氷菓」）不发请求，免得每次收到 400 被记成失败、反复重试。
 - 作品资料（`work_features`）长期保存，「缓存管理」里的清理不会删除；它是口味算法的输入，见 [taste-algorithm.md](taste-algorithm.md) §2。
 
 ## 6. 后台任务
@@ -183,6 +190,29 @@ HTTP 客户端开启了 15 秒一次的 HTTP/2 心跳，长连接被中途掐断
 Jikan 的 `504` 表示它连不上 MyAnimeList，不是本地网络问题；社区 issue [jikan-me/jikan#596](https://github.com/jikan-me/jikan/issues/596) 记录了同类失败。
 因此 MAL 评分默认取自 Tenrai（文档 <https://api.tenrai.org/documentation>，适配端点 `anime`、`anime/{id}`、`top/anime`、`seasons/now`，DTO 允许服务新增字段）。
 如果以后要恢复 Jikan，先重新核验它的服务状态。
+
+## 8. 接入新数据源
+
+新平台按下面的清单接入，不需要插件系统；每一项都有现成的平台可以照抄。
+
+| 要做的 | 位置 | 要求 |
+| --- | --- | --- |
+| 接口与 DTO | `data/remote/<平台>/`（`XxxApi` + `XxxDtos`） | DTO 字段都给默认值并忽略未知字段，平台新增字段不会让解析失败 |
+| 远端数据源 | `XxxRemoteDataSource` | 每个方法返回 `AppResult`，用 `runCatchingApp` 兜底；搜索、详情、评分三类能力按需提供；带 `RequestPriority` 参数，后台任务传 `BACKGROUND` |
+| 限流 | `core/network/RateLimitPolicy.kt`、`NetworkSource` | 填突发上限、每分钟上限、并发数和退避上限，数值写进 [rate-limits.md](rate-limits.md) |
+| 鉴权 | `core/network/interceptor/SourceAuth.kt` | 凭据只从 `CredentialStore` 读，请求日志不打印头 |
+| 作品身份 | `domain/model/SourceId`、`WorkIds` | 数字编号会和 Bangumi 撞号的平台写成「来源:编号」 |
+| 评分 | `SourceRatingFetcher`、`WorkRatingRefresher.toNetworkSource` | 「没有这个条目 / 没有评分」返回 `NotFound` 或 `FieldMissing`（写负缓存），网络与限流错误原样返回（只冷却、不写负缓存） |
+| 跨源补齐 | `CrossSourceLinker.crossSourceSearchers` | 外站一般没有中文名，查询词见 `foreignSearchQueries`；注意平台自身的过滤参数（例如 Tenrai 的 `sfw`）和关键词长度限制 |
+| 缓存期限 | `domain/detail/DetailCacheModels.kt` | 评分、资料、暂无评分各自的有效期 |
+| 设置 | 数据源开关、连接测试 | 每个数据源都能单独关闭 |
+| 测试 | `MockWebServer` | 至少覆盖：请求参数、正常解析、404 / 字段缺失、429 / 5xx 不写负缓存 |
+
+### Jikan 与 MyAnimeList 接口核对（2026-11）
+
+- Tenrai 与 Jikan 都是 Jikan v4 形式：`anime?q=&limit=&page=&sfw=`、`anime/{id}`、`top/anime`、`seasons/now`，与代码一致；Jikan 仍只用于连接测试。
+- MyAnimeList 官方 v2：`anime?q=&limit=&offset=&fields=`、`anime/{id}?fields=`、`users/{name}/animelist`，公开数据用 `X-MAL-CLIENT-ID` 头，与代码一致；
+  搜索关键词至少 3 个字符（已在客户端拦下更短的关键词）。
 
 ## 本地作品库的来源
 

@@ -197,6 +197,9 @@ app/src/main/java/com/acgcompass/
 | [docs/algorithm-template.md](docs/algorithm-template.md) | 算法模板格式与每个参数的说明（`docs/algorithm-template.json` 由代码导出） |
 | [docs/data-sources.md](docs/data-sources.md) | 各数据源的用途、回退与缓存策略 |
 | [docs/rate-limits.md](docs/rate-limits.md) | 各数据源的官方速率上限与本应用的限流设置 |
+| [docs/ai-providers.md](docs/ai-providers.md) | AI 服务商的参数差异与兼容处理、无剧透保护与回归测试 |
+| [docs/release.md](docs/release.md) | 构建与签名、发版前核对、Android 版本兼容情况 |
+| [docs/modularization.md](docs/modularization.md) | 模块化评估：为什么暂不拆模块、以后拆分的顺序与触发条件 |
 | [docs/design-system.md](docs/design-system.md) | 界面设计规范（表面层级、描边、选中态、尺寸） |
 | [CHANGELOG.md](CHANGELOG.md) | 版本记录 |
 
