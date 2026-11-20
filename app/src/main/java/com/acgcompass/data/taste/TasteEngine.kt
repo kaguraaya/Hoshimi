@@ -541,8 +541,11 @@ class TasteEngine @Inject constructor(
         val stored = if (missing.isEmpty()) {
             emptyMap()
         } else {
-            runCatchingCancellable { ratingDao.getAll() }.getOrDefault(emptyList())
-                .filter { it.sourceId == SourceId.BANGUMI.name && !it.missing && it.score > 0f && it.workId in missing }
+            // 只按缺评分的作品分批查，不把整张评分表读进内存。
+            runCatchingCancellable {
+                missing.chunked(SQL_IN_CHUNK).flatMap { ratingDao.getByWorks(it) }
+            }.getOrDefault(emptyList())
+                .filter { it.sourceId == SourceId.BANGUMI.name && !it.missing && it.score > 0f }
                 .associateBy { it.workId }
         }
         return if (stored.isEmpty()) {
@@ -590,6 +593,9 @@ class TasteEngine @Inject constructor(
          */
         const val CALIB_POOL_TARGET: Int = 40
         const val TIMING_LOG_TAG = "TasteMatchTiming"
+
+        /** `IN (...)` 查询每批的 id 数，避开 SQLite 变量上限。 */
+        const val SQL_IN_CHUNK = 900
         const val EXPLORE_CONTEXT = "explore"
 
         /** 详情页作品特征首次获取失败后的重试间隔。 */

@@ -57,25 +57,44 @@ private fun maxVariantSimilarity(a: List<String>, b: List<String>): Double {
  * 3. 年份冲突或类型冲突 → 否（不靠前缀相似强行合并）。
  * 4. 否则最大跨变体相似度 ≥ [MERGE_THRESHOLD] → 是。
  */
-public fun sameWork(a: Work, b: Work): Boolean {
+public fun sameWork(a: Work, b: Work): Boolean = sameWork(MergeKey(a), MergeKey(b))
+
+/**
+ * 一部作品在合并判断里要反复用到的派生数据（归一化标题、紧凑标题、季度序号、衍生标记），按需算一次。
+ * 聚类时每部作品要和很多候选比较，不缓存的话同一个标题会被归一化成百上千次。
+ */
+private class MergeKey(val work: Work) {
+    val formal: List<String> by lazy(LazyThreadSafetyMode.NONE) { work.formalTitleVariants() }
+    val season: Int by lazy(LazyThreadSafetyMode.NONE) { seasonNumberOf(formal) }
+    val edition: Set<String> by lazy(LazyThreadSafetyMode.NONE) { editionMarkersOf(formal) }
+    val normalized: List<String> by lazy(LazyThreadSafetyMode.NONE) {
+        work.allTitleVariants().map { normalizeTitle(it) }.filter { it.isNotEmpty() }
+    }
+    val normalizedSet: Set<String> by lazy(LazyThreadSafetyMode.NONE) { normalized.toHashSet() }
+    val compactSet: Set<String> by lazy(LazyThreadSafetyMode.NONE) {
+        work.allTitleVariants().map { normalizeCompact(it) }.filter { it.length >= MIN_COMPACT_LEN }.toHashSet()
+    }
+}
+
+@Suppress("ReturnCount")
+private fun sameWork(ka: MergeKey, kb: MergeKey): Boolean {
+    val a = ka.work
+    val b = kb.work
     if (sameSourceItem(a, b)) return true
     // 明确的季度或衍生类型不一致时，不使用标题相似度强行合并。
-    if (seasonNumberOf(a.formalTitleVariants()) != seasonNumberOf(b.formalTitleVariants())) return false
-    if (editionMarkersOf(a.formalTitleVariants()) != editionMarkersOf(b.formalTitleVariants())) return false
+    if (ka.season != kb.season) return false
+    if (ka.edition != kb.edition) return false
     val yearConflict = a.year != null && b.year != null && a.year != b.year
     val typeConflict = mediaTypesConflict(a.mediaType, b.mediaType)
 
-    val ta = a.allTitleVariants().map { normalizeTitle(it) }.filter { it.isNotEmpty() }
-    val tb = b.allTitleVariants().map { normalizeTitle(it) }.filter { it.isNotEmpty() }
-
-    val exactShared = ta.any { it in tb }
+    val exactShared = ka.normalized.any { it in kb.normalizedSet }
     if (exactShared) return !yearConflict && !typeConflict
     // 紧凑（去空格）精确相等——处理 9nine / 9-nine / 9 -Nine- 这类仅空格/连字符差异。
-    val ca = a.allTitleVariants().map { normalizeCompact(it) }.filter { it.length >= MIN_COMPACT_LEN }
-    val cb = b.allTitleVariants().map { normalizeCompact(it) }.filter { it.length >= MIN_COMPACT_LEN }
-    val compactShared = ca.any { it in cb }
+    val compactShared = ka.compactSet.any { it in kb.compactSet }
     if (compactShared) return !yearConflict && !typeConflict
     if (yearConflict || typeConflict) return false
+    val ta = ka.normalized
+    val tb = kb.normalized
     // 核心标题包含关系——一个原文标题是另一个的核心标题加 Episode/副标题等补充时也应合并。
     // 仅当被包含的核心长度足够（避免「9 nine」这类过短系列前缀把不同分作误并）。
     if (coreContainmentMatch(ta, tb)) return true
@@ -230,21 +249,24 @@ private const val MIN_LATIN_ALIAS_LEN = 5
 public fun clusterMatches(matches: List<WorkMatch>): List<List<WorkMatch>> {
     if (matches.isEmpty()) return emptyList()
     val ranked = matches.sortedByDescending { it.matchConfidence }
-    val clusters = mutableListOf<MutableList<WorkMatch>>()
+    val clusters = mutableListOf<MutableList<Pair<WorkMatch, MergeKey>>>()
     for (m in ranked) {
+        val key = MergeKey(m.work)
         val target = clusters.firstOrNull { cluster ->
-            cluster.any { sameWork(it.work, m.work) } && cluster.none { hardConflict(it.work, m.work) }
+            cluster.any { sameWork(it.second, key) } && cluster.none { hardConflict(it.second, key) }
         }
-        if (target != null) target.add(m) else clusters.add(mutableListOf(m))
+        if (target != null) target.add(m to key) else clusters.add(mutableListOf(m to key))
     }
-    return clusters
+    return clusters.map { cluster -> cluster.map { it.first } }
 }
 
 /** 两部作品明显不是同一部：季数、衍生类型、年份或媒介类型对不上（同一平台的同一编号除外）。 */
-private fun hardConflict(a: Work, b: Work): Boolean {
+private fun hardConflict(ka: MergeKey, kb: MergeKey): Boolean {
+    val a = ka.work
+    val b = kb.work
     if (sameSourceItem(a, b)) return false
-    val seasonDiffers = seasonNumberOf(a.formalTitleVariants()) != seasonNumberOf(b.formalTitleVariants())
-    val editionDiffers = editionMarkersOf(a.formalTitleVariants()) != editionMarkersOf(b.formalTitleVariants())
+    val seasonDiffers = ka.season != kb.season
+    val editionDiffers = ka.edition != kb.edition
     val yearDiffers = a.year != null && b.year != null && a.year != b.year
     return seasonDiffers || editionDiffers || yearDiffers || mediaTypesConflict(a.mediaType, b.mediaType)
 }

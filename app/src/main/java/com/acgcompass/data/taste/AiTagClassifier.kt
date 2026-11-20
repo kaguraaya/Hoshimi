@@ -379,8 +379,8 @@ class AiTagClassifier @Inject constructor(
             state.lastResult in setOf("STOPPED", "FAILED", "PARTIAL") &&
             state.inputFingerprint.isNotBlank()
         ) {
-            val resumable = planDao.getAll().filter {
-                it.planId == state.inputFingerprint && it.status in setOf(STATUS_PENDING, STATUS_FAILED)
+            val resumable = planDao.getByPlanId(state.inputFingerprint).filter {
+                it.status in setOf(STATUS_PENDING, STATUS_FAILED)
             }
             if (resumable.isNotEmpty()) {
                 val now = System.currentTimeMillis()
@@ -423,7 +423,7 @@ class AiTagClassifier @Inject constructor(
     }
 
     private suspend fun planCounts(planId: String): PlanCounts {
-        val rows = planDao.getAll().filter { it.planId == planId }
+        val rows = planDao.getByPlanId(planId)
         return PlanCounts(
             total = rows.size,
             automatic = rows.count { it.status == STATUS_AUTOMATIC },
@@ -556,9 +556,9 @@ class AiTagClassifier @Inject constructor(
         val cached = runCatchingCancellable { tagDimensionDao.getCachedTags(CLASSIFIER_VERSION) }
             .getOrDefault(emptyList())
             .toHashSet()
-        val terminalPlanTags = runCatchingCancellable { planDao.getAll() }.getOrDefault(emptyList())
-            .filter { it.status in setOf(STATUS_AUTOMATIC, STATUS_REVIEW, STATUS_REJECTED, STATUS_MANUAL) }
-            .mapTo(HashSet()) { it.tag }
+        val terminalPlanTags = runCatchingCancellable {
+            planDao.getTagsByStatuses(listOf(STATUS_AUTOMATIC, STATUS_REVIEW, STATUS_REJECTED, STATUS_MANUAL))
+        }.getOrDefault(emptyList()).toHashSet()
         if (personalIds.isEmpty()) return emptyList()
         // 按个人作品 id 读取完整特征集，避免公共缓存增长后截断个人标签并产生漂移。
         val pool = runCatchingCancellable {
