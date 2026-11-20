@@ -80,6 +80,24 @@ class RateLimitRegistryTest : StringSpec({
         requireNotNull(registry.limiterFor(NetworkSource.JIKAN)).reserve() shouldBeGreaterThanOrEqual 150_000L
     }
 
+    "background cooldown reports the remaining backoff, including a global pause" {
+        var now = 0L
+        val limiter = RateLimiter(
+            rules = listOf(RateLimiter.Rule(maxRequests = 4, windowMillis = 1_000L)),
+            throttleThreshold = 1.0,
+            clock = { now },
+        )
+        limiter.backgroundCooldownMillis() shouldBe 0L
+        limiter.pauseBackgroundUntil(120_000L)
+        limiter.backgroundCooldownMillis() shouldBe 120_000L
+        now = 100_000L
+        limiter.backgroundCooldownMillis() shouldBe 20_000L
+        limiter.pauseUntil(400_000L)
+        limiter.backgroundCooldownMillis() shouldBe 300_000L
+        now = 500_000L
+        limiter.backgroundCooldownMillis() shouldBe 0L
+    }
+
     "background requests only use half of each window so foreground keeps headroom" {
         var now = 0L
         val limiter = RateLimiter(

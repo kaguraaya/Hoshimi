@@ -49,7 +49,7 @@ internal fun extrasTab(title: String, body: String, extras: DetailExtras, failed
 }
 
 /**
- * 评论摘要 = 对大众口碑/评论的**内容性**摘要（好评点、争议点、适合人群、观看时机），
+ * 评论摘要 = 对大众口碑/评论的**内容性**摘要（好评点、争议点、需留意、适合人群），
  * 来自无剧透评价雷达（AI 或本地规则，基于评论/标签分析），**不展示评分数值**充当评论。
  * 无任何可用的内容性摘要时返回 [NO_DATA]（绝不用评分替代，绝不伪造）。
  */
@@ -73,16 +73,17 @@ internal fun reviewSummary(radar: SpoilerRadarResult?): String {
     val sections = mutableListOf<String>()
     val out = radar?.output
     if (out != null) {
-        out.overallImpression.trim().takeIf { it.isNotEmpty() }?.let { sections += "总体印象：$it" }
+        // 总体印象和观看时机在「无剧透评价雷达」里显示，这里只列要点。
         out.pros.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }
             ?.let { sections += "好评点：\n" + it.joinToString("\n") { p -> "· $p" } }
         out.controversies.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }
             ?.let { sections += "争议 / 吐槽点：\n" + it.joinToString("\n") { c -> "· $c" } }
+        out.pitfalls.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }
+            ?.let { sections += "需留意：\n" + it.joinToString("\n") { c -> "· $c" } }
         out.suitableFor.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }
             ?.let { sections += "适合：" + it.joinToString("、") }
         out.notSuitableFor.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }
             ?.let { sections += "可能不适合：" + it.joinToString("、") }
-        out.watchTiming.trim().takeIf { it.isNotEmpty() }?.let { sections += "观看时机：$it" }
     }
     if (sections.isEmpty()) return NO_DATA
     // 标注来源，避免被误读为逐条原始评论。

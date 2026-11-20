@@ -132,12 +132,20 @@ class BackgroundTaskRepositoryImpl @Inject constructor(
         }
     }
 
-    private inline fun <reified W : ListenableWorker> enqueueNow(name: String, network: Boolean = true): Boolean {
+    private suspend inline fun <reified W : ListenableWorker> enqueueNow(
+        name: String,
+        network: Boolean = true,
+    ): Boolean {
         val builder = OneTimeWorkRequest.Builder(W::class.java)
         if (network) {
             builder.setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
         }
-        workManager.enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, builder.build())
+        // 已经在运行就不打断；只是在排队（例如一直在等电量、联网条件的那一次）就换成这次手动的，马上按新条件跑。
+        val running = runCatchingCancellable {
+            workManager.getWorkInfosForUniqueWorkFlow(name).first().any { it.state == WorkInfo.State.RUNNING }
+        }.getOrDefault(false)
+        val policy = if (running) ExistingWorkPolicy.KEEP else ExistingWorkPolicy.REPLACE
+        workManager.enqueueUniqueWork(name, policy, builder.build())
         return true
     }
 

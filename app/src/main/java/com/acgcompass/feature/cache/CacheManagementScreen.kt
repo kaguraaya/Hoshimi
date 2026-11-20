@@ -84,15 +84,25 @@ fun CacheManagementScreen(
             contentPadding = ScreenContentPadding.lazyList(padding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                PolicyCard(
-                    state = state,
-                    onEvent = viewModel::onPolicyEvent,
-                )
+            if (state.loaded) {
+                item {
+                    PolicyCard(
+                        state = state,
+                        onEvent = viewModel::onPolicyEvent,
+                    )
+                }
+                item { UsageCard(state) }
+                item { SourceCard(state, viewModel) }
+                item { CleanupCard(state, viewModel, onOpenItemCleanup) }
+            } else {
+                item(key = "loading") {
+                    Text(
+                        "正在读取缓存设置…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            item { UsageCard(state) }
-            item { SourceCard(state, viewModel) }
-            item { CleanupCard(state, viewModel, onOpenItemCleanup) }
             item {
                 PrismCard(modifier = Modifier.fillMaxWidth()) {
                     Column(

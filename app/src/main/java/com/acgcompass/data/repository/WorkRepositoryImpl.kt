@@ -277,6 +277,9 @@ class WorkRepositoryImpl @Inject constructor(
     override suspend fun backfillRatingsOutcome(workId: String): RatingBackfillOutcome =
         ratingRefresher.backfillRatingsOutcome(workId)
 
+    override suspend fun backfillRatingsReport(workId: String): com.acgcompass.domain.model.RatingBackfillReport =
+        ratingRefresher.backfillRatingsReport(workId)
+
     override suspend fun aggregateRatingsCached(workId: String): RatingAggregate =
         ratingRefresher.aggregateRatingsCached(workId)
 

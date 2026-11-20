@@ -11,6 +11,10 @@ class SourceQuota @Inject constructor(
 ) {
     fun isTight(source: NetworkSource): Boolean = (registry.limiterFor(source)?.headroom() ?: 1.0) < TIGHT_HEADROOM
 
+    /** 这个数据源的后台请求还要冷却多久（毫秒）：撞上限流后的退避期内，后台请求发不出去。 */
+    fun backgroundCooldownMillis(source: NetworkSource): Long =
+        registry.limiterFor(source)?.backgroundCooldownMillis() ?: 0L
+
     private companion object {
         /** 剩余额度低于这个比例就算紧张，留给用户正在等的其它请求。 */
         const val TIGHT_HEADROOM = 0.25

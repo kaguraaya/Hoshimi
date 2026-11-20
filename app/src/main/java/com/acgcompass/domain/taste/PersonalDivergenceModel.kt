@@ -75,6 +75,8 @@ class PersonalDivergenceModel private constructor(
     val meanRating: Double,
     val meanCommunity: Double,
     val slope: Double,
+    /** 社区分按评分人数收缩的先验强度（见 [COMMUNITY_VOTE_PRIOR]）；0 表示不收缩。 */
+    private val communityVotePrior: Double,
     /** 标签 → 分歧权重（10 分制，作用于归一化标签向量）。 */
     private val tagWeights: Map<String, Double>,
     /** 标签 → 出现在多少部已评分作品里（展示「分歧最大的标签」时用来排除只有一两部作品支撑的）。 */
@@ -144,7 +146,7 @@ class PersonalDivergenceModel private constructor(
     }
 
     fun predict(feature: WorkFeature): RatingPrediction {
-        val base = baseline(feature.bangumiScore?.toDouble())
+        val base = baseline(shrinkCommunity(feature.bangumiScore?.toDouble(), feature.bangumiVotes, communityVotePrior))
         val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
         val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to PERSONAL_GAIN * it * x } }
         val tagPart = perTag.sumOf { it.second }
@@ -247,8 +249,30 @@ class PersonalDivergenceModel private constructor(
         const val FRANCHISE_SHRINK: Double = 0.5
         const val AXIS_RIDGE_LAMBDA: Double = 8.0
 
-        /** 基线斜率向全站先验 1.0 收缩的强度。 */
+        /**
+         * 社区分按评分人数向全站均分收缩：`(人数·社区分 + K·均分)/(人数 + K)`，K = 10。
+         * 只有一两个人打分的条目（比如 1 个人打的 10 分，收缩后约 6.9）不会把大众基线和预计评分抬到天上；
+         * 几百人以上几乎不变。Bangumi15M 盲测整体指标不变（K 取 30 时评分人数少的作品误差明显变大，所以取 10）。
+         */
+        const val COMMUNITY_PRIOR_SCORE: Double = 6.6
+        const val COMMUNITY_VOTE_PRIOR: Double = 10.0
+
+        /** 收缩后的社区分；没有社区分返回 null，评分人数未知（0）时原样返回。 */
+        fun shrinkCommunity(score10: Double?, votes: Int, prior: Double = COMMUNITY_VOTE_PRIOR): Double? = when {
+            score10 == null || score10 <= 0.0 -> null
+            votes <= 0 || prior <= 0.0 -> score10
+            else -> (votes * score10 + prior * COMMUNITY_PRIOR_SCORE) / (votes + prior)
+        }
+
+        private fun WorkFeature.communityForModel(prior: Double): Double =
+            shrinkCommunity(bangumiScore?.toDouble(), bangumiVotes, prior) ?: bangumiScore!!.toDouble()
+
+        /**
+         * 基线斜率向全站先验 [SLOPE_PRIOR] 收缩的强度。先验取 1.0（跟社区走）：Bangumi15M 盲测里把它降到 0.8
+         * （少跟社区）排序一致性和找出高分作品的 AUC 都下降约 0.002，「比社区预期更喜欢」的 AUC 只多 0.0005，所以不降。
+         */
         const val SLOPE_PRIOR_STRENGTH: Double = 15.0
+        const val SLOPE_PRIOR: Double = 1.0
         const val MAX_SLOPE: Double = 2.5
 
         /** 每部作品参与向量化的标签数上限。 */
@@ -349,6 +373,7 @@ class PersonalDivergenceModel private constructor(
             samples: List<TasteSample>,
             corpus: List<WorkFeature> = emptyList(),
             overrides: Map<String, TasteCategory> = emptyMap(),
+            communityVotePrior: Double = COMMUNITY_VOTE_PRIOR,
         ): PersonalDivergenceModel? {
             val eligible = samples
                 .filter { it.rating != null && (it.feature.bangumiScore ?: 0f) > 0f }
@@ -359,7 +384,7 @@ class PersonalDivergenceModel private constructor(
             if (n < MIN_SAMPLES) return null
 
             val ratings = DoubleArray(n) { rated[it].rating!!.toDouble() }
-            val community = DoubleArray(n) { rated[it].feature.bangumiScore!!.toDouble() }
+            val community = DoubleArray(n) { rated[it].feature.communityForModel(communityVotePrior) }
             val meanR = ratings.average()
             val meanC = community.average()
             val slope = shrunkSlope(ratings, community, meanR, meanC)
@@ -373,6 +398,7 @@ class PersonalDivergenceModel private constructor(
                     meanRating = meanR,
                     meanCommunity = meanC,
                     slope = slope,
+                    communityVotePrior = communityVotePrior,
                     tagWeights = weights,
                     tagSupport = support,
                     idf = idf,
@@ -385,7 +411,7 @@ class PersonalDivergenceModel private constructor(
                     sortedRatings = ratings.sortedArray(),
                     sampleCount = n,
                     examples = eligible.take(MAX_ANALOGY_EXAMPLES).mapIndexed { i, sample ->
-                        val c = sample.feature.bangumiScore!!.toDouble()
+                        val c = sample.feature.communityForModel(communityVotePrior)
                         RatedExample(sample.subjectId, sample.rating!!, meanR + slope * (c - meanC)) to
                             (vectors.getOrNull(i) ?: tagVector(sample.feature, idf, defaultIdf, overrides))
                     },
@@ -403,7 +429,10 @@ class PersonalDivergenceModel private constructor(
             }
             val n = ratings.size
             val ols = if (sxx > 0.0) sxy / sxx else 1.0
-            return ((n * ols + SLOPE_PRIOR_STRENGTH) / (n + SLOPE_PRIOR_STRENGTH)).coerceIn(0.0, MAX_SLOPE)
+            return ((n * ols + SLOPE_PRIOR_STRENGTH * SLOPE_PRIOR) / (n + SLOPE_PRIOR_STRENGTH)).coerceIn(
+                0.0,
+                MAX_SLOPE,
+            )
         }
 
         /** 标签的逆文档频率，以及没见过的标签用的默认值。 */

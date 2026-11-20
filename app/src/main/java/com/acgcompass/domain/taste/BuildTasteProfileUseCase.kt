@@ -61,6 +61,7 @@ class BuildTasteProfileUseCase @Inject constructor() {
         neutralBias: Double = TasteScoringParams.PREF_NEUTRAL_BIAS,
         prefSlope: Double = TasteScoringParams.PREF_SLOPE,
         implicitSignals: List<ImplicitSignal> = emptyList(),
+        communityVotePrior: Double = PersonalDivergenceModel.COMMUNITY_VOTE_PRIOR,
     ): AdvancedTasteProfile {
         val rated = samples.filter { it.rating != null }
         if (rated.isEmpty()) {
@@ -189,7 +190,7 @@ class BuildTasteProfileUseCase @Inject constructor() {
             coverage = coverage,
             sampleCount = n,
             userAvgRating = rated.mapNotNull { it.rating }.average(),
-            divergence = PersonalDivergenceModel.fit(rated, calibrationPool, tagOverrides),
+            divergence = PersonalDivergenceModel.fit(rated, calibrationPool, tagOverrides, communityVotePrior),
             generatedAt = now,
         )
     }

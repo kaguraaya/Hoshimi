@@ -16,6 +16,17 @@ class RatingBackfillPolicyTest : StringSpec({
         checked.nextAttemptAt shouldBe now + hour + RatingBackfillPolicy.CHECKED_RETRY_MS
     }
 
+    "a lease pushes the next attempt back without counting a failure" {
+        val failing = RatingBackfillPolicy.next("1", null, RatingBackfillOutcome.TRANSIENT_FAILURE, now)
+        val leased = RatingBackfillPolicy.lease("1", failing, now + hour)
+        leased.failureCount shouldBe failing.failureCount
+        leased.lastOutcome shouldBe failing.lastOutcome
+        leased.nextAttemptAt shouldBe now + hour + RatingBackfillPolicy.LEASE_MS
+        val fresh = RatingBackfillPolicy.lease("2", null, now)
+        fresh.failureCount shouldBe 0
+        fresh.lastOutcome shouldBe RatingBackfillPolicy.LEASED
+    }
+
     "network failures retry within hours, growing to at most a day" {
         var state = RatingBackfillPolicy.next("1", null, RatingBackfillOutcome.TRANSIENT_FAILURE, now)
         state.nextAttemptAt - now shouldBe 1 * hour

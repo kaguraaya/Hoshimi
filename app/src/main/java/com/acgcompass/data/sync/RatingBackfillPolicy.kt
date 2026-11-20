@@ -51,6 +51,20 @@ internal object RatingBackfillPolicy {
         }
     }
 
+    /** 开始查一部作品前的占位时长，见 [lease]。 */
+    const val LEASE_MS: Long = 2 * HOUR_MS
+
+    /** 占位行的结果名：这部作品已经开始查、还没有结果。 */
+    const val LEASED: String = "LEASED"
+
+    /**
+     * 开始查一部作品之前先占位：把下次可以再试的时间推到 [LEASE_MS] 之后，失败次数和上次结果不变。
+     * 运行中途被系统停掉时，这部作品不会在下一次运行里又排第一、再次卡住整批；查完后由 [next] 覆盖。
+     */
+    fun lease(workId: String, previous: RatingBackfillStateEntity?, now: Long): RatingBackfillStateEntity =
+        (previous ?: RatingBackfillStateEntity(workId, now, null, 0, now, LEASED))
+            .copy(lastAttemptAt = now, nextAttemptAt = now + LEASE_MS)
+
     /** 旧版本存在设置里的「最近查过」记录换算成表里的行：当作查过了，按原来的时间往后排。 */
     fun fromLegacy(attempts: Map<String, Long>): List<RatingBackfillStateEntity> = attempts.map { (id, at) ->
         RatingBackfillStateEntity(
