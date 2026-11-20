@@ -1,0 +1,140 @@
+name: Release APK
+
+# 合并到 main 且版本号对应的标签还不存在时：打正式包、签名、按 CHANGELOG 写说明并发布 Release。
+# 推到 release-check/** 分支时只构建并校验签名，不发布（用于检查仓库 Secrets 是否填对）。
+# 手动运行可以指定提交，用来补发历史版本。
+on:
+  push:
+    branches: [main, 'release-check/**']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 要构建的提交或分支（留空为 main 最新）
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign and publish
+    if: github.repository == 'kaguraaya/Hoshimi'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPECTED_CERT_SHA256: 7e3f8d6c1d3604bd420c748a1f749b54a0603c7443586746557430435101e441
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts | head -1)
+          CODE=$(sed -n 's/^ *versionCode = \([0-9]*\)/\1/p' app/build.gradle.kts | head -1)
+          test -n "$VERSION" && test -n "$CODE"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_NAME#release-check/}" != "$GITHUB_REF_NAME" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "v$VERSION 已经发布过，跳过"
+            echo "publish=skip" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up JDK 21
+        if: steps.version.outputs.publish != 'skip'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        if: steps.version.outputs.publish != 'skip'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing
+        if: steps.version.outputs.publish != 'skip'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.HOSHIMI_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.HOSHIMI_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.HOSHIMI_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.HOSHIMI_KEY_PASSWORD }}
+        run: |
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "::error::缺少仓库 Secret：HOSHIMI_$name"; exit 1; fi
+          done
+          echo "$KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null \
+            || { echo "::error::签名密钥、密码或别名不对，请检查 HOSHIMI_KEYSTORE_* 与 HOSHIMI_KEY_ALIAS"; exit 1; }
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Build release APK
+        if: steps.version.outputs.publish != 'skip'
+        env:
+          BANGUMI_CLIENT_ID: ${{ secrets.BANGUMI_CLIENT_ID }}
+          BANGUMI_OAUTH_PROXY_BASE_URL: ${{ secrets.BANGUMI_OAUTH_PROXY_BASE_URL }}
+        run: |
+          if [ -z "$BANGUMI_CLIENT_ID" ] || [ -z "$BANGUMI_OAUTH_PROXY_BASE_URL" ]; then
+            echo "::error::缺少 BANGUMI_CLIENT_ID 或 BANGUMI_OAUTH_PROXY_BASE_URL，打出来的包无法登录 Bangumi"; exit 1
+          fi
+          ./gradlew :app:assembleRelease -Phoshimi.minify=true --stacktrace
+
+      - name: Verify APK
+        if: steps.version.outputs.publish != 'skip'
+        id: apk
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          CERT=$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | sed -n 's/.*SHA-256 digest: //p' | head -1)
+          if [ "$CERT" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::签名证书和以往版本不一致，用户无法覆盖安装"; exit 1
+          fi
+          CONFIG=app/build/generated/source/buildConfig/release/com/acgcompass/BuildConfig.java
+          grep -q 'BANGUMI_CLIENT_SECRET = "";' "$CONFIG" || { echo "::error::正式包里带了 client secret"; exit 1; }
+          grep -q 'BANGUMI_CLIENT_ID = "";' "$CONFIG" && { echo "::error::正式包里没有 Bangumi client id"; exit 1; }
+          OUT="Hoshimi-${{ steps.version.outputs.version }}.apk"
+          cp "$APK" "$OUT"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+          echo "签名与配置检查通过：$OUT"
+
+      - name: Release notes from CHANGELOG
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          VERSION='${{ steps.version.outputs.version }}'
+          awk -v v="$VERSION" '
+            $0 ~ "^## " v " " { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::CHANGELOG 里没有 $VERSION 的记录"; exit 1; }
+          printf '\n版本：%s（versionCode %s）\n' "$VERSION" '${{ steps.version.outputs.code }}' >> notes.md
+
+      - name: Publish release
+        if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION='${{ steps.version.outputs.version }}'
+          gh release create "v$VERSION" '${{ steps.apk.outputs.file }}' \
+            --title "Hoshimi $VERSION" \
+            --notes-file notes.md \
+            --target "$(git rev-parse HEAD)"
+
+      - name: Clean up signing files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" keystore.properties
