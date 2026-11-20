@@ -46,7 +46,7 @@ internal fun PolicyCard(
 }
 
 @Composable
-private fun CacheModeControls(state: CacheManagementUiState, onEvent: (CachePolicyEvent) -> Unit) {
+internal fun CacheModeControls(state: CacheManagementUiState, onEvent: (CachePolicyEvent) -> Unit) {
     PillTabs(
         options = listOf(CacheLimitMode.COUNT, CacheLimitMode.SPACE),
         selected = state.mode,
@@ -56,7 +56,7 @@ private fun CacheModeControls(state: CacheManagementUiState, onEvent: (CachePoli
 }
 
 @Composable
-private fun CacheLimitControls(
+internal fun CacheLimitControls(
     state: CacheManagementUiState,
     presets: List<Int>,
     onEvent: (CachePolicyEvent) -> Unit,
@@ -82,7 +82,7 @@ private fun CacheLimitControls(
 }
 
 @Composable
-private fun BackgroundFillControl(state: CacheManagementUiState, onEvent: (CachePolicyEvent) -> Unit) {
+internal fun BackgroundFillControl(state: CacheManagementUiState, onEvent: (CachePolicyEvent) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.weight(1f)) {
             Text("后台补充")
@@ -96,7 +96,7 @@ private fun BackgroundFillControl(state: CacheManagementUiState, onEvent: (Cache
 }
 
 @Composable
-private fun FillAction(state: CacheManagementUiState, onEvent: (CachePolicyEvent) -> Unit) {
+internal fun FillAction(state: CacheManagementUiState, onEvent: (CachePolicyEvent) -> Unit) {
     // 公共缓存受各数据源限流约束，不提供「立即填充」：只说明实际行为，填充进行中时给出停止入口。
     Text(
         "公共缓存会在你使用应用时自动补充（打开首页、浏览榜单时按各数据源的限速慢慢补），不需要手动触发。",
@@ -111,7 +111,7 @@ private fun FillAction(state: CacheManagementUiState, onEvent: (CachePolicyEvent
 }
 
 @Composable
-private fun FillRunStatus(state: CacheManagementUiState) {
+internal fun FillRunStatus(state: CacheManagementUiState) {
     val target = when (state.mode) {
         CacheLimitMode.COUNT -> state.policy.normalizedCountLimit
         CacheLimitMode.SPACE -> null
@@ -125,7 +125,7 @@ private fun FillRunStatus(state: CacheManagementUiState) {
         FlatDivider()
         val time = run.lastRunAt?.let { DateFormat.getDateTimeInstance().format(Date(it)) } ?: "尚未运行"
         Text(
-            "${run.source}：${run.result.toSourceStatusText()} · $time",
+            "${run.source.toCacheSourceLabel()}：${run.result.toSourceStatusText()} · $time",
             style = MaterialTheme.typography.bodySmall,
         )
         run.failureReason?.let {
@@ -134,31 +134,21 @@ private fun FillRunStatus(state: CacheManagementUiState) {
     }
 }
 
-/** 一个来源本次补充的结果说明；「后台任务」页也用这一份，保证两边说法一致。 */
-internal fun String?.toSourceStatusText(): String = when (this) {
-    "TARGET_REACHED" -> "此源本次配额已完成"
-    "EXHAUSTED" -> "此源候选已耗尽"
-    "RUNNING" -> "正在补充"
-    "FAILED" -> "本次失败，可稍后继续"
-    null -> "暂无"
-    else -> this
-}
-
-private fun CacheManagementUiState.isLimitSelected(value: Int): Boolean = when (mode) {
+internal fun CacheManagementUiState.isLimitSelected(value: Int): Boolean = when (mode) {
     CacheLimitMode.COUNT -> policy.countLimit == value
     CacheLimitMode.SPACE -> policy.spaceLimitBytes / BYTES_PER_MEGABYTE == value.toLong()
 }
 
-private fun CacheManagementUiState.limitText(): String = when (mode) {
+internal fun CacheManagementUiState.limitText(): String = when (mode) {
     CacheLimitMode.COUNT -> policy.countLimit.toString()
     CacheLimitMode.SPACE -> (policy.spaceLimitBytes / BYTES_PER_MEGABYTE).toString()
 }
 
-private fun CacheManagementUiState.updateLimit(value: Int, onEvent: (CachePolicyEvent) -> Unit) {
+internal fun CacheManagementUiState.updateLimit(value: Int, onEvent: (CachePolicyEvent) -> Unit) {
     when (mode) {
         CacheLimitMode.COUNT -> onEvent(CachePolicyEvent.CountLimitChanged(value))
         CacheLimitMode.SPACE -> onEvent(CachePolicyEvent.SpaceLimitChanged(value))
     }
 }
 
-private const val BYTES_PER_MEGABYTE = 1024L * 1024L
+internal const val BYTES_PER_MEGABYTE = 1024L * 1024L

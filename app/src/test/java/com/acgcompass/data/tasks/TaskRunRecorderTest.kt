@@ -65,4 +65,15 @@ class TaskRunRecorderTest {
         recorder.clearStaleRunning()
         assertFalse(db.taskRunDao().get("bangumi_outbox")!!.running)
     }
+
+    @Test
+    fun failureTextNeverEchoesUrlsOrTokensFromExceptions() {
+        val leaky = IOException("GET https://api.bgm.tv/v0/me?access_token=abcdef123456 failed")
+        val text = TaskRunRecorder.describe(leaky)
+        assertFalse(text.contains("token"))
+        assertFalse(text.contains("https://"))
+        val other = TaskRunRecorder.describe(IllegalStateException("Bearer secret-value"))
+        assertFalse(other.contains("secret"))
+        assertEquals("出错了（IllegalStateException）", other)
+    }
 }

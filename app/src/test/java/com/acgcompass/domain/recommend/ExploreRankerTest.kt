@@ -96,4 +96,18 @@ class ExploreRankerTest : StringSpec({
         // 无反馈时原样返回。
         ExploreRanker.rerankRemaining(cards, keepUntil = 1, model = empty) { it } shouldBe cards
     }
+
+    "random batches vary between visits but still favour high-scoring works" {
+        val pool = (1..40).map { c("m$it", 91 - it, setOf("t$it")) }
+        val fixed = ExploreRanker.buildBatch(pool, empty, 10).map { it.candidate.id }
+        val runs = (1..50).map { seed ->
+            ExploreRanker.buildBatch(pool, empty, 10, kotlin.random.Random(seed)).map { it.candidate.id }
+        }
+        // 至少有一部分批次的顺序和确定版本不同，且彼此之间也不全一样。
+        (runs.count { it != fixed } > 40) shouldBe true
+        (runs.toSet().size > 30) shouldBe true
+        // 最高分的作品绝大多数时候仍然在这一批里，排在很后面的几乎不会出现。
+        (runs.count { "m1" in it } >= 45) shouldBe true
+        (runs.count { "m40" in it } <= 2) shouldBe true
+    }
 })

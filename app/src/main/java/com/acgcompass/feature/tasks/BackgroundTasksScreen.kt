@@ -34,6 +34,7 @@ import com.acgcompass.core.ui.AcgScreenScaffold
 import com.acgcompass.core.ui.ScreenContentPadding
 import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.model.BackgroundTaskStatus
+import com.acgcompass.feature.cache.toCacheSourceLabel
 import com.acgcompass.feature.cache.toSourceStatusText
 
 @Composable
@@ -129,7 +130,7 @@ private fun TaskCard(status: BackgroundTaskStatus, now: Long, onRetry: () -> Uni
                 val time = run.lastRunAt?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) }
                     ?: "尚未运行"
                 Text(
-                    "${run.source}：${run.result.toSourceStatusText()} · $time",
+                    "${run.source.toCacheSourceLabel()}：${run.result.toSourceStatusText()} · $time",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

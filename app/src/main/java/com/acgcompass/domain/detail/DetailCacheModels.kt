@@ -63,6 +63,9 @@ object DetailCacheTtl {
     const val PERSONAL_MILLIS = 15L * 60L * 1_000L
     const val COMMENTS_MILLIS = 6L * 60L * 60L * 1_000L
     const val MISSING_RATING_MILLIS = 7L * 24L * 60L * 60L * 1_000L
+
+    /** 放送中或近一年的作品：平台上「暂无评分」常常只是还没攒够人数，一天后就再查。 */
+    const val MISSING_RATING_RECENT_MILLIS = 24L * 60L * 60L * 1_000L
     const val BASE_MILLIS = 24L * 60L * 60L * 1_000L
     const val CREDITS_RELATIONS_MILLIS = 7L * 24L * 60L * 60L * 1_000L
 

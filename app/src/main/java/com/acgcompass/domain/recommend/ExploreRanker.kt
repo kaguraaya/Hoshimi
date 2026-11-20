@@ -53,6 +53,10 @@ object ExploreRanker {
     private const val MIN_FEEDBACK = 4
 
     /** 多样性权重：效用里扣掉与已入选卡片的最大题材相似度的比例。 */
+    /** 随机组批时的高分段宽度（批大小的倍数）与扰动强度（效用以 0–1 计，0.06 约等于匹配度差 6 分内常会互换）。 */
+    private const val RANDOM_SHORTLIST_FACTOR = 6
+    private const val EXPLORATION_TEMPERATURE = 0.06
+
     private const val DIVERSITY_WEIGHT = 0.18
 
     /** 每批跨界名额占比。 */
@@ -147,7 +151,16 @@ object ExploreRanker {
      * 先按 MMR 选出「口味主力」，再从符合跨界门槛的候选里按「口碑 × 陌生度」补足跨界名额，
      * 最后把跨界卡片均匀穿插进主力序列（不会一上来就是陌生题材，也不会全堆在最后没人看到）。
      */
-    fun buildBatch(candidates: List<Candidate>, model: FeedbackModel, batchSize: Int): List<Ranked> {
+    /**
+     * @param random 不为 null 时在更宽的高分段里按效用加权随机挑（Gumbel 噪声，分数越高越容易被挑中），
+     *   每次进来的顺序不再和「为你排行」一模一样；为 null 时完全确定（测试用）。
+     */
+    fun buildBatch(
+        candidates: List<Candidate>,
+        model: FeedbackModel,
+        batchSize: Int,
+        random: kotlin.random.Random? = null,
+    ): List<Ranked> {
         if (candidates.isEmpty() || batchSize <= 0) return emptyList()
         val discoverySlots = (batchSize * DISCOVERY_SHARE).toInt()
         val byUtility = candidates
@@ -155,7 +168,7 @@ object ExploreRanker {
             .sortedWith(compareByDescending<Pair<Candidate, Double>> { it.second }.thenBy { it.first.id })
 
         val selection = Selection()
-        val main = pickMain(byUtility, selection, batchSize - discoverySlots, batchSize)
+        val main = pickMain(byUtility, selection, batchSize - discoverySlots, batchSize, random)
         val discoveries = pickDiscoveries(candidates, model, selection, discoverySlots)
         // 跨界名额没用完（候选池太小 / 没有够格的）→ 用主力候选补满，不留空位。
         val filler = ArrayList<Ranked>()
@@ -173,13 +186,20 @@ object ExploreRanker {
         selection: Selection,
         slots: Int,
         batchSize: Int,
+        random: kotlin.random.Random? = null,
     ): List<Ranked> {
-        val shortlist = byUtility.take(maxOf(batchSize * SHORTLIST_FACTOR, MIN_SHORTLIST))
+        val factor = if (random != null) RANDOM_SHORTLIST_FACTOR else SHORTLIST_FACTOR
+        val shortlist = byUtility.take(maxOf(batchSize * factor, MIN_SHORTLIST))
+        // 每个候选一份固定的随机扰动（同一批里不变），再和多样性惩罚一起比较。
+        val noise = shortlist.associate { (c, _) ->
+            c.id to (random?.let { gumbel(it) * EXPLORATION_TEMPERATURE } ?: 0.0)
+        }
         val main = ArrayList<Ranked>(slots)
         while (main.size < slots) {
             val next = shortlist.filter { selection.isFree(it.first) }.maxWithOrNull(
-                compareBy<Pair<Candidate, Double>> { (c, u) -> u - DIVERSITY_WEIGHT * selection.maxSimilarity(c) }
-                    .thenByDescending { it.first.id },
+                compareBy<Pair<Candidate, Double>> { (c, u) ->
+                    u - DIVERSITY_WEIGHT * selection.maxSimilarity(c) + noise.getValue(c.id)
+                }.thenByDescending { it.first.id },
             ) ?: break
             main += selection.add(next.first, next.second, discovery = false)
         }
@@ -249,4 +269,12 @@ object ExploreRanker {
     private const val MIN_DISCOVERY_GAP = 2
     private const val SHORTLIST_FACTOR = 4
     private const val MIN_SHORTLIST = 24
+}
+
+private const val GUMBEL_EPSILON = 1e-12
+
+/** 标准 Gumbel 分布的一个样本：在效用上加这份噪声再取最大，等价于按 exp(效用 / 温度) 加权抽样。 */
+private fun gumbel(random: kotlin.random.Random): Double {
+    val u = random.nextDouble().coerceIn(GUMBEL_EPSILON, 1.0 - GUMBEL_EPSILON)
+    return -kotlin.math.ln(-kotlin.math.ln(u))
 }

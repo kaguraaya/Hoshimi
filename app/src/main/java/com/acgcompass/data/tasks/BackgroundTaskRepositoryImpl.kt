@@ -125,7 +125,9 @@ class BackgroundTaskRepositoryImpl @Inject constructor(
                 sw.backup &&
                     enqueueNow<AutoBackupWorker>("${AutoBackupWorker.UNIQUE_WORK_NAME}_manual", network = false)
             // 公共缓存在「缓存管理」页也不提供立即补充（受各数据源限流约束），这里同样不提供。
-            BackgroundTaskKind.CACHE_FILL, BackgroundTaskKind.POOL_EXPAND, BackgroundTaskKind.DETAIL_EXTRAS -> false
+            BackgroundTaskKind.CACHE_FILL, BackgroundTaskKind.POOL_EXPAND,
+            BackgroundTaskKind.DETAIL_EXTRAS, BackgroundTaskKind.DETAIL_RATINGS,
+            -> false
         }
     }
 
@@ -223,7 +225,8 @@ internal fun buildBackgroundTaskStatuses(
             disabled = !inputs.switches.backup,
             retryable = inputs.switches.backup,
         )
-        BackgroundTaskKind.POOL_EXPAND, BackgroundTaskKind.DETAIL_EXTRAS -> base.copy(retryable = false)
+        BackgroundTaskKind.POOL_EXPAND, BackgroundTaskKind.DETAIL_EXTRAS, BackgroundTaskKind.DETAIL_RATINGS,
+        -> base.copy(retryable = false)
         BackgroundTaskKind.FEATURE_ENRICHMENT -> base
     }
 }

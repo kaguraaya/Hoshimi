@@ -26,12 +26,18 @@ class TenraiRemoteDataSource @Inject constructor(
 ) {
     private val auth = SourceAuths.tenrai
 
+    /**
+     * @param safeForWork 为 true 时带 `sfw=true`。Tenrai 的这个过滤比较严，会把 MAL 分级为 R+（轻度裸露）的普通作品
+     *   也过滤掉；给本地已有作品找对应条目、补评分时要传 false，否则这类作品永远匹配不上。
+     */
     suspend fun searchAnime(
         keyword: String,
         limit: Int = 10,
         priority: RequestPriority = RequestPriority.FOREGROUND,
+        safeForWork: Boolean = true,
     ): AppResult<List<WorkMatch>> = runCatchingApp {
-        api.searchAnime(keyword, limit, null, true, auth.withPriority(priority)).bodyOrThrow().data.map { dto ->
+        val sfw = if (safeForWork) true else null
+        api.searchAnime(keyword, limit, null, sfw, auth.withPriority(priority)).bodyOrThrow().data.map { dto ->
             dto.toWorkMatch(source = SourceId.TENRAI)
         }
     }

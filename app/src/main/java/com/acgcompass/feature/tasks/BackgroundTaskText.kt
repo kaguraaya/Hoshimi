@@ -17,6 +17,7 @@ internal fun BackgroundTaskKind.label(): String = when (this) {
     BackgroundTaskKind.POOL_EXPAND -> "扩充作品库"
     BackgroundTaskKind.AUTO_BACKUP -> "自动备份"
     BackgroundTaskKind.DETAIL_EXTRAS -> "详情页评论与角色"
+    BackgroundTaskKind.DETAIL_RATINGS -> "详情页各平台评分"
 }
 
 /** 任务做什么的一句话。 */
@@ -29,6 +30,8 @@ internal fun BackgroundTaskKind.description(): String = when (this) {
     BackgroundTaskKind.POOL_EXPAND -> "在「为你排行」里点「补充作品库」时运行"
     BackgroundTaskKind.AUTO_BACKUP -> "每周一次，写完读回检查"
     BackgroundTaskKind.DETAIL_EXTRAS -> "打开详情页时拉评论摘要和角色 · Staff，这里记最近一次的结果"
+    BackgroundTaskKind.DETAIL_RATINGS ->
+        "打开详情页时刷新各平台评分，这里记最近一次哪个平台没拿到；某个平台额度快用完且本地已有它的评分时，先用本地的"
 }
 
 /** 状态标签的种类，决定颜色。 */

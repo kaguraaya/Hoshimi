@@ -142,6 +142,21 @@ class RateLimiter(
         return earliest
     }
 
+    /**
+     * 现在还剩多少额度（0–1）：各条规则里窗口剩余名额占比的最小值；处于全局暂停时为 0。
+     * 详情页据此判断「这个源快没额度了」，有缓存时先不刷新。
+     */
+    @Synchronized
+    fun headroom(): Double {
+        val now = clock()
+        if (pausedUntilMillis > now) return 0.0
+        prune(now)
+        return rules.minOfOrNull { rule ->
+            val inWindow = grants.count { it > now - rule.windowMillis }
+            ((rule.maxRequests - inWindow).toDouble() / rule.maxRequests).coerceIn(0.0, 1.0)
+        } ?: 1.0
+    }
+
     @Synchronized
     fun pauseUntil(timestampMillis: Long) {
         pausedUntilMillis = maxOf(pausedUntilMillis, timestampMillis)
