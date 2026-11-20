@@ -1,8 +1,10 @@
 package com.acgcompass.data.remote.ai
 
 import com.acgcompass.core.common.AppError
+import com.acgcompass.core.common.AppErrorException
 import com.acgcompass.core.common.asException
 import com.acgcompass.core.common.runCatchingCancellable
+import com.acgcompass.core.common.withCause
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -55,16 +57,48 @@ class OpenAiCompatibleProvider(
             ?: throw AppError.Unauthorized(cause = "未配置 AI 模型名").asException()
 
         val url = baseUrl.trimEnd('/') + CHAT_COMPLETIONS_PATH
-        val bodyJson = buildRequestBody(req, model, config.thinkingEnabled)
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .addHeader("Content-Type", APPLICATION_JSON)
-            .post(json.encodeToString(bodyJson).toRequestBody(APPLICATION_JSON.toMediaType()))
-            .build()
+        var bodyJson = buildRequestBody(req, model, config.thinkingEnabled)
+        val dropped = mutableListOf<String>()
+        while (true) {
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $apiKey")
+                .addHeader("Content-Type", APPLICATION_JSON)
+                .post(json.encodeToString(bodyJson).toRequestBody(APPLICATION_JSON.toMediaType()))
+                .build()
+            val rawBody = try {
+                httpCaller.execute(request)
+            } catch (e: AppErrorException) {
+                val fix = compatibilityFix(e.error.cause, bodyJson, dropped)
+                if (fix == null || dropped.size >= MAX_COMPAT_RETRIES) throw e.withRejectedField(bodyJson, dropped)
+                dropped += fix.field
+                bodyJson = fix.apply(bodyJson)
+                continue
+            }
+            return parseResponse(rawBody)
+        }
+    }
 
-        val rawBody = httpCaller.execute(request)
-        return parseResponse(rawBody)
+    /**
+     * 各家兼容端点支持的参数不完全一样：有的不接受 `response_format`，有的新模型只认 `max_completion_tokens`、
+     * 不允许改 `temperature`。服务端用 HTTP 400 点名拒绝某个参数时，去掉（或换成等价写法）再试一次。
+     */
+    private fun compatibilityFix(detail: String, body: JsonObject, dropped: List<String>): CompatFix? {
+        if (!detail.startsWith(HTTP_BAD_REQUEST_PREFIX)) return null
+        return COMPAT_FIXES.firstOrNull { fix ->
+            fix.field !in dropped && fix.field in body && fix.pattern.containsMatchIn(detail)
+        }
+    }
+
+    /** 最终失败时在说明里点名被拒绝的参数，以及已经自动去掉过哪些。 */
+    private fun AppErrorException.withRejectedField(body: JsonObject, dropped: List<String>): AppErrorException {
+        val detail = error.cause
+        val rejected = COMPAT_FIXES.firstOrNull { it.field in body && it.pattern.containsMatchIn(detail) }?.field
+        val notes = buildList {
+            if (detail.startsWith(HTTP_BAD_REQUEST_PREFIX) && rejected != null) add("该服务不支持参数 $rejected")
+            if (dropped.isNotEmpty()) add("已自动去掉 ${dropped.joinToString("、")} 重试")
+        }
+        return if (notes.isEmpty()) this else error.withCause("$detail（${notes.joinToString("；")}）").asException()
     }
 
     internal fun buildRequestBody(req: AiRequest, model: String, thinkingEnabled: Boolean): JsonObject {
@@ -151,9 +185,27 @@ class OpenAiCompatibleProvider(
         else -> FinishReason.UNKNOWN
     }
 
+    private class CompatFix(val field: String, val pattern: Regex, val apply: (JsonObject) -> JsonObject)
+
     private companion object {
         const val CHAT_COMPLETIONS_PATH = "/chat/completions"
         const val APPLICATION_JSON = "application/json"
+        const val HTTP_BAD_REQUEST_PREFIX = "HTTP 400"
+
+        /** 一次请求最多为兼容性改写几次参数。 */
+        const val MAX_COMPAT_RETRIES = 2
+
+        val COMPAT_FIXES = listOf(
+            CompatFix("response_format", Regex("response_format|json_schema|json_object", RegexOption.IGNORE_CASE)) {
+                JsonObject(it - "response_format")
+            },
+            CompatFix("max_tokens", Regex("max_tokens", RegexOption.IGNORE_CASE)) { body ->
+                val limit = body["max_tokens"]
+                JsonObject((body - "max_tokens") + listOfNotNull(limit?.let { "max_completion_tokens" to it }))
+            },
+            CompatFix("temperature", Regex("temperature", RegexOption.IGNORE_CASE)) { JsonObject(it - "temperature") },
+            CompatFix("thinking", Regex("thinking", RegexOption.IGNORE_CASE)) { JsonObject(it - "thinking") },
+        )
     }
 }
 
