@@ -1,6 +1,7 @@
 package com.acgcompass.data.tastecode
 
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.data.local.dao.RatingDao
 import com.acgcompass.data.local.dao.UserCollectionDao
@@ -29,7 +30,7 @@ class TasteCodeRepositoryImpl @Inject constructor(
 
     override suspend fun draft(): TasteCodeDraft? = withContext(dispatchers.io) {
         val profile = analysis.advancedProfile.value
-            ?: runCatching { analysis.ensureCurrentProfile() }.let { analysis.advancedProfile.value }
+            ?: runCatchingCancellable { analysis.ensureCurrentProfile() }.let { analysis.advancedProfile.value }
             ?: return@withContext null
         if (!profile.isUsable) return@withContext null
         val works = userCollectionDao.getAll()

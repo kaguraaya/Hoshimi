@@ -2,6 +2,7 @@ package com.acgcompass.data.remote.ai
 
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.asException
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.common.toAppError
 import com.acgcompass.core.common.withCause
 import com.acgcompass.core.network.HttpErrorMapper
@@ -39,7 +40,7 @@ class AiHttpCaller(
      */
     suspend fun execute(request: Request): String = suspendCancellableCoroutine { cont ->
         val call = client.newCall(request)
-        cont.invokeOnCancellation { runCatching { call.cancel() } }
+        cont.invokeOnCancellation { runCatchingCancellable { call.cancel() } }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 cont.resumeWithException(e.toAppError().asException())
@@ -47,7 +48,7 @@ class AiHttpCaller(
 
             override fun onResponse(call: Call, response: Response) {
                 response.use { resp ->
-                    val body = runCatching { resp.body?.string() }.getOrNull().orEmpty()
+                    val body = runCatchingCancellable { resp.body?.string() }.getOrNull().orEmpty()
                     when {
                         !resp.isSuccessful ->
                             cont.resumeWithException(

@@ -1,5 +1,6 @@
 package com.acgcompass.data.remote.ai
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import kotlinx.coroutines.flow.first
 
@@ -47,12 +48,12 @@ class PersistedAiProviderSelector(
 
     override suspend fun selected(): ProviderId {
         val persisted = ProviderId.fromStorage(
-            runCatching { settingsDataStore.aiProviderId.first() }.getOrNull()?.takeIf { it.isNotBlank() },
+            runCatchingCancellable { settingsDataStore.aiProviderId.first() }.getOrNull()?.takeIf { it.isNotBlank() },
         )
         if (persisted != null) return persisted
 
         // 未保存 provider 类型时，按已配置 baseUrl 主机名推断。
-        val baseUrl = runCatching { credentialSource.load().baseUrl }.getOrNull()
+        val baseUrl = runCatchingCancellable { credentialSource.load().baseUrl }.getOrNull()
         return inferFromBaseUrl(baseUrl)
     }
 

@@ -1,6 +1,7 @@
 package com.acgcompass.data.report
 
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.dao.RatingDao
 import com.acgcompass.data.local.dao.SnapshotDao
 import com.acgcompass.data.local.dao.UserCollectionDao
@@ -76,7 +77,7 @@ class WatchReportRepositoryImpl @Inject constructor(
         WatchReportBuilder.build(period, works, dropped)
     }
 
-    private fun parseTime(value: String): Long? = runCatching {
+    private fun parseTime(value: String): Long? = runCatchingCancellable {
         OffsetDateTime.parse(value).toInstant().toEpochMilli()
     }.getOrNull()
 

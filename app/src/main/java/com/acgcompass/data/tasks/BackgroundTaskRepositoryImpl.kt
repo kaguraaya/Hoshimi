@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.backup.AutoBackupWorker
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.RatingBackfillDao
@@ -83,9 +84,9 @@ class BackgroundTaskRepositoryImpl @Inject constructor(
         }.map { inputs ->
             buildBackgroundTaskStatuses(
                 inputs,
-                outboxPending = runCatching { outbox.pendingCount() }.getOrDefault(0),
-                backfillFailing = runCatching { backfillDao.countFailing() }.getOrDefault(0),
-                backfillRetryAt = runCatching { backfillDao.earliestRetryAt() }.getOrNull(),
+                outboxPending = runCatchingCancellable { outbox.pendingCount() }.getOrDefault(0),
+                backfillFailing = runCatchingCancellable { backfillDao.countFailing() }.getOrDefault(0),
+                backfillRetryAt = runCatchingCancellable { backfillDao.earliestRetryAt() }.getOrNull(),
             )
         }
     }

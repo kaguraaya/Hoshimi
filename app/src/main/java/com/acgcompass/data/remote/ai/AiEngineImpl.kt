@@ -3,6 +3,7 @@ package com.acgcompass.data.remote.ai
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.remote.ai.prompt.AiTaskSpec
 import com.acgcompass.data.remote.ai.prompt.AiTaskSpecs
 import com.acgcompass.data.remote.ai.prompt.SpoilerGuard
@@ -197,7 +198,7 @@ class AiEngineImpl @Inject constructor(
         schema: JsonObject?,
     ): AiRunResult.Success<T>? {
         val jsonText = extractJsonText(rawContent)
-        val element = runCatching { json.parseToJsonElement(jsonText) }.getOrNull() ?: return null
+        val element = runCatchingCancellable { json.parseToJsonElement(jsonText) }.getOrNull() ?: return null
         val obj = coerceTopLevelToObject(element, schema, task.requiredFields) ?: return null
         if (!hasAllRequired(obj, task.requiredFields)) return null
 
@@ -206,7 +207,7 @@ class AiEngineImpl @Inject constructor(
         // 放宽 AI 结构化校验：依 schema 把数值/数组/字符串等类型偏差就近矫正，避免可用响应因小偏差被判失败。
         val normalized = if (schema != null) AiJsonCoercion.coerce(scrubbed, schema) else scrubbed
         val normalizedText = json.encodeToString(JsonElement.serializer(), normalized)
-        val payload = runCatching { json.decodeFromString(task.serializer, normalizedText) }
+        val payload = runCatchingCancellable { json.decodeFromString(task.serializer, normalizedText) }
             .getOrNull() ?: return null
 
         return AiRunResult.Success(

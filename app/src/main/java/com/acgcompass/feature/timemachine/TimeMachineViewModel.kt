@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -142,7 +143,7 @@ constructor(
 
     /** 解析 ISO-8601 时间串为毫秒；失败返回 null。 */
     private fun parseIsoMillis(iso: String): Long? =
-        runCatching { java.time.Instant.parse(iso).toEpochMilli() }.getOrNull()
+        runCatchingCancellable { java.time.Instant.parse(iso).toEpochMilli() }.getOrNull()
 
     /** 将用户收藏和作品信息映射为可浏览的基线条目。 */
     private fun List<PersonalRecord>.toBaselineItems(works: List<Work>): List<BaselineItem> {

@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -26,7 +27,7 @@ class BangumiSyncWorker @AssistedInject constructor(
     private val syncManager: BangumiSyncManager,
 ) : CoroutineWorker(appContext, params) {
 
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = runCatchingCancellable {
         // 未配置时不重试（用户尚未登录 Bangumi），直接成功结束。
         if (!syncManager.isConfigured()) return Result.success()
         when (val result = syncManager.syncCollections()) {

@@ -4,6 +4,7 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.asException
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.HttpErrorMapper
 import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.core.network.interceptor.SourceAuth
@@ -45,7 +46,7 @@ class MalRemoteDataSource @Inject constructor(
      * 是否已由用户显式配置 Client ID。未配置时本源不参与降级、不发请求。
      * 任何读取异常都安全降级为「未启用」（不崩溃）。
      */
-    suspend fun isEnabled(): Boolean = runCatching {
+    suspend fun isEnabled(): Boolean = runCatchingCancellable {
         credentialStore.get(CredentialSourceId.MAL)?.clientId?.isNotBlank() == true
     }.getOrDefault(false)
 

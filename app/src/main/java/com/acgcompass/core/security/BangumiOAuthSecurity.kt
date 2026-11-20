@@ -1,5 +1,6 @@
 package com.acgcompass.core.security
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.NetworkConstants
 import java.net.URI
 import java.security.MessageDigest
@@ -52,7 +53,7 @@ object BangumiOAuthSecurity {
         )
     }
 
-    private fun parse(url: String): URI? = runCatching { URI(url) }.getOrNull()
+    private fun parse(url: String): URI? = runCatchingCancellable { URI(url) }.getOrNull()
 
     private fun isSafeHttpsOrigin(uri: URI): Boolean =
         uri.scheme.equals("https", ignoreCase = true) && uri.host != null && uri.userInfo == null

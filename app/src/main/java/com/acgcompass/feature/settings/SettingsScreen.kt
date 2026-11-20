@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.designsystem.IconWell
 import com.acgcompass.core.designsystem.NavRow
 import com.acgcompass.core.designsystem.PrismCard
@@ -244,7 +245,7 @@ internal fun rememberSettingsActions(
             scope.launch {
                 val json = viewModel.buildBackupJson()
                 if (json != null) {
-                    val written = runCatching {
+                    val written = runCatchingCancellable {
                         context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } != null
                     }.getOrDefault(false)
                     if (written) viewModel.notifyExported("备份") else viewModel.notifyExportFailed("备份")
@@ -258,7 +259,7 @@ internal fun rememberSettingsActions(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val json = runCatching {
+                val json = runCatchingCancellable {
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
                 }.getOrNull()
                 if (json != null) viewModel.importBackupJson(json)
@@ -274,7 +275,7 @@ internal fun rememberSettingsActions(
         pendingCsvContent = null
         if (uri != null && csv != null) {
             scope.launch {
-                val written = runCatching {
+                val written = runCatchingCancellable {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(csv.toByteArray()) } != null
                 }.getOrDefault(false)
                 if (written) {
@@ -301,7 +302,7 @@ internal fun rememberSettingsActions(
     val effectiveOpenDoc: (String) -> Unit = remember(onOpenDoc, uriHandler, context) {
         { url ->
             if (url.isNotBlank()) {
-                val opened = runCatching {
+                val opened = runCatchingCancellable {
                     val intent = android.content.Intent(
                         android.content.Intent.ACTION_VIEW,
                         android.net.Uri.parse(url),
@@ -309,9 +310,9 @@ internal fun rememberSettingsActions(
                     context.startActivity(intent)
                 }.isSuccess
                 if (!opened) {
-                    val fallback = runCatching { uriHandler.openUri(url) }.isSuccess
+                    val fallback = runCatchingCancellable { uriHandler.openUri(url) }.isSuccess
                     if (!fallback) {
-                        runCatching {
+                        runCatchingCancellable {
                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                                 as? android.content.ClipboardManager
                             clipboard?.setPrimaryClip(

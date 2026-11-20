@@ -1,5 +1,6 @@
 package com.acgcompass.data.remote.ai
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -51,9 +52,9 @@ class CredentialStoreAiCredentialSource @Inject constructor(
 ) : AiCredentialSource {
 
     override suspend fun load(): AiEndpointConfig {
-        val secret = runCatching { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
-        val providerId = runCatching { settingsDataStore.aiProviderId.first() }.getOrDefault("")
-        val thinkingEnabled = runCatching {
+        val secret = runCatchingCancellable { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
+        val providerId = runCatchingCancellable { settingsDataStore.aiProviderId.first() }.getOrDefault("")
+        val thinkingEnabled = runCatchingCancellable {
             providerId in settingsDataStore.aiThinkingEnabledProviders.first()
         }.getOrDefault(false)
         return AiEndpointConfig(

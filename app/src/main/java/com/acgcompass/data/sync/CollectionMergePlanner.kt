@@ -1,5 +1,6 @@
 package com.acgcompass.data.sync
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.data.repository.CollectionRemoval
 import java.time.Instant
@@ -113,7 +114,7 @@ internal fun UserCollectionEntity.isUnsynced(): Boolean = updatedAt > syncedAt
 /** 解析 Bangumi 的 ISO 8601 时间（带时区偏移或 Z），失败返回 null。 */
 internal fun parseBangumiTime(raw: String?): Long? {
     val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return runCatching { OffsetDateTime.parse(value).toInstant().toEpochMilli() }
+    return runCatchingCancellable { OffsetDateTime.parse(value).toInstant().toEpochMilli() }
         .recoverCatching { Instant.parse(value).toEpochMilli() }
         .getOrNull()
 }

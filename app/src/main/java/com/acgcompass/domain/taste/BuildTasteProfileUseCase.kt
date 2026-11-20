@@ -1,5 +1,6 @@
 package com.acgcompass.domain.taste
 
+import com.acgcompass.core.common.runCatchingCancellable
 import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -308,7 +309,15 @@ class BuildTasteProfileUseCase @Inject constructor() {
         idfStrength: Double = 0.0,
     ): TasteCalibration {
         val poolZs = if (pool.size >= CALIB_MIN_POOL) {
-            pool.mapNotNull { f -> runCatching { TasteRawScorer.rawScore(f, core, tagOverrides) }.getOrNull() }
+            pool.mapNotNull { f ->
+                runCatchingCancellable {
+                    TasteRawScorer.rawScore(
+                        f,
+                        core,
+                        tagOverrides,
+                    )
+                }.getOrNull()
+            }
         } else {
             emptyList()
         }

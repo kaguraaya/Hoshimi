@@ -3,6 +3,7 @@ package com.acgcompass.data.repository
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.dao.BacklogDao
 import com.acgcompass.data.local.dao.WorkDao
 import com.acgcompass.data.local.entity.BacklogItemEntity
@@ -130,7 +131,7 @@ class BacklogRepositoryImpl @Inject constructor(
         }
 
         // 新加入的作品排队同步成 Bangumi「想看」（后台推送，失败会重试）。
-        runCatching { wishSync.enqueue(added) }
+        runCatchingCancellable { wishSync.enqueue(added) }
         AddResult(addedWorkIds = added, duplicateWorkIds = duplicates)
     }
 

@@ -4,6 +4,7 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.asException
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.domain.model.RatingEntry
 import com.acgcompass.domain.model.Work
@@ -75,7 +76,7 @@ class AniListRemoteDataSource @Inject constructor(
         fromEpochSeconds: Long,
         toEpochSeconds: Long?,
         priority: RequestPriority = RequestPriority.BACKGROUND,
-    ): Result<List<BroadcastScheduleEntry>> = runCatching {
+    ): Result<List<BroadcastScheduleEntry>> = runCatchingCancellable {
         val entries = mutableListOf<BroadcastScheduleEntry>()
         var page = 1
         do {

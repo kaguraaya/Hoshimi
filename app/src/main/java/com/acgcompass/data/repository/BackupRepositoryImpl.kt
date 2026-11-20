@@ -5,6 +5,7 @@ import com.acgcompass.BuildConfig
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.backup.BackupEnvelope
 import com.acgcompass.data.backup.BackupMerger
 import com.acgcompass.data.backup.BackupSerializer
@@ -327,7 +328,7 @@ internal fun BackupEnvelope.toRatedWorkCsvRows(): List<RatedWorkCsvRow> {
     }
 }
 
-private fun parseFeatureTags(json: String): List<Pair<String, Int>> = runCatching {
+private fun parseFeatureTags(json: String): List<Pair<String, Int>> = runCatchingCancellable {
     Json.parseToJsonElement(json).jsonArray.mapNotNull { element ->
         val value = element.jsonObject
         val name = value["name"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank) ?: return@mapNotNull null

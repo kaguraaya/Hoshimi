@@ -11,6 +11,7 @@ import androidx.work.WorkerParameters
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.domain.repository.BackupRepository
 import com.acgcompass.domain.repository.ImportReport
@@ -79,7 +80,7 @@ class AutoBackupManager @Inject constructor(
 
     /** 从一份自动备份恢复（与导入备份相同，按现有规则合并）。 */
     suspend fun restore(backup: AutoBackupFile): AppResult<ImportReport> = withContext(dispatchers.io) {
-        val json = runCatching { backup.file.readText() }.getOrNull()
+        val json = runCatchingCancellable { backup.file.readText() }.getOrNull()
             ?: return@withContext AppResult.Failure(AppError.FieldMissing(cause = "备份文件读不出来"))
         backupRepository.importBackup(json)
     }
@@ -92,7 +93,7 @@ class AutoBackupManager @Inject constructor(
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date(now))
         val target = File(dir, "$PREFIX$stamp.json")
         val temp = File(dir, "$PREFIX$stamp.json.tmp")
-        return runCatching {
+        return runCatchingCancellable {
             temp.writeText(json)
             // 读回来能解析才算成功：防止写了一半或格式错误的文件冒充备份。
             BackupSerializer.deserialize(temp.readText())

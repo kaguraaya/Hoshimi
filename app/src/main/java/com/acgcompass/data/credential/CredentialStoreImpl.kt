@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.acgcompass.core.common.runCatchingCancellable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -71,7 +72,7 @@ class CredentialStoreImpl @Inject constructor(
     override suspend fun get(source: SourceId): SecretBundle? = withContext(Dispatchers.IO) {
         mutex.withLock {
             val payload = prefs.getString(secretKey(source), null) ?: return@withLock null
-            runCatching { json.decodeFromString(SecretBundle.serializer(), payload) }
+            runCatchingCancellable { json.decodeFromString(SecretBundle.serializer(), payload) }
                 .getOrNull()
         }
     }
@@ -104,7 +105,7 @@ class CredentialStoreImpl @Inject constructor(
         mutex.withLock {
             val entries = SourceId.entries.mapNotNull { source ->
                 val payload = prefs.getString(secretKey(source), null) ?: return@mapNotNull null
-                val bundle = runCatching {
+                val bundle = runCatchingCancellable {
                     json.decodeFromString(SecretBundle.serializer(), payload)
                 }.getOrNull() ?: return@mapNotNull null
                 source to bundle.toRedacted()
@@ -132,7 +133,7 @@ class CredentialStoreImpl @Inject constructor(
     }
 
     /** 创建（或在损坏时重建）AES256-GCM 加密的 SharedPreferences 实例。 */
-    private fun createEncryptedPrefs(): SharedPreferences = runCatching { buildEncryptedPrefs() }
+    private fun createEncryptedPrefs(): SharedPreferences = runCatchingCancellable { buildEncryptedPrefs() }
         .getOrElse {
             // 加密层损坏：删除文件后重建，凭据视为失效（用户需重新配置）。
             context.deleteSharedPreferences(PREFS_FILE_NAME)

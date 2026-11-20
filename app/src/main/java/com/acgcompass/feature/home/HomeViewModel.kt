@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.logging.RedactingLogger
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.common.throttleLatest
 import com.acgcompass.core.network.NetworkJson
 import com.acgcompass.core.ui.UiState
@@ -105,7 +106,7 @@ class HomeViewModel @Inject constructor(
 
     init {
         // 首页公共模块进入时按需加载一次；失败时保留本地缓存并显示中性提示。
-        viewModelScope.launch { runCatching { workRepository.loadPublicDiscovery(background = true) } }
+        viewModelScope.launch { runCatchingCancellable { workRepository.loadPublicDiscovery(background = true) } }
         viewModelScope.launch {
             // 先显示上次存下的列表，再在后台取一次（一小时内走 HTTP 缓存）。
             loadSeasonalLists()
@@ -119,7 +120,9 @@ class HomeViewModel @Inject constructor(
                 credentialStore.observeStatus().map { it[CredentialSourceId.AI_PROVIDER]?.configured == true },
             ) { enabled, configured -> enabled && configured }
                 .distinctUntilChanged()
-                .collectLatest { on -> aiDraw.value = if (on) runCatching { loadAiDraw() }.getOrNull() else null }
+                .collectLatest { on ->
+                    aiDraw.value = if (on) runCatchingCancellable { loadAiDraw() }.getOrNull() else null
+                }
         }
     }
 
@@ -156,7 +159,7 @@ class HomeViewModel @Inject constructor(
         return draw
     }
 
-    private fun parseAiDraw(payloadJson: String): DailyDraw? = runCatching {
+    private fun parseAiDraw(payloadJson: String): DailyDraw? = runCatchingCancellable {
         NetworkJson.instance.decodeFromString(DailyDrawOutput.serializer(), payloadJson)
     }.getOrNull()?.toDailyDraw()
 
@@ -343,7 +346,7 @@ class HomeViewModel @Inject constructor(
             val job = refreshGate.launch(viewModelScope) {
                 if (uiState.value is UiState.Error) onRetry()
                 val seasonal = async { refreshSeasonal(fresh = true, alreadyRepicked = local != null) }
-                val result = runCatching { scheduleRepository.refreshUpcoming(force = true) }
+                val result = runCatchingCancellable { scheduleRepository.refreshUpcoming(force = true) }
                     .getOrElse { Result.failure(it) }
                 scheduleRefreshState.value = HomeScheduleRefreshState(
                     refreshing = false,
@@ -366,7 +369,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun loadSeasonalLists() {
-        seasonalLists.value = runCatching {
+        seasonalLists.value = runCatchingCancellable {
             HomeSeasonal(
                 new = workRepository.getCachedRanking(HomeSeasonalLists.NEW),
                 hot = workRepository.getCachedRanking(HomeSeasonalLists.HOT),
@@ -383,7 +386,7 @@ class HomeViewModel @Inject constructor(
         val stale = local?.fetchedAt?.let { System.currentTimeMillis() - it > SEASONAL_STALE_MS } ?: true
         if (fresh && alreadyRepicked && !stale) return true
         var fetched = false
-        val result = runCatching {
+        val result = runCatchingCancellable {
             workRepository.refreshHomeSeasonal(fresh) { lists ->
                 if (lists.isEmpty) return@refreshHomeSeasonal
                 seasonalLists.value = lists
@@ -422,7 +425,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private suspend fun updateSeasonalMatches(ids: List<String>) {
-        val fresh = runCatching {
+        val fresh = runCatchingCancellable {
             tasteEngine.scoreBatch(ids, networkBudget = 0).filterValues { !it.isRated }.mapValues { it.value.score }
         }.getOrDefault(emptyMap())
         if (fresh.isEmpty()) return
@@ -445,7 +448,7 @@ class HomeViewModel @Inject constructor(
         lastScheduleRefreshAttemptAt = now
         scheduleRefreshState.value = HomeScheduleRefreshState(refreshing = true)
         viewModelScope.launch {
-            val result = runCatching { scheduleRepository.refreshUpcoming() }
+            val result = runCatchingCancellable { scheduleRepository.refreshUpcoming() }
                 .getOrElse { Result.failure(it) }
             scheduleRefreshState.value = HomeScheduleRefreshState(
                 refreshing = false,

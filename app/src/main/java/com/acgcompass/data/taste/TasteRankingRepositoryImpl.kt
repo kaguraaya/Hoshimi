@@ -1,6 +1,7 @@
 package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.dao.BacklogDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkDao
@@ -98,7 +99,7 @@ class TasteRankingRepositoryImpl @Inject constructor(
     ): TasteRankItem {
         val f = ranked.feature
         val work = workDao.getById(f.subjectId)
-        val airDate = (work?.airDate ?: f.airDate)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val airDate = (work?.airDate ?: f.airDate)?.let { runCatchingCancellable { LocalDate.parse(it) }.getOrNull() }
         val reason = ranked.match.positiveReasons.maxByOrNull { it.contribution }?.label
         return TasteRankItem(
             subjectId = f.subjectId,

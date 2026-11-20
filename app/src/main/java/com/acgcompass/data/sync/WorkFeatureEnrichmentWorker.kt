@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.dao.BacklogDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkFeatureDao
@@ -34,7 +35,7 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
      * 第 3 步的作品永远不少，所以必须放在第 2 步之后，否则没有资料的作品一直轮不到。
      * 这一批有进展且还有剩余时再排下一批。
      */
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = runCatchingCancellable {
         taskRecorder.started(BackgroundTaskKind.FEATURE_ENRICHMENT)
         val batch = enrichBatch()
         if (batch.stalled) {

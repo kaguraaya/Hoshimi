@@ -2,6 +2,7 @@ package com.acgcompass.feature.report
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.report.ReportPeriod
 import com.acgcompass.domain.report.WatchReport
 import com.acgcompass.domain.report.WatchReportRepository
@@ -59,7 +60,7 @@ class WatchReportViewModel @Inject constructor(
         loadJob?.cancel()
         _state.update { it.copy(loading = true) }
         loadJob = viewModelScope.launch {
-            val report = runCatching { repository.load(period) }.getOrNull()
+            val report = runCatchingCancellable { repository.load(period) }.getOrNull()
             _state.update { it.copy(loading = false, report = report) }
         }
     }

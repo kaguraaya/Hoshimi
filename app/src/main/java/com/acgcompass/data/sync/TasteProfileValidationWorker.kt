@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.taste.TasteAnalysisController
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -15,7 +16,7 @@ class TasteProfileValidationWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val controller: TasteAnalysisController,
 ) : CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = runCatchingCancellable {
         controller.ensureCurrentProfile()
         Result.success()
     }.getOrElse { Result.retry() }

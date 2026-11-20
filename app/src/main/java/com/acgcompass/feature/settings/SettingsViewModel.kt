@@ -3,6 +3,7 @@ package com.acgcompass.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.credential.CredentialStatus
 import com.acgcompass.data.credential.CredentialStore
@@ -177,9 +178,9 @@ class SettingsViewModel @Inject constructor(
         // 恢复已保存的 AI provider 类型与非敏感配置（Base URL / 模型名），
         // 使设置页重新进入时仍展示用户上次的选择与端点（API Key 仍以掩码占位，绝不回读明文）。
         viewModelScope.launch {
-            val persisted = runCatching { settingsDataStore.aiProviderId.first() }.getOrNull()
+            val persisted = runCatchingCancellable { settingsDataStore.aiProviderId.first() }.getOrNull()
             val option = aiProviderOptionFromProviderId(persisted)
-            val saved = runCatching { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
+            val saved = runCatchingCancellable { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
             localUi.update { state ->
                 val drafts = state.ai.drafts.toMutableMap()
                 saved?.baseUrl?.takeIf { it.isNotBlank() }?.let { drafts[CredentialFieldKey.BASE_URL] = it }
@@ -230,7 +231,7 @@ class SettingsViewModel @Inject constructor(
         if (tokenDraft == null && clientIdDraft == null && clientSecretDraft == null) return
         viewModelScope.launch {
             // 与已存凭据合并，仅覆盖本次填写的字段，避免未编辑的字段被清空。
-            val existing = runCatching { credentialStore.get(source) }.getOrNull()
+            val existing = runCatchingCancellable { credentialStore.get(source) }.getOrNull()
             val merged = SecretBundle(
                 token = tokenDraft ?: existing?.token,
                 clientId = clientIdDraft ?: existing?.clientId,
@@ -367,7 +368,7 @@ class SettingsViewModel @Inject constructor(
         val modelDraft = ai.drafts[CredentialFieldKey.MODEL]?.trim()?.takeIf { it.isNotEmpty() }
         viewModelScope.launch {
             // 与已存凭据合并，仅覆盖本次填写的字段；未编辑的字段沿用旧值。
-            val existing = runCatching { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
+            val existing = runCatchingCancellable { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
             val merged = SecretBundle(
                 apiKey = apiKeyDraft ?: existing?.apiKey,
                 baseUrl = baseUrlDraft ?: existing?.baseUrl,

@@ -3,6 +3,7 @@ package com.acgcompass.data.repository
 import androidx.room.withTransaction
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.AcgCompassDatabase
 import com.acgcompass.data.local.dao.CacheDao
@@ -108,7 +109,12 @@ class VisualNovelRepositoryImpl @Inject constructor(
         val allowAdult = settings.showAdultContent.first()
         val cachedRow = cacheDao.getDetail(id, SourceId.VNDB.name, DETAIL_SECTION)
         val cached = cachedRow?.let { row ->
-            runCatching { json.decodeFromString(VisualNovelDetail.serializer(), row.payloadJson) }.getOrNull()
+            runCatchingCancellable {
+                json.decodeFromString(
+                    VisualNovelDetail.serializer(),
+                    row.payloadJson,
+                )
+            }.getOrNull()
         }
         val cachedBlocked = cached != null && !VisualNovelContentPolicy.canDisplay(cached.adult, allowAdult)
         val cachedFresh = !forceRefresh && cached != null && cachedRow?.expiresAt?.let { it > now } == true
@@ -129,7 +135,7 @@ class VisualNovelRepositoryImpl @Inject constructor(
     override suspend fun cachedDetail(id: String): VisualNovelDetailSnapshot? {
         val row = cacheDao.getDetail(id, SourceId.VNDB.name, DETAIL_SECTION)
         val detail = row?.let {
-            runCatching {
+            runCatchingCancellable {
                 json.decodeFromString(VisualNovelDetail.serializer(), it.payloadJson)
             }.getOrNull()
         }

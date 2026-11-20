@@ -1,6 +1,7 @@
 package com.acgcompass.data.repository
 
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -52,7 +53,7 @@ class DetailInteractionRepositoryImpl @Inject constructor(
     }
 
     override fun schedulePendingPush() {
-        runCatching { outboxScheduler.enqueue() }
+        runCatchingCancellable { outboxScheduler.enqueue() }
     }
 
     override suspend fun trashPersonalRecord(workId: String, batchId: String): Boolean =

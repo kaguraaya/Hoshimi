@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.security.BangumiOAuthSecurity
 import com.acgcompass.domain.auth.BangumiOAuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -110,7 +111,7 @@ class BangumiOAuthViewModel @Inject constructor(
         if (handlingCode) return
         handlingCode = true
 
-        val uri = runCatching { Uri.parse(url) }.getOrNull()
+        val uri = runCatchingCancellable { Uri.parse(url) }.getOrNull()
         val error = uri?.getQueryParameter("error")
         val code = uri?.getQueryParameter("code")
         val returnedState = uri?.getQueryParameter("state")

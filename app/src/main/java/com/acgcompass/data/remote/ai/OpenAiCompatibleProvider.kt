@@ -2,6 +2,7 @@ package com.acgcompass.data.remote.ai
 
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.asException
+import com.acgcompass.core.common.runCatchingCancellable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -118,7 +119,7 @@ class OpenAiCompatibleProvider(
     }
 
     private fun parseResponse(rawBody: String): AiRawResponse {
-        val parsed = runCatching { json.decodeFromString<OpenAiChatResponse>(rawBody) }
+        val parsed = runCatchingCancellable { json.decodeFromString<OpenAiChatResponse>(rawBody) }
             .getOrElse { throw AppError.AiMalformed().asException() }
         val choice = parsed.choices.firstOrNull()
         // content 为空时回落 reasoning_content；推理型模型在较小 token 预算下可能只产出思维链。

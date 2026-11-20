@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.ai.AiEngine
 import com.acgcompass.domain.ai.AiRunOptions
@@ -223,7 +224,7 @@ class DetailViewModel @Inject constructor(
                 val work = inputs.work
                 val profile = inputs.profile
                 if (work == null) return@flatMapLatest flowOf(null to profile)
-                val bangumiId = runCatching { resolveBangumiSubjectId(work) }.getOrNull()
+                val bangumiId = runCatchingCancellable { resolveBangumiSubjectId(work) }.getOrNull()
                 val featureId = bangumiId?.toString() ?: work.id
                 // 没有 Bangumi 条目（或一直取不到它的特征）时，用作品自己的标签与评分临时出分。
                 tasteAnalysis.observeScore(
@@ -284,12 +285,16 @@ class DetailViewModel @Inject constructor(
         }
         loadRatings()
         // 打开详情即记录「最近浏览」，供发现-搜索页空态展示「上次点开的条目」。
-        if (workId.isNotBlank()) viewModelScope.launch { runCatching { detailInteractions.addRecentlyViewed(workId) } }
+        if (workId.isNotBlank()) {
+            viewModelScope.launch {
+                runCatchingCancellable { detailInteractions.addRecentlyViewed(workId) }
+            }
+        }
         // 冷启动时先用已缓存特征重建画像；仍不可用且存在评分作品时，每进程至多联网补齐一次。
         // 后台执行，不阻塞 UI。
         viewModelScope.launch {
             delay(DETAIL_FIRST_PAINT_GRACE_MS)
-            runCatching { tasteAnalysis.ensureReady() }
+            runCatchingCancellable { tasteAnalysis.ensureReady() }
         }
     }
 
@@ -335,9 +340,9 @@ class DetailViewModel @Inject constructor(
 
     /** 缓存里的 VNDB 详情还没关联 Bangumi 时补一次匹配，补到后刷新评分区。 */
     private suspend fun linkVndbToBangumi(detail: com.acgcompass.domain.visualnovel.VisualNovelDetail) {
-        val linked = runCatching { visualNovelRepository.linkBangumiIfMissing(detail) }.getOrNull() ?: return
+        val linked = runCatchingCancellable { visualNovelRepository.linkBangumiIfMissing(detail) }.getOrNull() ?: return
         detailExtras.value = detailExtras.value.copy(vndbDetail = linked)
-        ratings.value = runCatching { workRepository.aggregateRatingsCached(workId) }.getOrNull()
+        ratings.value = runCatchingCancellable { workRepository.aggregateRatingsCached(workId) }.getOrNull()
     }
 
     /**
@@ -346,7 +351,7 @@ class DetailViewModel @Inject constructor(
      */
     private fun ensureWorkLoaded() {
         viewModelScope.launch {
-            runCatching {
+            runCatchingCancellable {
                 if (workId.startsWith("v", ignoreCase = true)) {
                     visualNovelRepository.detail(workId)
                 } else {
@@ -378,8 +383,8 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             refreshGate.run(viewModelScope) {
                 // 各平台评分按来源逐条落库、页面逐条更新；指示器最多转约 3 秒，较慢的跨源匹配继续在后台完成。
-                launch { runCatching { workRepository.aggregateRatings(workId, forceRefresh = true) } }
-                launch { runCatching { refreshPersonalState(forceRefresh = true) } }
+                launch { runCatchingCancellable { workRepository.aggregateRatings(workId, forceRefresh = true) } }
+                launch { runCatchingCancellable { refreshPersonalState(forceRefresh = true) } }
                 if (workId.startsWith("v", ignoreCase = true)) launch { refreshVndbDetail() }
                 loadExtras(forceRefresh = true)
             }
@@ -388,7 +393,7 @@ class DetailViewModel @Inject constructor(
     }
 
     private suspend fun refreshVndbDetail() {
-        val result = runCatching { visualNovelRepository.detail(workId, forceRefresh = true) }.getOrNull()
+        val result = runCatchingCancellable { visualNovelRepository.detail(workId, forceRefresh = true) }.getOrNull()
         if (result is AppResult.Success) {
             detailExtras.value = detailExtras.value.copy(
                 vndbDetail = result.data,
@@ -476,13 +481,13 @@ class DetailViewModel @Inject constructor(
             // 「缓存优先加载」：点入详情时评分聚合走网络刷新，若等待请求会让评分区长时间「暂无数据」。
             // 故先立即读本地已缓存评分（不联网）铺上首帧——有缓存则秒显，随后网络刷新到手再原地更新数值。
             // 因 ratings 是 StateFlow、UI 为响应式重组，更新只改变化的数值，不会重建列表 / 改变滚动位置（无页面重载）。
-            val cached = runCatching { workRepository.aggregateRatingsCached(workId) }.getOrNull()
+            val cached = runCatchingCancellable { workRepository.aggregateRatingsCached(workId) }.getOrNull()
             if (cached != null) ratings.value = cached
 
             // 仓库按来源逐行落库，上方观察器会立即发布每个结果，不等待整条跨源补齐链完成。
-            runCatching { workRepository.aggregateRatings(workId, forceRefresh) }
+            runCatchingCancellable { workRepository.aggregateRatings(workId, forceRefresh) }
         }
-        viewModelScope.launch { runCatching { refreshPersonalState(forceRefresh) } }
+        viewModelScope.launch { runCatchingCancellable { refreshPersonalState(forceRefresh) } }
         viewModelScope.launch {
             delay(if (forceRefresh) DETAIL_BACKGROUND_DELAY_MS / 2 else DETAIL_BACKGROUND_DELAY_MS)
             loadExtras(forceRefresh)
@@ -528,7 +533,7 @@ class DetailViewModel @Inject constructor(
                     cached?.inputFingerprint == fingerprint &&
                     cached.promptVersion == RadarCachePolicy.PROMPT_VERSION
                 ) {
-                    val output = runCatching {
+                    val output = runCatchingCancellable {
                         json.decodeFromString<SpoilerRadarOutput>(
                             cached.payloadJson,
                         )
@@ -550,7 +555,7 @@ class DetailViewModel @Inject constructor(
                 }
             }
             // 社区评分信号（仅读本地缓存，不联网），让 AI 校准口碑判断。
-            val communitySignal = runCatching {
+            val communitySignal = runCatchingCancellable {
                 val agg = workRepository.aggregateRatingsCached(work.id)
                 val scored = agg.perSource.entries.mapNotNull { (src, entry) ->
                     val s = entry?.score ?: return@mapNotNull null
@@ -599,7 +604,7 @@ class DetailViewModel @Inject constructor(
                 is RadarOutcome.NeedsCostConfirmation -> generateSpoilerRadar.local(request)
             }
             radar.value = generated
-            runCatching {
+            runCatchingCancellable {
                 aiRepository.put(
                     AiResult(
                         id = "spoiler-radar:${work.id}",
@@ -706,7 +711,8 @@ class DetailViewModel @Inject constructor(
                             vndbError = null,
                         )
                         maybeTranslateVndbDescription(vndb.data)
-                        ratings.value = runCatching { workRepository.aggregateRatingsCached(work.id) }.getOrNull()
+                        ratings.value =
+                            runCatchingCancellable { workRepository.aggregateRatingsCached(work.id) }.getOrNull()
                     }
                     is AppResult.Failure -> detailExtras.value = detailExtras.value.copy(
                         vndbLoading = false,
@@ -722,7 +728,7 @@ class DetailViewModel @Inject constructor(
                 return@launch
             }
             detailExtras.value = detailExtras.value.copy(bangumiLoad = ExtrasLoad.LOADING)
-            val completed = runCatching { collectBangumiExtras(work, subjectId, forceRefresh) }
+            val completed = runCatchingCancellable { collectBangumiExtras(work, subjectId, forceRefresh) }
             detailExtras.value = detailExtras.value.copy(
                 bangumiLoad = ExtrasLoad.LOADED,
                 creditsFailed = detailExtras.value.creditsFailed || completed.isFailure,
@@ -790,7 +796,7 @@ class DetailViewModel @Inject constructor(
                 if (r is AppResult.Success) works += r.data
             }
             if (works.isNotEmpty()) {
-                runCatching { backlogRepository.addAll(works.distinctBy { it.id }) }
+                runCatchingCancellable { backlogRepository.addAll(works.distinctBy { it.id }) }
             }
         }
     }
@@ -828,7 +834,7 @@ class DetailViewModel @Inject constructor(
                 .orEmpty()
             val community = ratings.value
             // 纳入近期评分作品 + 历史最高/最低分锚点，比仅用标签更具参考价值。
-            val allRated = runCatching { detailInteractions.ratedWorkContexts() }.getOrDefault(emptyList())
+            val allRated = runCatchingCancellable { detailInteractions.ratedWorkContexts() }.getOrDefault(emptyList())
             val recentRated = allRated.sortedByDescending { it.updatedAt }.take(20)
             // 口味锚点——历史最高分（最喜欢）与最低分（最不喜欢），各取前若干。
             val topRated = allRated.sortedByDescending { it.rating }.take(5)
@@ -848,7 +854,7 @@ class DetailViewModel @Inject constructor(
             val lowLines = lowRated.map(lineOf)
             // 本地个人分歧模型给出的证据：大众基线 / 预计评分 / 分歧来源、题材相近的已评分作品、
             // 与大众分歧最大的评分。让 AI 在有数据支撑的先验上做归因，而不是只看一堆标签凭感觉打分。
-            val divergenceEvidence = runCatching {
+            val divergenceEvidence = runCatchingCancellable {
                 buildDivergenceEvidence(
                     work,
                     allRated,
@@ -894,7 +900,7 @@ class DetailViewModel @Inject constructor(
                 if (community != null) add("社区评分")
             }
 
-            val result = runCatching {
+            val result = runCatchingCancellable {
                 aiEngine.run(
                     AiTask.TasteMatch(workId = work.id, content = content, dataSources = dataSources),
                     AiRunOptions(confirmed = true),
@@ -938,7 +944,7 @@ class DetailViewModel @Inject constructor(
         allowComments: Boolean,
     ): String {
         val model = tasteAnalysis.advancedProfile.value?.divergence ?: return ""
-        val bangumiId = runCatching { resolveBangumiSubjectId(work) }.getOrNull()
+        val bangumiId = runCatchingCancellable { resolveBangumiSubjectId(work) }.getOrNull()
         val match = tasteAnalysis.score(bangumiId?.toString() ?: work.id, null, allowNetwork = false)
         val byId = rated.filter { it.subjectId.isNotBlank() }.associateBy { it.subjectId }
         fun line(e: com.acgcompass.domain.taste.RatedExample): String? {

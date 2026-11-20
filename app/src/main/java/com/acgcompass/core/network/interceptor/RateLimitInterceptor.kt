@@ -1,5 +1,6 @@
 package com.acgcompass.core.network.interceptor
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.NetworkSource
 import com.acgcompass.core.network.RateLimitPolicy
 import com.acgcompass.core.network.RateLimiter
@@ -36,7 +37,7 @@ class RateLimiterRegistry private constructor(
         val seconds = value?.toLongOrNull()
         return when {
             seconds != null -> seconds.coerceAtLeast(0L) * MILLIS_PER_SECOND
-            value != null -> runCatching {
+            value != null -> runCatchingCancellable {
                 ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
             }.getOrNull()?.let { epochMillis -> (epochMillis - wallClock()).coerceAtLeast(0L) }
             else -> null

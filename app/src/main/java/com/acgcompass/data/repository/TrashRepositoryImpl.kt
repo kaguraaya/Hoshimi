@@ -2,6 +2,7 @@ package com.acgcompass.data.repository
 
 import androidx.room.withTransaction
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.backup.BackupUserCollection
 import com.acgcompass.data.backup.toBackup
 import com.acgcompass.data.backup.toEntity
@@ -232,10 +233,10 @@ class TrashRepositoryImpl @Inject constructor(
     }
 
     private fun decodeCollection(json: String): BackupUserCollection? =
-        runCatching { JSON.decodeFromString(BackupUserCollection.serializer(), json) }.getOrNull()
+        runCatchingCancellable { JSON.decodeFromString(BackupUserCollection.serializer(), json) }.getOrNull()
 
     private fun decodeBacklog(json: String): TrashBacklogPayload? =
-        runCatching { JSON.decodeFromString(TrashBacklogPayload.serializer(), json) }.getOrNull()
+        runCatchingCancellable { JSON.decodeFromString(TrashBacklogPayload.serializer(), json) }.getOrNull()
 
     /** 在应用里移除的收藏要长期保留「已移除」标记：Bangumi 上的收藏还在，否则同步会把它加回来。 */
     private fun TrashItemEntity.keepsMarker(): Boolean =

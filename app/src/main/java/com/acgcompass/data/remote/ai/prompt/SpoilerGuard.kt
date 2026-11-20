@@ -1,5 +1,6 @@
 package com.acgcompass.data.remote.ai.prompt
 
+import com.acgcompass.core.common.runCatchingCancellable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -95,7 +96,7 @@ object SpoilerGuard {
      * @return 净化后的 JSON 文本；当 [rawJson] 非合法 JSON 时返回 `null`（由调用方触发修复流程）。
      */
     fun scrubJsonString(json: Json, rawJson: String): String? {
-        val element = runCatching { json.parseToJsonElement(rawJson) }.getOrNull() ?: return null
+        val element = runCatchingCancellable { json.parseToJsonElement(rawJson) }.getOrNull() ?: return null
         return json.encodeToString(JsonElement.serializer(), scrubJson(element))
     }
 }

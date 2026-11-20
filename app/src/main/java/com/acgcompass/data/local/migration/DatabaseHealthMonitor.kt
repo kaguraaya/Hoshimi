@@ -1,6 +1,7 @@
 package com.acgcompass.data.local.migration
 
 import android.content.Context
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.AcgCompassDatabase
 import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -46,13 +47,13 @@ class DatabaseHealthMonitor @Inject constructor(
 
     suspend fun check(): DatabaseHealth = withContext(Dispatchers.IO) {
         // 先构建数据库实例：升级前备份在构建时（Room 打开文件之前）生成，之后才能读到待自检标记。
-        val instance = runCatching { database.get() }
-        val pending = runCatching { DatabaseUpgradeBackup.pendingVerification(context) }.getOrNull()
-        val result = runCatching {
+        val instance = runCatchingCancellable { database.get() }
+        val pending = runCatchingCancellable { DatabaseUpgradeBackup.pendingVerification(context) }.getOrNull()
+        val result = runCatchingCancellable {
             val db = instance.getOrThrow().openHelper.writableDatabase
-            if (pending == null) return@runCatching DatabaseHealth.Ok
+            if (pending == null) return@runCatchingCancellable DatabaseHealth.Ok
             val after = DatabaseUpgradeBackup.CORE_TABLES.associateWith { table ->
-                runCatching {
+                runCatchingCancellable {
                     db.query("SELECT COUNT(*) FROM `$table`").use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
                 }.getOrDefault(0L)
             }

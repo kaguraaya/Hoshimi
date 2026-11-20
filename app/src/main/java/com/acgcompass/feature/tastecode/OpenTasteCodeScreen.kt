@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.designsystem.FlatTextField
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.AcgScreenScaffold
@@ -65,7 +66,7 @@ fun OpenTasteCodeScreen(onBack: () -> Unit, onOpen: (String) -> Unit, modifier: 
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
             val decoded = withContext(Dispatchers.Default) {
-                runCatching {
+                runCatchingCancellable {
                     context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
                 }.getOrNull()?.let(QrCodes::decode)
             }

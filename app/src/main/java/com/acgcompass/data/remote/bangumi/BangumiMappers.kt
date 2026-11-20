@@ -1,5 +1,6 @@
 package com.acgcompass.data.remote.bangumi
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.matching.normalizeTitle
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingEntry
@@ -83,7 +84,7 @@ internal fun parseBangumiYear(date: String?): Int? {
 /** 解析 Bangumi 日期串为 [java.time.LocalDate]（取前 10 位 `yyyy-MM-dd`）；失败返回 `null`。 */
 internal fun parseBangumiDate(date: String?): java.time.LocalDate? {
     val head = date?.trim()?.takeIf { it.length >= 10 }?.substring(0, 10) ?: return null
-    return runCatching { java.time.LocalDate.parse(head) }.getOrNull()
+    return runCatchingCancellable { java.time.LocalDate.parse(head) }.getOrNull()
 }
 
 /**
