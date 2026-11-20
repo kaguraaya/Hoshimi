@@ -7,6 +7,7 @@ import android.graphics.drawable.BitmapDrawable
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.GallerySaver
 import com.acgcompass.domain.report.ReportWork
 import com.acgcompass.domain.report.WatchReport
@@ -52,7 +53,7 @@ internal object ReportShare {
                     .allowHardware(false)
                     .size(COVER_PIXELS)
                     .build()
-                val result = runCatching { context.imageLoader.execute(request) }.getOrNull()
+                val result = runCatchingCancellable { context.imageLoader.execute(request) }.getOrNull()
                 val bitmap = ((result as? SuccessResult)?.drawable as? BitmapDrawable)?.bitmap
                 bitmap?.let { work.workId to it }
             }

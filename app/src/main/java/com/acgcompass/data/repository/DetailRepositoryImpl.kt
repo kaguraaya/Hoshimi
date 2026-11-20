@@ -3,6 +3,7 @@ package com.acgcompass.data.repository
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.logging.RedactingLogger
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.dao.CacheDao
 import com.acgcompass.data.local.entity.DetailCacheEntity
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
@@ -188,7 +189,7 @@ class DetailRepositoryImpl @Inject constructor(
 
         fun merged(): DetailExtrasData {
             fun decode(entity: DetailCacheEntity?): DetailExtrasData = entity?.let {
-                runCatching { json.decodeFromString<DetailExtrasData>(it.payloadJson) }.getOrNull()
+                runCatchingCancellable { json.decodeFromString<DetailExtrasData>(it.payloadJson) }.getOrNull()
             } ?: DetailExtrasData()
             val creditData = decode(credits)
             val commentData = decode(comments)

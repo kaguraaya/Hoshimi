@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import coil.imageLoader
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.designsystem.PrismCorner
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.visualnovel.VisualNovelDetail
@@ -226,7 +227,7 @@ internal fun VndbProducerSection(
                             android.content.Intent.ACTION_VIEW,
                             android.net.Uri.parse("https://vndb.org/${producer.id}"),
                         )
-                        runCatching { context.startActivity(intent) }
+                        runCatchingCancellable { context.startActivity(intent) }
                     },
                 ) { Text("VNDB") }
             }

@@ -2,6 +2,7 @@ package com.acgcompass.data.sync
 
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.BackgroundTaskStateDao
 import com.acgcompass.data.local.dao.BacklogDao
@@ -87,7 +88,7 @@ class TasteProfileAutoUpdater @Inject constructor(
         settingsDataStore.tasteMatchBranch
             .distinctUntilChanged()
             .drop(1)
-            .onEach { runCatching { tasteEngine.rebuildFromCache() } }
+            .onEach { runCatchingCancellable { tasteEngine.rebuildFromCache() } }
             .flowOn(dispatchers.io)
             .launchIn(scope)
         // 待补池新加的作品只需要把标签补回来（详情 / 推荐里好出分），安静地在后台做，不动画像。
@@ -103,7 +104,7 @@ class TasteProfileAutoUpdater @Inject constructor(
     /** 后台补齐缺标签的作品，失败就算了（下次再试）；不写任务状态，界面上不会显示「正在分析」。 */
     private suspend fun prefetchMissingFeatures(ids: List<String>) {
         if (ids.isEmpty()) return
-        runCatching {
+        runCatchingCancellable {
             workFeatureRepository.ensureBasic(ids, networkBudget = PREFETCH_BUDGET, background = true)
         }
     }
@@ -143,7 +144,7 @@ class TasteProfileAutoUpdater @Inject constructor(
         val savedFingerprintMatches = settingsDataStore.tasteProfileInputFingerprint.first() == fingerprint
         // 输入没变就不重建；个别作品缺标签不触发重建（缺的在后台补）。
         if (!force && savedFingerprintMatches && !interruptedTask) {
-            if (tasteEngine.currentProfile == null) runCatching { tasteEngine.rebuildFromCache() }
+            if (tasteEngine.currentProfile == null) runCatchingCancellable { tasteEngine.rebuildFromCache() }
             prefetchMissingFeatures(priorityIds)
             return@withLock false
         }
@@ -165,19 +166,19 @@ class TasteProfileAutoUpdater @Inject constructor(
         val records = buildTasteRecords(collections, basicFeatures)
         // 基础画像只使用已落库的评分、收藏状态、短评和经过校验的作品标签；
         // Staff、角色和声优等扩展特征缺失时不影响本次基础画像完成。
-        val result = runCatching { tasteProfileRepository.importAndCompute(records) }.getOrNull()
+        val result = runCatchingCancellable { tasteProfileRepository.importAndCompute(records) }.getOrNull()
         if (result !is AppResult.Success) {
             persistFailure(fingerprint, priorityIds.size)
             return@withLock false
         }
-        val planPrepared = runCatching { aiTagClassifier.prepareStablePlan() }.isSuccess
+        val planPrepared = runCatchingCancellable { aiTagClassifier.prepareStablePlan() }.isSuccess
         if (!planPrepared) {
             persistFailure(fingerprint, priorityIds.size, "本地标签候选整理失败")
             return@withLock false
         }
         settingsDataStore.setTasteProfileInputFingerprint(fingerprint)
         // 不可变 AI 候选快照建立后再发布高级画像，使完成状态和待分类数量属于同一代输入。
-        runCatching { tasteEngine.rebuildFromCache() }
+        runCatchingCancellable { tasteEngine.rebuildFromCache() }
         val completedAt = System.currentTimeMillis()
         persistCompletedState(fingerprint, priorityIds.size, completedAt)
         restoreInBackground(priorityIds)
@@ -196,19 +197,19 @@ class TasteProfileAutoUpdater @Inject constructor(
         if (ids.isEmpty() || restoreJob?.isActive == true) return
         restoreJob = scope.launch(dispatchers.io) {
             repeat(MAX_RESTORE_ROUNDS) {
-                val before = runCatching { workFeatureRepository.countUnverified(ids) }.getOrDefault(0)
+                val before = runCatchingCancellable { workFeatureRepository.countUnverified(ids) }.getOrDefault(0)
                 if (before == 0) return@launch
                 // 每批打乱顺序：个别一直取不到的作品不会每次都占住名额。
-                runCatching {
+                runCatchingCancellable {
                     workFeatureRepository.ensureBasic(
                         ids.shuffled(),
                         networkBudget = PREFETCH_BUDGET,
                         background = true,
                     )
                 }
-                val after = runCatching { workFeatureRepository.countUnverified(ids) }.getOrDefault(before)
+                val after = runCatchingCancellable { workFeatureRepository.countUnverified(ids) }.getOrDefault(before)
                 if (after >= before) return@launch
-                runCatching { tasteEngine.rebuildFromCache() }
+                runCatchingCancellable { tasteEngine.rebuildFromCache() }
             }
         }
     }

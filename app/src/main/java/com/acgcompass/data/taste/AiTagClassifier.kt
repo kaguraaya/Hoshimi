@@ -1,6 +1,7 @@
 package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.BackgroundTaskStateDao
 import com.acgcompass.data.local.dao.BacklogDao
@@ -168,14 +169,14 @@ class AiTagClassifier @Inject constructor(
 
     /** AI 已缓存的标签数（UI 展示 / 判断是否需要分类）。读失败返回 0。 */
     suspend fun cachedCount(): Int = withContext(dispatchers.io) {
-        runCatching { tagDimensionDao.count() }.getOrDefault(0)
+        runCatchingCancellable { tagDimensionDao.count() }.getOrDefault(0)
     }
 
     suspend fun pendingCount(): Int = withContext(dispatchers.io) {
         val state = taskStateDao.get(TASK_KEY)
         val planRows = state?.inputFingerprint
             ?.takeIf(String::isNotBlank)
-            ?.let { runCatching { planDao.getByPlanId(it) }.getOrDefault(emptyList()) }
+            ?.let { runCatchingCancellable { planDao.getByPlanId(it) }.getOrDefault(emptyList()) }
             .orEmpty()
         // 页面只观察既有快照；候选计划只在本地画像成功后建立，后台补齐不能改变当前显示数量。
         val currentPlanRemaining = planRows.count { it.status in setOf(STATUS_PENDING, STATUS_FAILED) }
@@ -230,7 +231,7 @@ class AiTagClassifier @Inject constructor(
         }
         val existing = state?.inputFingerprint
             ?.takeIf(String::isNotBlank)
-            ?.let { runCatching { planDao.getByPlanId(it) }.getOrDefault(emptyList()) }
+            ?.let { runCatchingCancellable { planDao.getByPlanId(it) }.getOrDefault(emptyList()) }
             .orEmpty()
         if (existing.isNotEmpty() && existing.first().candidateFingerprint == fingerprint) {
             return existing.count { it.status in setOf(STATUS_PENDING, STATUS_FAILED) }
@@ -272,7 +273,7 @@ class AiTagClassifier @Inject constructor(
         }
         val currentRows = state.inputFingerprint
             .takeIf(String::isNotBlank)
-            ?.let { runCatching { planDao.getByPlanId(it) }.getOrDefault(emptyList()) }
+            ?.let { runCatchingCancellable { planDao.getByPlanId(it) }.getOrDefault(emptyList()) }
             .orEmpty()
         return currentRows.count { it.status in setOf(STATUS_PENDING, STATUS_FAILED) }
     }
@@ -281,7 +282,9 @@ class AiTagClassifier @Inject constructor(
         val ids = personalFeatureIds()
         val personal = workFeatureRepository.getFeatures(ids.toList(), networkBudget = 0).values
         val covered = personal.count { it.completeness != WorkFeatureCompleteness.EMBEDDED }
-        val (featureCount, verifiedCount) = runCatching { workFeatureRepository.localStats() }.getOrDefault(0 to 0)
+        val (featureCount, verifiedCount) = runCatchingCancellable { workFeatureRepository.localStats() }.getOrDefault(
+            0 to 0,
+        )
         TasteProcessingSummary(
             localFeatureCount = featureCount,
             verifiedFeatureCount = verifiedCount,
@@ -300,7 +303,7 @@ class AiTagClassifier @Inject constructor(
      * 供画像页展示分类的实际收益（而非只有一个「已分类 N 个」的 Toast）。读失败返回空摘要（UI 隐藏该区）。
      */
     suspend fun dimensionSummary(): TagDimensionSummary = withContext(dispatchers.io) {
-        val counts = runCatching { tagDimensionDao.getDimensionCounts() }.getOrDefault(emptyList())
+        val counts = runCatchingCancellable { tagDimensionDao.getDimensionCounts() }.getOrDefault(emptyList())
         val byCategory = counts
             .mapNotNull { row -> TasteCategory.fromKey(row.dimension)?.let { it to row.count } }
             .groupBy({ it.first }, { it.second })
@@ -376,8 +379,8 @@ class AiTagClassifier @Inject constructor(
             state.lastResult in setOf("STOPPED", "FAILED", "PARTIAL") &&
             state.inputFingerprint.isNotBlank()
         ) {
-            val resumable = planDao.getAll().filter {
-                it.planId == state.inputFingerprint && it.status in setOf(STATUS_PENDING, STATUS_FAILED)
+            val resumable = planDao.getByPlanId(state.inputFingerprint).filter {
+                it.status in setOf(STATUS_PENDING, STATUS_FAILED)
             }
             if (resumable.isNotEmpty()) {
                 val now = System.currentTimeMillis()
@@ -420,7 +423,7 @@ class AiTagClassifier @Inject constructor(
     }
 
     private suspend fun planCounts(planId: String): PlanCounts {
-        val rows = planDao.getAll().filter { it.planId == planId }
+        val rows = planDao.getByPlanId(planId)
         return PlanCounts(
             total = rows.size,
             automatic = rows.count { it.status == STATUS_AUTOMATIC },
@@ -549,16 +552,16 @@ class AiTagClassifier @Inject constructor(
     }
 
     private suspend fun pendingCandidates(limit: Int, personalIds: Set<String>): List<String> {
-        runCatching { tagDimensionDao.invalidateOlderVersions(CLASSIFIER_VERSION) }
-        val cached = runCatching { tagDimensionDao.getCachedTags(CLASSIFIER_VERSION) }
+        runCatchingCancellable { tagDimensionDao.invalidateOlderVersions(CLASSIFIER_VERSION) }
+        val cached = runCatchingCancellable { tagDimensionDao.getCachedTags(CLASSIFIER_VERSION) }
             .getOrDefault(emptyList())
             .toHashSet()
-        val terminalPlanTags = runCatching { planDao.getAll() }.getOrDefault(emptyList())
-            .filter { it.status in setOf(STATUS_AUTOMATIC, STATUS_REVIEW, STATUS_REJECTED, STATUS_MANUAL) }
-            .mapTo(HashSet()) { it.tag }
+        val terminalPlanTags = runCatchingCancellable {
+            planDao.getTagsByStatuses(listOf(STATUS_AUTOMATIC, STATUS_REVIEW, STATUS_REJECTED, STATUS_MANUAL))
+        }.getOrDefault(emptyList()).toHashSet()
         if (personalIds.isEmpty()) return emptyList()
         // 按个人作品 id 读取完整特征集，避免公共缓存增长后截断个人标签并产生漂移。
-        val pool = runCatching {
+        val pool = runCatchingCancellable {
             workFeatureRepository.getFeatures(personalIds.toList(), networkBudget = 0).values.toList()
         }.getOrDefault(emptyList())
 
@@ -596,14 +599,14 @@ class AiTagClassifier @Inject constructor(
     }
 
     private suspend fun personalFeatureIds(): Set<String> = buildSet {
-        runCatching { userCollectionDao.getAll() }.getOrDefault(emptyList()).forEach {
+        runCatchingCancellable { userCollectionDao.getAll() }.getOrDefault(emptyList()).forEach {
             add(it.sourceItemId.ifBlank { it.localWorkId })
         }
-        runCatching { backlogDao.getAll() }.getOrDefault(emptyList()).forEach { add(it.workId) }
+        runCatchingCancellable { backlogDao.getAll() }.getOrDefault(emptyList()).forEach { add(it.workId) }
     }.filter { it.toIntOrNull() != null }.toSet()
 
     private suspend fun personalInputFingerprint(personalIds: Set<String>): String = buildString {
-        append(runCatching { userCollectionDao.getAll().toTasteInputFingerprint() }.getOrDefault(""))
+        append(runCatchingCancellable { userCollectionDao.getAll().toTasteInputFingerprint() }.getOrDefault(""))
         append('\n')
         personalIds.sorted().forEach { append("priority:").append(it).append('\n') }
     }.sha256()

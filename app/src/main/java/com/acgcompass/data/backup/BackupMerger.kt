@@ -45,14 +45,22 @@ object BackupMerger {
      * @property merged 合并后的信封（含全部业务数据；`credentials=null`）。
      * @property addedCount 新增主键总数。
      * @property updatedCount 被导入数据更新的主键总数。
-     * @property conflicts 主键冲突明细（含已保留本地与已采用导入两种）。
+     * @property conflictCount 主键冲突总数（含已保留本地与已采用导入两种）。
+     * @property keptLocalCount 冲突里保留本地的条数。
+     * @property conflicts 冲突样例，最多 [MAX_CONFLICT_SAMPLES] 条：导入自己的备份时几乎每一行都冲突，
+     *   全部记下来会有几万条，界面只需要计数和几条示例。
      */
     data class MergeResult(
         val merged: BackupEnvelope,
         val addedCount: Int,
         val updatedCount: Int,
+        val conflictCount: Int,
+        val keptLocalCount: Int,
         val conflicts: List<Conflict>,
     )
+
+    /** 合并结果里最多保留多少条冲突样例。 */
+    const val MAX_CONFLICT_SAMPLES: Int = 20
 
     /** 合并 `incoming` 进 `local`，返回合并后的信封与统计/冲突明细。 */
     @Suppress("LongMethod")
@@ -218,6 +226,8 @@ object BackupMerger {
             merged = merged,
             addedCount = acc.added,
             updatedCount = acc.updated,
+            conflictCount = acc.conflictCount,
+            keptLocalCount = acc.keptLocalCount,
             conflicts = acc.conflicts,
         )
     }
@@ -226,7 +236,15 @@ object BackupMerger {
     private class Accumulator {
         var added: Int = 0
         var updated: Int = 0
+        var conflictCount: Int = 0
+        var keptLocalCount: Int = 0
         val conflicts: MutableList<Conflict> = mutableListOf()
+
+        fun recordConflict(conflict: Conflict) {
+            conflictCount++
+            if (conflict.resolution == Resolution.KEPT_LOCAL) keptLocalCount++
+            if (conflicts.size < MAX_CONFLICT_SAMPLES) conflicts += conflict
+        }
 
         /**
          * 合并单张表。保持本地原有顺序，新增项追加在末尾，保证结果确定。
@@ -266,10 +284,10 @@ object BackupMerger {
                 if (useIncoming) {
                     byKey[k] = fill(incomingItem, localItem)
                     updated++
-                    conflicts += Conflict(table, k, Resolution.USED_INCOMING)
+                    recordConflict(Conflict(table, k, Resolution.USED_INCOMING))
                 } else {
                     // 保留本地，不覆盖。
-                    conflicts += Conflict(table, k, Resolution.KEPT_LOCAL)
+                    recordConflict(Conflict(table, k, Resolution.KEPT_LOCAL))
                 }
             }
             return byKey.values.toList()

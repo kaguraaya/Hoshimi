@@ -3,6 +3,7 @@ package com.acgcompass.feature.explore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.common.runCatchingResult
 import com.acgcompass.data.taste.TasteEngine
 import com.acgcompass.domain.model.MediaType
@@ -88,7 +89,7 @@ class ExploreQueueViewModel @Inject constructor(
             shownIds.clear()
             unscoredCandidates = emptyList()
             publish(
-                runCatching { buildBatch() }
+                runCatchingCancellable { buildBatch() }
                     .getOrElse { ExploreQueueUiState.Error("生成探索队列失败，请稍后重试") },
             )
             if (unscoredCandidates.isNotEmpty()) enrichMissingMatches(currentGeneration)
@@ -335,7 +336,7 @@ class ExploreQueueViewModel @Inject constructor(
         synopsisInFlight += workId
         updateCard(workId) { it.copy(synopsisLoading = true) }
         viewModelScope.launch {
-            val res = runCatching { summarySource.summary(sid) }.getOrNull()
+            val res = runCatchingCancellable { summarySource.summary(sid) }.getOrNull()
             synopsisInFlight -= workId
             val summary = (res as? AppResult.Success)?.data?.trim()?.takeIf { it.isNotBlank() }
             // 仅联网成功（含确实无简介）标记已尝试，失败保留可重试。

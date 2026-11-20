@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.AcgTopBarHeight
 import com.acgcompass.core.ui.topBarScrim
 import com.acgcompass.core.ui.transparentTopBarColors
@@ -254,7 +255,7 @@ private fun ErrorColumn(
     val clipboard = LocalClipboardManager.current
     val openOfficialUrl: () -> Unit = {
         officialUrl?.let { url ->
-            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            runCatchingCancellable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
         }
     }
     Column(

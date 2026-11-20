@@ -1,6 +1,7 @@
 package com.acgcompass.data.remote.bangumi
 
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -33,7 +34,7 @@ class BangumiTokenRefresher @Inject constructor(
 
     /** 按需续期：无 refresh_token / 仍很新则直接返回；best-effort，任何异常静默吞掉。 */
     suspend fun refreshIfNeeded() = mutex.withLock {
-        val secret = runCatching { credentialStore.get(SourceId.BANGUMI) }.getOrNull() ?: return@withLock
+        val secret = runCatchingCancellable { credentialStore.get(SourceId.BANGUMI) }.getOrNull() ?: return@withLock
         val refreshToken = secret.refreshToken?.takeIf { it.isNotBlank() } ?: return@withLock
         val expiresAt = secret.tokenExpiresAt
         val now = System.currentTimeMillis()

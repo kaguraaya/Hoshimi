@@ -2,6 +2,7 @@ package com.acgcompass.feature.taste
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.model.TasteProfile
@@ -127,20 +128,20 @@ class TasteProfileViewModel @Inject constructor(
     /** 刷新升维效果摘要（后台读缓存计数；失败静默保持原值）。 */
     private fun refreshDimensionSummary() {
         viewModelScope.launch {
-            runCatching { analysisController.dimensionSummary() }
+            runCatchingCancellable { analysisController.dimensionSummary() }
                 .onSuccess { _dimensionSummary.value = it }
         }
     }
 
     private fun refreshPendingTagCount() {
         viewModelScope.launch {
-            _pendingTagCount.value = runCatching { analysisController.pendingTagCount() }.getOrDefault(0)
+            _pendingTagCount.value = runCatchingCancellable { analysisController.pendingTagCount() }.getOrDefault(0)
         }
     }
 
     private fun refreshProcessingSummary() {
         viewModelScope.launch {
-            runCatching { analysisController.processingSummary() }
+            runCatchingCancellable { analysisController.processingSummary() }
                 .onSuccess { _processingSummary.value = it }
         }
     }
@@ -209,7 +210,7 @@ class TasteProfileViewModel @Inject constructor(
         refreshProcessingSummary()
         if (_importing.value) return
         viewModelScope.launch {
-            runCatching { analysisController.ensureCurrentProfile() }
+            runCatchingCancellable { analysisController.ensureCurrentProfile() }
             refreshPendingTagCount()
             refreshProcessingSummary()
             refreshDimensionSummary()

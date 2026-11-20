@@ -2,6 +2,7 @@ package com.acgcompass.data.local.migration
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.AcgCompassDatabase
 import java.io.File
 import java.text.SimpleDateFormat
@@ -75,7 +76,7 @@ object DatabaseUpgradeBackup {
     private fun copyInto(root: File, db: File, files: List<File>, version: Int, targetVersion: Int, now: Long): File? {
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date(now))
         val dir = File(root, "v$version-$stamp").apply { mkdirs() }
-        return runCatching {
+        return runCatchingCancellable {
             files.forEach { it.copyTo(File(dir, it.name), overwrite = true) }
             val meta = UpgradeBackupMeta(version, targetVersion, now, files.sumOf { it.length() }, countRows(db))
             File(dir, META).writeText(JSON.encodeToString(UpgradeBackupMeta.serializer(), meta))
@@ -121,15 +122,15 @@ object DatabaseUpgradeBackup {
     }
 
     /** 读数据库文件的 schema 版本；读不出返回 null。 */
-    internal fun readUserVersion(file: File): Int? = runCatching {
+    internal fun readUserVersion(file: File): Int? = runCatchingCancellable {
         SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { it.version }
     }.getOrNull()
 
     /** 核心表的行数（表不存在的跳过）。 */
-    internal fun countRows(file: File): Map<String, Long> = runCatching {
+    internal fun countRows(file: File): Map<String, Long> = runCatchingCancellable {
         SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY).use { db ->
             CORE_TABLES.mapNotNull { table ->
-                runCatching {
+                runCatchingCancellable {
                     db.rawQuery(
                         "SELECT COUNT(*) FROM `$table`",
                         null,
@@ -139,7 +140,7 @@ object DatabaseUpgradeBackup {
         }
     }.getOrDefault(emptyMap())
 
-    private fun readMeta(dir: File): UpgradeBackupMeta? = runCatching {
+    private fun readMeta(dir: File): UpgradeBackupMeta? = runCatchingCancellable {
         JSON.decodeFromString(UpgradeBackupMeta.serializer(), File(dir, META).readText())
     }.getOrNull()
 

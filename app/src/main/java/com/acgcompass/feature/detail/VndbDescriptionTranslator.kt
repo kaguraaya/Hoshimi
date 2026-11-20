@@ -1,6 +1,7 @@
 package com.acgcompass.feature.detail
 
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.ai.AiEngine
 import com.acgcompass.domain.ai.AiRunOptions
 import com.acgcompass.domain.ai.AiRunResult
@@ -42,7 +43,13 @@ internal class VndbDescriptionTranslator(
             VndbTranslationCachePolicy.isReusable(cached.inputFingerprint, cached.promptVersion, source)
         return cached
             ?.takeIf { reusable }
-            ?.let { runCatching { json.decodeFromString<VndbTranslationOutput>(it.payloadJson) }.getOrNull() }
+            ?.let {
+                runCatchingCancellable {
+                    json.decodeFromString<VndbTranslationOutput>(
+                        it.payloadJson,
+                    )
+                }.getOrNull()
+            }
             ?.text
             ?.takeIf(String::isNotBlank)
     }

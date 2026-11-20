@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.model.SourceRef
 import com.acgcompass.domain.model.WorkMatch
@@ -177,7 +178,7 @@ class DiscoverViewModel @Inject constructor(
                     }
                     DiscoverTab.SCORE_DIFF -> {
                         // 评分差异依赖公共池：按后台优先级补充，不和前台请求抢额度；再补一轮第二平台评分。
-                        runCatching { workRepository.loadPublicDiscovery(background = true) }
+                        runCatchingCancellable { workRepository.loadPublicDiscovery(background = true) }
                         scoreDiffBackfilledOnce = false
                         backfillScoreDiffRatings()
                     }
@@ -295,7 +296,7 @@ class DiscoverViewModel @Inject constructor(
      */
     fun refreshFilterSnapshot() {
         viewModelScope.launch {
-            val works = runCatching { publicCacheWorkRepository.observePublicCachedWorks().first() }
+            val works = runCatchingCancellable { publicCacheWorkRepository.observePublicCachedWorks().first() }
                 .getOrDefault(emptyList())
             filterSnapshotState.value = works
                 .map { WorkRatings(work = it, ratings = workRepository.aggregateRatingsCached(it.id)) }
@@ -601,7 +602,7 @@ class DiscoverViewModel @Inject constructor(
                 // 一次进入最多查 [SCORE_DIFF_BACKFILL_LIMIT] 部、按顺序进行，不和详情页抢限流额度；失败的跳过。
                 for (id in targets) {
                     scoreDiffAttempted += id
-                    runCatching { workRepository.aggregateRatings(id, forceRefresh = false) }
+                    runCatchingCancellable { workRepository.aggregateRatings(id, forceRefresh = false) }
                 }
                 scoreDiffBackfilledOnce = true
             } finally {

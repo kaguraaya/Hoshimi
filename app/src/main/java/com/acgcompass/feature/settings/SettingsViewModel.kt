@@ -3,6 +3,7 @@ package com.acgcompass.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.credential.CredentialStatus
 import com.acgcompass.data.credential.CredentialStore
@@ -21,6 +22,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 设置页 ViewModel。使用 Hilt 注入依赖，并以 StateFlow 暴露状态。
@@ -75,13 +78,14 @@ class SettingsViewModel @Inject constructor(
      * 构建备份 JSON（默认零凭据）。供 UI 取得文本后写入用户选定的文件（SAF）。
      * @return 备份 JSON；失败返回 `null` 并设置提示。
      */
-    suspend fun buildBackupJson(): String? = when (val r = backupRepository.exportBackup(includeCredentials = false)) {
-        is AppResult.Success -> r.data
-        is AppResult.Failure -> {
-            _dataOpMessage.value = "导出失败，请重试"
-            null
+    suspend fun writeBackup(output: java.io.OutputStream): Boolean =
+        when (backupRepository.exportBackupTo(output, includeCredentials = false)) {
+            is AppResult.Success -> true
+            is AppResult.Failure -> {
+                _dataOpMessage.value = "导出失败，请重试"
+                false
+            }
         }
-    }
 
     /** 构建指定表的 CSV 文本。 */
     suspend fun buildCsv(kind: CsvKind): String? = when (val r = backupRepository.exportCsv(kind)) {
@@ -93,17 +97,20 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** 导入备份 JSON（合并不覆盖，冲突回报）。结果以提示展示，不静默覆盖。 */
-    fun importBackupJson(json: String) {
+    fun importBackup(open: () -> java.io.InputStream?) {
         viewModelScope.launch {
-            when (val r = backupRepository.importBackup(json)) {
+            val result = runCatchingCancellable {
+                withContext(Dispatchers.IO) { open()?.buffered()?.use { backupRepository.importBackupFrom(it) } }
+            }.getOrNull()
+            when (result) {
                 is AppResult.Success -> {
-                    val rep = r.data
-                    val conflictKept = rep.conflicts.count { it.keptLocal }
+                    val rep = result.data
+                    val conflictKept = rep.keptLocalCount
                     _dataOpMessage.value =
-                        "导入完成：新增 ${rep.added}，更新 ${rep.updated}，冲突 ${rep.conflicts.size}" +
+                        "导入完成：新增 ${rep.added}，更新 ${rep.updated}，冲突 ${rep.conflictCount}" +
                         if (conflictKept > 0) "（其中 $conflictKept 项保留本地较新数据，未覆盖）" else ""
                 }
-                is AppResult.Failure -> _dataOpMessage.value = "导入失败：备份文件可能损坏或格式不符"
+                else -> _dataOpMessage.value = "导入失败：备份文件可能损坏或格式不符"
             }
         }
     }
@@ -177,9 +184,9 @@ class SettingsViewModel @Inject constructor(
         // 恢复已保存的 AI provider 类型与非敏感配置（Base URL / 模型名），
         // 使设置页重新进入时仍展示用户上次的选择与端点（API Key 仍以掩码占位，绝不回读明文）。
         viewModelScope.launch {
-            val persisted = runCatching { settingsDataStore.aiProviderId.first() }.getOrNull()
+            val persisted = runCatchingCancellable { settingsDataStore.aiProviderId.first() }.getOrNull()
             val option = aiProviderOptionFromProviderId(persisted)
-            val saved = runCatching { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
+            val saved = runCatchingCancellable { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
             localUi.update { state ->
                 val drafts = state.ai.drafts.toMutableMap()
                 saved?.baseUrl?.takeIf { it.isNotBlank() }?.let { drafts[CredentialFieldKey.BASE_URL] = it }
@@ -230,7 +237,7 @@ class SettingsViewModel @Inject constructor(
         if (tokenDraft == null && clientIdDraft == null && clientSecretDraft == null) return
         viewModelScope.launch {
             // 与已存凭据合并，仅覆盖本次填写的字段，避免未编辑的字段被清空。
-            val existing = runCatching { credentialStore.get(source) }.getOrNull()
+            val existing = runCatchingCancellable { credentialStore.get(source) }.getOrNull()
             val merged = SecretBundle(
                 token = tokenDraft ?: existing?.token,
                 clientId = clientIdDraft ?: existing?.clientId,
@@ -367,7 +374,7 @@ class SettingsViewModel @Inject constructor(
         val modelDraft = ai.drafts[CredentialFieldKey.MODEL]?.trim()?.takeIf { it.isNotEmpty() }
         viewModelScope.launch {
             // 与已存凭据合并，仅覆盖本次填写的字段；未编辑的字段沿用旧值。
-            val existing = runCatching { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
+            val existing = runCatchingCancellable { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
             val merged = SecretBundle(
                 apiKey = apiKeyDraft ?: existing?.apiKey,
                 baseUrl = baseUrlDraft ?: existing?.baseUrl,

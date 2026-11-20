@@ -1,6 +1,8 @@
 package com.acgcompass.data.backup
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.encodeToStream
 
 /**
  * 纯函数式备份序列化器（领域无关、无 Android / DAO 依赖，可在 JVM 单测中直接调用）。
@@ -40,4 +42,18 @@ object BackupSerializer {
      *   由更高层（`BackupRepositoryImpl.importBackup`）经 `runCatchingApp` 兜底为 `AppError`。
      */
     fun deserialize(json: String): BackupEnvelope = this.json.decodeFromString(BackupEnvelope.serializer(), json)
+
+    /**
+     * 把备份信封直接编码写进 [output]，不在内存里拼出整段 JSON 文本。
+     * 作品库几千部时整段文本有几千万字符，先拼成字符串再写文件会让内存峰值翻几倍。
+     */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    fun serializeTo(envelope: BackupEnvelope, output: java.io.OutputStream) {
+        json.encodeToStream(BackupEnvelope.serializer(), envelope, output)
+    }
+
+    /** 从 [input] 直接解码备份信封，不先把整个文件读成字符串。 */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    fun deserializeFrom(input: java.io.InputStream): BackupEnvelope =
+        json.decodeFromStream(BackupEnvelope.serializer(), input)
 }

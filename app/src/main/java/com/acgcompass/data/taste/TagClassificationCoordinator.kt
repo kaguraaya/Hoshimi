@@ -1,6 +1,7 @@
 package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.ApplicationScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.taste.ManualTagReview
 import com.acgcompass.domain.taste.TagClassificationController
 import com.acgcompass.domain.taste.TagClassificationPhase
@@ -75,7 +76,7 @@ class TagClassificationCoordinator private constructor(
                 }
                 _state.update { it.copy(lastResult = result) }
             } catch (_: CancellationException) {
-                runCatching { task.markStopped() }
+                runCatchingCancellable { task.markStopped() }
                 _state.update { it.copy(lastResult = TagClassificationResult.STOPPED) }
             } catch (_: Throwable) {
                 _state.update { it.copy(lastResult = TagClassificationResult.FAILED) }
@@ -89,7 +90,7 @@ class TagClassificationCoordinator private constructor(
 
     private suspend fun handleOutcome(outcome: TagClassifyOutcome): TagClassificationResult = when (outcome) {
         is TagClassifyOutcome.Done -> {
-            if (outcome.classified > 0) runCatching { task.rebuildProfile() }
+            if (outcome.classified > 0) runCatchingCancellable { task.rebuildProfile() }
             task.restoreState()?.let { restored ->
                 _state.value = restored.copy(active = true)
             } ?: _state.update {
@@ -129,7 +130,7 @@ class TagClassificationCoordinator private constructor(
     override suspend fun resolveManual(tags: Set<String>, category: TasteCategory) {
         task.resolveManual(tags, category)
         _state.update { it.copy(manualReview = task.manualReviewItems().size) }
-        runCatching { task.rebuildProfile() }
+        runCatchingCancellable { task.rebuildProfile() }
     }
 
     internal companion object {
@@ -173,7 +174,7 @@ private class ProductionTagClassificationTask(
     override suspend fun restoreState(): TagClassificationState? = classifier.persistedState()?.let { state ->
         TagClassificationState(
             active = state.lastResult == null && state.phase in ACTIVE_PHASES && state.remaining > 0,
-            phase = runCatching { TagClassificationPhase.valueOf(state.phase) }.getOrNull(),
+            phase = runCatchingCancellable { TagClassificationPhase.valueOf(state.phase) }.getOrNull(),
             completed = state.completed,
             total = state.total,
             batchIndex = state.batchIndex,

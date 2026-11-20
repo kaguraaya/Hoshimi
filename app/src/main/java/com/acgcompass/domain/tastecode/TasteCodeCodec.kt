@@ -1,5 +1,6 @@
 package com.acgcompass.domain.tastecode
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.taste.TasteCategory
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -44,7 +45,7 @@ object TasteCodeCodec {
     fun extract(text: String): String? = CODE_PATTERN.find(text.trim())?.value
 
     /** 解析口味码；格式不对、校验不通过或被截断时返回 null。 */
-    fun decode(text: String): TasteCode? = runCatching {
+    fun decode(text: String): TasteCode? = runCatchingCancellable {
         val token = extract(text) ?: return null
         val packed = Base64.getUrlDecoder().decode(token.removePrefix(PREFIX))
         val bytes = inflate(packed) ?: return null

@@ -1,5 +1,6 @@
 package com.acgcompass.data.remote.ai.prompt
 
+import com.acgcompass.core.common.runCatchingCancellable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -36,12 +37,14 @@ object SpoilerGuard {
         "结局", "大结局", "结尾", "最终结局", "ending",
         // 死亡 / 牺牲 / 复活
         "死亡", "死了", "身亡", "丧命", "牺牲", "复活", "领便当", "下线",
+        "去世", "被杀", "遇害", "殉职", "战死", "死去",
         // 身份 / 真相
         "真实身份", "真正身份", "身份是", "真相", "真凶", "凶手", "幕后黑手", "幕后真凶",
         // 反转 / 黑化 / 背叛
         "反转", "大反转", "黑化", "背叛", "叛变", "卧底",
         // CP / 感情结果
         "在一起", "分手", "表白成功", "告白成功", "CP 结果", "cp结果", "be结局", "he结局",
+        "结婚", "开始交往", "成为恋人",
     )
 
     /**
@@ -95,7 +98,7 @@ object SpoilerGuard {
      * @return 净化后的 JSON 文本；当 [rawJson] 非合法 JSON 时返回 `null`（由调用方触发修复流程）。
      */
     fun scrubJsonString(json: Json, rawJson: String): String? {
-        val element = runCatching { json.parseToJsonElement(rawJson) }.getOrNull() ?: return null
+        val element = runCatchingCancellable { json.parseToJsonElement(rawJson) }.getOrNull() ?: return null
         return json.encodeToString(JsonElement.serializer(), scrubJson(element))
     }
 }

@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import com.acgcompass.core.common.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,7 +22,7 @@ object GallerySaver {
 
     /** 以 PNG 保存 [bitmap]，返回相册里的地址（可以直接交给系统分享）；失败返回 null。 */
     suspend fun savePngUri(context: Context, bitmap: Bitmap, name: String): Uri? = withContext(Dispatchers.IO) {
-        runCatching {
+        runCatchingCancellable {
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, "${name}_${System.currentTimeMillis()}.png")
                 put(MediaStore.Images.Media.MIME_TYPE, "image/png")
@@ -31,13 +32,14 @@ object GallerySaver {
                 }
             }
             val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@runCatching null
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return@runCatchingCancellable null
             val written = resolver.openOutputStream(
                 uri,
             )?.use { bitmap.compress(Bitmap.CompressFormat.PNG, PNG_QUALITY, it) }
             if (written != true) {
                 resolver.delete(uri, null, null)
-                return@runCatching null
+                return@runCatchingCancellable null
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)

@@ -1,5 +1,6 @@
 package com.acgcompass.core.network.interceptor
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.NetworkCredential
 import com.acgcompass.core.network.NetworkCredentialProvider
 import com.acgcompass.core.network.NetworkSource
@@ -35,7 +36,7 @@ class AuthInterceptor(
         if (secret != null && !authenticated.header("Authorization").isNullOrBlank() &&
             response.code in UNAUTHORIZED_STATUS_CODES
         ) {
-            runCatching {
+            runCatchingCancellable {
                 runBlocking { credentialProvider.onUnauthorized(auth.sourceId) }
             }
         }
@@ -44,7 +45,7 @@ class AuthInterceptor(
 
     /** 读取指定源凭据；任何异常都降级为「无凭据」以保证不崩溃。 */
     private fun readSecret(sourceId: NetworkSource): NetworkCredential? =
-        runCatching { runBlocking { credentialProvider.get(sourceId) } }.getOrNull()
+        runCatchingCancellable { runBlocking { credentialProvider.get(sourceId) } }.getOrNull()
 
     private companion object {
         val UNAUTHORIZED_STATUS_CODES = setOf(HTTP_UNAUTHORIZED, HTTP_FORBIDDEN)

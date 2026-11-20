@@ -3,6 +3,7 @@ package com.acgcompass.feature.backlog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -245,7 +246,7 @@ class BacklogViewModel @Inject constructor(
             // 用 workId 反查本地作品名，弹窗展示作品标题而非裸 id。
             val pickId = result.pick?.workId
             val title = pickId?.let { id ->
-                runCatching {
+                runCatchingCancellable {
                     workRepository.observeWorks().first().firstOrNull { it.id == id }?.titles?.canonical
                 }.getOrNull()
             }

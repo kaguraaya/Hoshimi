@@ -2,6 +2,7 @@ package com.acgcompass.feature.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SecretBundle
 import com.acgcompass.data.credential.SourceId
@@ -63,7 +64,7 @@ class OnboardingViewModel @Inject constructor(
             // 可选 Bangumi Token 与既有凭据合并，仅覆盖 token。
             val bangumiToken = setup.bangumiToken.trim().takeIf { it.isNotEmpty() }
             if (bangumiToken != null) {
-                val existing = runCatching { credentialStore.get(SourceId.BANGUMI) }.getOrNull()
+                val existing = runCatchingCancellable { credentialStore.get(SourceId.BANGUMI) }.getOrNull()
                 credentialStore.put(SourceId.BANGUMI, (existing ?: SecretBundle()).copy(token = bangumiToken))
             }
             // 仅在 API Key 非空时保存 AI 配置，并根据 baseUrl 持久化 provider 类型。
@@ -71,7 +72,7 @@ class OnboardingViewModel @Inject constructor(
             if (aiApiKey != null) {
                 val baseUrl = setup.aiBaseUrl.trim().takeIf { it.isNotEmpty() }
                 val model = setup.aiModel.trim().takeIf { it.isNotEmpty() }
-                val existing = runCatching { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
+                val existing = runCatchingCancellable { credentialStore.get(SourceId.AI_PROVIDER) }.getOrNull()
                 credentialStore.put(
                     SourceId.AI_PROVIDER,
                     (existing ?: SecretBundle()).copy(apiKey = aiApiKey, baseUrl = baseUrl, model = model),

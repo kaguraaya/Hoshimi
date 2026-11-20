@@ -47,6 +47,7 @@ import coil.compose.SubcomposeAsyncImageContent
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.acgcompass.core.common.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -246,7 +247,7 @@ private fun PreviewImage(url: String?, title: String) {
 /** 经 Coil 取回封面位图并写入系统相册。返回是否成功。 */
 private suspend fun saveCoverToGallery(context: Context, url: String, title: String): Boolean =
     withContext(Dispatchers.IO) {
-        runCatching {
+        runCatchingCancellable {
             val request = ImageRequest.Builder(context)
                 .data(url)
                 .allowHardware(false)

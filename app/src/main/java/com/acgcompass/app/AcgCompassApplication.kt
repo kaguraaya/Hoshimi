@@ -11,6 +11,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.HttpClientFactory
 import com.acgcompass.core.network.HttpTimeouts
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -123,7 +124,7 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
                         ?.let { raw -> CacheAssetKind.entries.firstOrNull { it.name == raw } }
                         ?: CacheAssetKind.COVER
                     appScope.launch {
-                        runCatching {
+                        runCatchingCancellable {
                             cacheRepository.get().recordMedia(
                                 ManagedMediaRecord(
                                     cacheKey = cacheKey,
@@ -166,7 +167,7 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             // 上次进程被杀时留下的「运行中」标记清掉，后台任务页才不会一直显示在运行。
             taskRunRecorder.get().clearStaleRunning()
             // 其它平台作品的旧编号改成「来源:编号」，免得和同号的 Bangumi 作品串在一起。
-            runCatching { workIdMigration.get().run() }
+            runCatchingCancellable { workIdMigration.get().run() }
             settingsDataStore.autoBackupEnabled
                 .distinctUntilChanged()
                 .onEach { enabled -> autoBackupScheduler.get().apply(enabled) }
@@ -196,17 +197,17 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             // 个人收藏变化（同步入库 / 详情页改状态 / 加待补池）→ 防抖后自动重算口味画像。
             tasteProfileAutoUpdater.get().start(appScope)
             // 本地作品资料（标签、评分、封面）在后台分批补齐，联网时才跑。
-            runCatching { featureEnrichmentScheduler.get().enqueue() }
+            runCatchingCancellable { featureEnrichmentScheduler.get().enqueue() }
             tasteProfileValidationScheduler.get().ensureScheduled()
             // Construct the durable manual-classification coordinator so an interrupted run can resume.
             tagClassificationController.get()
             // 待补池里还没同步到 Bangumi 的作品继续推送「想看」。
-            runCatching { bangumiWishSync.get().resumeOnStartup() }
+            runCatchingCancellable { bangumiWishSync.get().resumeOnStartup() }
             // Bangumi OAuth token 启动期自动续期（best-effort，静默；无 refresh_token 时跳过）。
-            runCatching { bangumiTokenRefresher.get().refreshIfNeeded() }
+            runCatchingCancellable { bangumiTokenRefresher.get().refreshIfNeeded() }
             // 本地改了还没推到 Bangumi 的收藏继续推送；清理超过保留期的回收站记录。
-            runCatching { outboxScheduler.get().enqueue() }
-            runCatching { trashRepository.get().purgeExpired() }
+            runCatchingCancellable { outboxScheduler.get().enqueue() }
+            runCatchingCancellable { trashRepository.get().purgeExpired() }
         }
     }
 

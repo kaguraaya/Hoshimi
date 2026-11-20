@@ -2,6 +2,7 @@ package com.acgcompass.data.repository
 
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.data.local.dao.WorkFeatureDao
 import com.acgcompass.data.local.entity.WorkFeatureEntity
@@ -338,7 +339,7 @@ class WorkFeatureRepositoryImpl @Inject constructor(
     }
 
     private fun WorkFeatureEntity.toDomain(): WorkFeature {
-        val tags = runCatching { JSON.decodeFromString(TAG_LIST_SERIALIZER, tagCountsJson) }
+        val tags = runCatchingCancellable { JSON.decodeFromString(TAG_LIST_SERIALIZER, tagCountsJson) }
             .getOrDefault(emptyList())
             .map { TagCount(it.name, it.count) }
         return WorkFeature(
@@ -354,7 +355,7 @@ class WorkFeatureRepositoryImpl @Inject constructor(
             platform = platform,
             mediaType = mediaType?.let { MediaType.fromStorage(it) },
             titleVariants = titles,
-            completeness = runCatching { WorkFeatureCompleteness.valueOf(completeness) }
+            completeness = runCatchingCancellable { WorkFeatureCompleteness.valueOf(completeness) }
                 .getOrDefault(WorkFeatureCompleteness.BASIC),
             baseDataUpdatedAt = baseDataUpdatedAt,
             extendedDataUpdatedAt = extendedDataUpdatedAt,

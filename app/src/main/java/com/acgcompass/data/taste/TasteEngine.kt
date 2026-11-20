@@ -2,6 +2,7 @@ package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.logging.RedactingLogger
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.RatingDao
 import com.acgcompass.data.local.dao.RecommendationExposureDao
@@ -80,7 +81,7 @@ class TasteEngine @Inject constructor(
      * 读 `tag_dimensions` 缓存为「清洗后标签 → 口味维度」覆盖表，供画像构建 / 评分对本地兜底为题材的
      * 未知标签做更精确的升维分类。表为空 / 读失败 / 维度非法 → 返回空表，全回退本地规则（不阻塞、不伪造）。
      */
-    private suspend fun loadTagOverrides(): Map<String, TasteCategory> = runCatching {
+    private suspend fun loadTagOverrides(): Map<String, TasteCategory> = runCatchingCancellable {
         tagDimensionDao.getAll()
             .mapNotNull { e -> TasteCategory.fromKey(e.dimension)?.let { e.tag to it } }
             .toMap()
@@ -145,7 +146,7 @@ class TasteEngine @Inject constructor(
                     ids.size,
                 )
             }
-            val features: Map<String, WorkFeature> = runCatching {
+            val features: Map<String, WorkFeature> = runCatchingCancellable {
                 workFeatureRepository.getFeatures(ids, networkBudget) { done, total ->
                     if (networkBudget > 0) {
                         refreshProgressState.value =
@@ -164,16 +165,16 @@ class TasteEngine @Inject constructor(
             // 出分落在 50 分附近、按契合度拉开（详见 BuildTasteProfileUseCase.calibrate）。排除已评分作品
             // （它们走显式评分锚定，且会污染「典型未评分作品」中心）。池不足时 build 内部回退训练样本留一 z。
             val ratedIds = rated.mapTo(HashSet()) { it.sourceItemId }
-            var calibrationPool = runCatching { workFeatureRepository.getCachedPool() }
+            var calibrationPool = runCatchingCancellable { workFeatureRepository.getCachedPool() }
                 .getOrDefault(emptyList())
                 .filter { it.subjectId !in ratedIds }
             // 联网重建时补足真实的未评分校准池，避免仅用已评分样本产生幸存者偏差。
             // 补齐失败时保留原池，并由构建器使用训练样本校准作为回退。
             if (networkBudget > 0 && calibrationPool.size < CALIB_POOL_TARGET) {
-                runCatching {
+                runCatchingCancellable {
                     backfillCalibrationPool(ratedIds, calibrationPool.mapTo(HashSet()) { it.subjectId })
                 }
-                calibrationPool = runCatching { workFeatureRepository.getCachedPool() }
+                calibrationPool = runCatchingCancellable { workFeatureRepository.getCachedPool() }
                     .getOrDefault(emptyList())
                     .filter { it.subjectId !in ratedIds }
             }
@@ -201,7 +202,7 @@ class TasteEngine @Inject constructor(
         now,
         calibrationPool,
         loadTagOverrides(),
-        implicitSignals = runCatching { loadImplicitSignals(ratedIds, now) }.getOrDefault(emptyList()),
+        implicitSignals = runCatchingCancellable { loadImplicitSignals(ratedIds, now) }.getOrDefault(emptyList()),
     )
 
     /**
@@ -266,7 +267,7 @@ class TasteEngine @Inject constructor(
             if (subjectId.isBlank()) return@withContext null
             val profile = profileState.value ?: rebuildFromCache()
             if (profile == null || !profile.isUsable) return@withContext null
-            val feature = runCatching { workFeatureRepository.getFeature(subjectId, allowNetwork) }
+            val feature = runCatchingCancellable { workFeatureRepository.getFeature(subjectId, allowNetwork) }
                 .getOrNull() ?: return@withContext null
             computeMatch(feature, profile, userRating, loadTagOverrides())
         }
@@ -292,7 +293,7 @@ class TasteEngine @Inject constructor(
     private suspend fun retryFeature(subjectId: String): WorkFeature? {
         for (waitMs in FEATURE_RETRY_DELAYS_MS) {
             delay(waitMs)
-            val feature = runCatching { workFeatureRepository.getFeature(subjectId, true) }.getOrNull()
+            val feature = runCatchingCancellable { workFeatureRepository.getFeature(subjectId, true) }.getOrNull()
             if (feature != null) return feature
         }
         return null
@@ -345,7 +346,7 @@ class TasteEngine @Inject constructor(
             if (allowNetwork) feature = retryFeature(subjectId)
         }
         if (allowNetwork && feature?.needsExtendedRefresh() == true) {
-            launch { runCatching { workFeatureRepository.refresh(subjectId) } }
+            launch { runCatchingCancellable { workFeatureRepository.refresh(subjectId) } }
         }
     }.distinctUntilChanged()
 
@@ -358,10 +359,16 @@ class TasteEngine @Inject constructor(
         allowNetwork: Boolean,
         emitFallback: suspend () -> Unit,
     ): WorkFeature? {
-        val cached = runCatching { workFeatureRepository.getFeature(subjectId, false) }.getOrNull()
+        val cached = runCatchingCancellable { workFeatureRepository.getFeature(subjectId, false) }.getOrNull()
         if (cached != null) return cached
         emitFallback()
-        return if (allowNetwork) runCatching { workFeatureRepository.getFeature(subjectId, true) }.getOrNull() else null
+        return if (allowNetwork) {
+            runCatchingCancellable {
+                workFeatureRepository.getFeature(subjectId, true)
+            }.getOrNull()
+        } else {
+            null
+        }
     }
 
     /**
@@ -378,7 +385,7 @@ class TasteEngine @Inject constructor(
             if (subjectIds.isEmpty()) return@withContext emptyMap()
             val profile = profileState.value ?: rebuildFromCache()
             if (profile == null || !profile.isUsable) return@withContext emptyMap()
-            val features = runCatching {
+            val features = runCatchingCancellable {
                 workFeatureRepository.getFeatures(subjectIds.distinct(), networkBudget)
             }.getOrDefault(emptyMap())
             scoreLoaded(profile, features)
@@ -426,7 +433,7 @@ class TasteEngine @Inject constructor(
         val profile = profileState.value ?: rebuildFromCache()
         if (profile == null || !profile.isUsable) return@withContext emptyList()
         val rated = profile.ratedSubjectScores.keys
-        val pool = runCatching { workFeatureRepository.getCachedPool(limit) }.getOrDefault(emptyList())
+        val pool = runCatchingCancellable { workFeatureRepository.getCachedPool(limit) }.getOrDefault(emptyList())
             .filter { it.subjectId !in rated }
         val overrides = loadTagOverrides()
         val chunkSize = (pool.size / PARALLEL_CHUNKS + 1).coerceAtLeast(MIN_CHUNK)
@@ -455,7 +462,11 @@ class TasteEngine @Inject constructor(
         val profile = profileState.value ?: rebuildFromCache()
         if (profile == null || !profile.isUsable) return@withContext null
         val rated = profile.ratedSubjectScores
-        val pool = runCatching { workFeatureRepository.getCachedPool(LOCAL_RANK_LIMIT) }.getOrDefault(emptyList())
+        val pool = runCatchingCancellable {
+            workFeatureRepository.getCachedPool(
+                LOCAL_RANK_LIMIT,
+            )
+        }.getOrDefault(emptyList())
             .filter { it.hasSignal && (it.mediaType == null || it.mediaType == MediaType.ANIME) }
         val overrides = loadTagOverrides()
         val scored = parallelMap(pool) { f ->
@@ -505,13 +516,18 @@ class TasteEngine @Inject constructor(
         if (subjectIds.isEmpty()) {
             emptyMap()
         } else {
-            runCatching { workFeatureRepository.getFeatures(subjectIds.distinct(), 0) }.getOrDefault(emptyMap())
+            runCatchingCancellable {
+                workFeatureRepository.getFeatures(
+                    subjectIds.distinct(),
+                    0,
+                )
+            }.getOrDefault(emptyMap())
         }
     }
 
     /** 按设置里选的分支（常规 / 保守 / 激进）带上口味匹配度公式。 */
     private suspend fun withMatchBranch(profile: AdvancedTasteProfile): AdvancedTasteProfile {
-        val key = runCatching { settingsDataStore.tasteMatchBranch.first() }.getOrNull()
+        val key = runCatchingCancellable { settingsDataStore.tasteMatchBranch.first() }.getOrNull()
         val branch = TasteMatchBranch.fromKey(key)
         return profile.copy(matchBranch = branch, headlineFormula = algorithmConfig.current().formula(branch))
     }
@@ -525,8 +541,11 @@ class TasteEngine @Inject constructor(
         val stored = if (missing.isEmpty()) {
             emptyMap()
         } else {
-            runCatching { ratingDao.getAll() }.getOrDefault(emptyList())
-                .filter { it.sourceId == SourceId.BANGUMI.name && !it.missing && it.score > 0f && it.workId in missing }
+            // 只按缺评分的作品分批查，不把整张评分表读进内存。
+            runCatchingCancellable {
+                missing.chunked(SQL_IN_CHUNK).flatMap { ratingDao.getByWorks(it) }
+            }.getOrDefault(emptyList())
+                .filter { it.sourceId == SourceId.BANGUMI.name && !it.missing && it.score > 0f }
                 .associateBy { it.workId }
         }
         return if (stored.isEmpty()) {
@@ -560,8 +579,8 @@ class TasteEngine @Inject constructor(
     private fun parseIsoMillis(iso: String?): Long? {
         val s = iso?.trim().orEmpty()
         if (s.isEmpty()) return null
-        return runCatching { OffsetDateTime.parse(s).toInstant().toEpochMilli() }.getOrNull()
-            ?: runCatching { Instant.parse(s).toEpochMilli() }.getOrNull()
+        return runCatchingCancellable { OffsetDateTime.parse(s).toInstant().toEpochMilli() }.getOrNull()
+            ?: runCatchingCancellable { Instant.parse(s).toEpochMilli() }.getOrNull()
     }
 
     private companion object {
@@ -574,6 +593,9 @@ class TasteEngine @Inject constructor(
          */
         const val CALIB_POOL_TARGET: Int = 40
         const val TIMING_LOG_TAG = "TasteMatchTiming"
+
+        /** `IN (...)` 查询每批的 id 数，避开 SQLite 变量上限。 */
+        const val SQL_IN_CHUNK = 900
         const val EXPLORE_CONTEXT = "explore"
 
         /** 详情页作品特征首次获取失败后的重试间隔。 */

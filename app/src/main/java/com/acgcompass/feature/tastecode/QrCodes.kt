@@ -1,6 +1,7 @@
 package com.acgcompass.feature.tastecode
 
 import android.graphics.Bitmap
+import com.acgcompass.core.common.runCatchingCancellable
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
@@ -30,7 +31,7 @@ object QrCodes {
     }
 
     /** 识别图片里的二维码文字；没有二维码或识别失败返回 null。大图先缩小，识别更快。 */
-    fun decode(bitmap: Bitmap): String? = runCatching {
+    fun decode(bitmap: Bitmap): String? = runCatchingCancellable {
         val scaled = scaleDown(bitmap)
         val pixels = IntArray(scaled.width * scaled.height)
         scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)

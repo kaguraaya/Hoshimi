@@ -110,6 +110,17 @@ class AutoBackupManagerTest {
             }
         }
 
+        override suspend fun exportBackupTo(
+            output: java.io.OutputStream,
+            includeCredentials: Boolean,
+        ): AppResult<Unit> {
+            output.write(payload.toByteArray())
+            return AppResult.Success(Unit)
+        }
+
+        override suspend fun importBackupFrom(input: java.io.InputStream): AppResult<ImportReport> =
+            importBackup(input.readBytes().decodeToString())
+
         override suspend fun exportCsv(kind: CsvKind): AppResult<String> = AppResult.Success("")
     }
 }

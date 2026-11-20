@@ -4,6 +4,7 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.asException
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.HttpErrorMapper
 import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.core.network.interceptor.SourceAuth
@@ -45,7 +46,7 @@ class MalRemoteDataSource @Inject constructor(
      * 是否已由用户显式配置 Client ID。未配置时本源不参与降级、不发请求。
      * 任何读取异常都安全降级为「未启用」（不崩溃）。
      */
-    suspend fun isEnabled(): Boolean = runCatching {
+    suspend fun isEnabled(): Boolean = runCatchingCancellable {
         credentialStore.get(CredentialSourceId.MAL)?.clientId?.isNotBlank() == true
     }.getOrDefault(false)
 
@@ -56,6 +57,8 @@ class MalRemoteDataSource @Inject constructor(
         offset: Int? = null,
         priority: RequestPriority = RequestPriority.FOREGROUND,
     ): AppResult<List<WorkMatch>> = guarded {
+        // MAL 官方搜索要求关键词至少 3 个字符，否则直接返回 400；两个字的标题（如「氷菓」）不发请求。
+        if (keyword.trim().length < MIN_SEARCH_QUERY_LENGTH) return@guarded emptyList()
         api.searchAnime(query = keyword, limit = limit, offset = offset, auth = auth.withPriority(priority))
             .bodyOrThrow().data
             .mapNotNull { it.toWorkMatchOrNull() }
@@ -126,5 +129,8 @@ class MalRemoteDataSource @Inject constructor(
     private companion object {
         /** 官方「当前用户」别名（需用户 OAuth token）。 */
         const val USER_ME: String = "@me"
+
+        /** MAL 官方搜索关键词的最短长度。 */
+        const val MIN_SEARCH_QUERY_LENGTH = 3
     }
 }

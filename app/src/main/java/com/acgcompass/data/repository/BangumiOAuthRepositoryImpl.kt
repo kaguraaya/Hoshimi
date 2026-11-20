@@ -3,6 +3,7 @@ package com.acgcompass.data.repository
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.map
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SecretBundle
 import com.acgcompass.data.credential.SourceId
@@ -40,7 +41,7 @@ class BangumiOAuthRepositoryImpl @Inject constructor(
         }
 
     private suspend fun persistToken(dto: BangumiTokenResponseDto) {
-        val existing = runCatching { credentialStore.get(SourceId.BANGUMI) }.getOrNull()
+        val existing = runCatchingCancellable { credentialStore.get(SourceId.BANGUMI) }.getOrNull()
         val expiresAt = dto.expiresIn?.let { System.currentTimeMillis() + it * MILLIS_PER_SECOND }
         credentialStore.put(
             SourceId.BANGUMI,
@@ -57,7 +58,7 @@ class BangumiOAuthRepositoryImpl @Inject constructor(
     }
 
     private suspend fun fetchAndStoreUsername() {
-        runCatching {
+        runCatchingCancellable {
             val me = bangumi.getMe()
             if (me is AppResult.Success) {
                 val name = me.data.username.ifBlank { me.data.nickname }

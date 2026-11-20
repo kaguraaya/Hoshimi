@@ -2,6 +2,7 @@ package com.acgcompass.data.repository
 
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.data.local.dao.BroadcastScheduleDao
 import com.acgcompass.data.local.dao.SourceLinkDao
@@ -256,9 +257,9 @@ class BroadcastScheduleRepositoryImpl @Inject constructor(
     private fun JikanAnimeDto.toScheduleEntry(fromMillis: Long, toMillis: Long): BroadcastScheduleEntry? {
         val broadcast = broadcast ?: return null
         val weekday = englishWeekday(broadcast.day) ?: return null
-        val localTime = broadcast.time?.let { value -> runCatching { LocalTime.parse(value) }.getOrNull() }
+        val localTime = broadcast.time?.let { value -> runCatchingCancellable { LocalTime.parse(value) }.getOrNull() }
             ?: return null
-        val zone = runCatching { ZoneId.of(broadcast.timezone ?: "Asia/Tokyo") }
+        val zone = runCatchingCancellable { ZoneId.of(broadcast.timezone ?: "Asia/Tokyo") }
             .getOrDefault(ZoneId.of("Asia/Tokyo"))
         val airingAt = nextOccurrenceMillis(weekday, localTime, zone, fromMillis)
             .takeIf { it in fromMillis..toMillis } ?: return null

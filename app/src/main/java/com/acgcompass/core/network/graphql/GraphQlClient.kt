@@ -1,5 +1,6 @@
 package com.acgcompass.core.network.graphql
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.core.network.interceptor.SourceAuth
 import com.acgcompass.core.network.interceptor.networkSource
@@ -95,7 +96,7 @@ class GraphQlClient(
         val response = client.newCall(httpRequest).await()
         response.use { resp ->
             val raw = resp.body?.string().orEmpty()
-            val root: JsonObject? = runCatching {
+            val root: JsonObject? = runCatchingCancellable {
                 if (raw.isBlank()) null else json.parseToJsonElement(raw) as? JsonObject
             }.getOrNull()
             return GraphQlResponse(
@@ -121,6 +122,6 @@ private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont 
         }
     })
     cont.invokeOnCancellation {
-        runCatching { cancel() }
+        runCatchingCancellable { cancel() }
     }
 }

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.AcgCompassDatabase
 import com.acgcompass.data.local.migration.DatabaseUpgradeBackup
 import com.acgcompass.data.local.migration.UpgradeBackup
@@ -71,7 +72,7 @@ class DataSafety @Inject constructor(
     /** 把一份升级前备份（数据库文件 + meta.json）打包成 zip 写到 [target]。 */
     suspend fun exportUpgradeBackup(id: String, target: Uri): Boolean = withContext(dispatchers.io) {
         val backup = findUpgradeBackup(id) ?: return@withContext false
-        runCatching {
+        runCatchingCancellable {
             val out = context.contentResolver.openOutputStream(target) ?: error("无法写入")
             ZipOutputStream(out.buffered()).use { zip ->
                 backup.dir.listFiles().orEmpty().filter { it.isFile }.forEach { file ->
@@ -90,7 +91,7 @@ class DataSafety @Inject constructor(
 
     /** 把一份自动备份原样写到 [target]。 */
     suspend fun exportAutoBackup(backup: AutoBackupFile, target: Uri): Boolean = withContext(dispatchers.io) {
-        runCatching {
+        runCatchingCancellable {
             val out = context.contentResolver.openOutputStream(target) ?: error("无法写入")
             out.use { stream -> backup.file.inputStream().use { it.copyTo(stream) } }
             true
@@ -101,7 +102,7 @@ class DataSafety @Inject constructor(
     suspend fun restoreUpgradeBackupAndRestart(id: String) {
         val backup = withContext(dispatchers.io) { findUpgradeBackup(id) } ?: return
         withContext(dispatchers.io) {
-            runCatching { database.get().close() }
+            runCatchingCancellable { database.get().close() }
             DatabaseUpgradeBackup.restore(context, backup)
         }
         restartApp(context)
@@ -130,7 +131,7 @@ class DataSafety @Inject constructor(
         val name = withContext(dispatchers.io) {
             val flag = File(context.filesDir, RESTORE_FLAG)
             if (!flag.isFile) return@withContext null
-            runCatching { flag.readText().trim() }.getOrDefault("").also { flag.delete() }
+            runCatchingCancellable { flag.readText().trim() }.getOrDefault("").also { flag.delete() }
         } ?: return
         val backup = autoBackupManager.list().firstOrNull { it.file.name == name }
         _lastRestoreMessage.value = when (val result = backup?.let { autoBackupManager.restore(it) }) {

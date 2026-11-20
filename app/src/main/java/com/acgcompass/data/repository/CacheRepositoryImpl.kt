@@ -3,6 +3,7 @@ package com.acgcompass.data.repository
 import android.content.Context
 import androidx.room.withTransaction
 import coil.imageLoader
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.AcgCompassDatabase
 import com.acgcompass.data.local.dao.CacheDao
@@ -320,7 +321,7 @@ class CacheRepositoryImpl @Inject constructor(
 
     @OptIn(coil.annotation.ExperimentalCoilApi::class)
     private suspend fun removeMedia(entry: MediaCacheEntryEntity) {
-        runCatching { context.imageLoader.diskCache?.remove(entry.cacheKey) }
+        runCatchingCancellable { context.imageLoader.diskCache?.remove(entry.cacheKey) }
         cacheDao.deleteMedia(entry.cacheKey)
     }
 

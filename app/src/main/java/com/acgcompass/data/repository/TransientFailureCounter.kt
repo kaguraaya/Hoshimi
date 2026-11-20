@@ -1,10 +1,14 @@
 package com.acgcompass.data.repository
 
 import com.acgcompass.core.common.AppError
+import com.acgcompass.core.common.AppResult
 import com.acgcompass.data.sync.isTransient
+import com.acgcompass.domain.model.SourceId
+import com.acgcompass.domain.model.WorkMatch
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -31,4 +35,23 @@ internal class TransientFailureCounter : AbstractCoroutineContextElement(Key) {
 /** 当前协程里有计数器时记一笔暂时失败（网络、限流、服务端错误；查不到、缺字段属于确定的结果）。 */
 internal suspend fun recordTransientFailure(error: AppError?, source: com.acgcompass.domain.model.SourceId? = null) {
     if (error == null || error.isTransient()) coroutineContext[TransientFailureCounter]?.record(source, error)
+}
+
+/** 跑一次搜索：失败（含异常）记到当前的 [TransientFailureCounter] 并返回空列表；协程取消照常抛出。 */
+internal suspend fun safeSearch(
+    source: SourceId? = null,
+    block: suspend () -> AppResult<List<WorkMatch>>,
+): List<WorkMatch> = try {
+    when (val result = block()) {
+        is AppResult.Success -> result.data
+        is AppResult.Failure -> {
+            recordTransientFailure(result.error, source)
+            emptyList()
+        }
+    }
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    recordTransientFailure(null, source)
+    emptyList()
 }

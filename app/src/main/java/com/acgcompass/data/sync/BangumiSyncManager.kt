@@ -3,6 +3,7 @@ package com.acgcompass.data.sync
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -129,7 +130,7 @@ class BangumiSyncManager @Inject constructor(
 
     private suspend fun syncAndRecord(): AppResult<SyncReport> {
         taskRecorder.started(com.acgcompass.domain.model.BackgroundTaskKind.SYNC)
-        runCatching { tokenRefresher.refreshIfNeeded() }
+        runCatchingCancellable { tokenRefresher.refreshIfNeeded() }
         val result = when (val raw = runSyncInternal()) {
             is AppResult.Failure -> AppResult.Failure(raw.error.withBangumiApiHint())
             is AppResult.Success -> raw
@@ -174,13 +175,13 @@ class BangumiSyncManager @Inject constructor(
                 AppError.Unauthorized(cause = ACCOUNT_SWITCH_MESSAGE, nextStep = ACCOUNT_SWITCH_NEXT),
             )
         }
-        runCatching { settingsDataStore.setBangumiUsername(username) }
+        runCatchingCancellable { settingsDataStore.setBangumiUsername(username) }
         val fetched = when (val f = fetchAll(username)) {
             is AppResult.Failure -> return AppResult.Failure(f.error)
             is AppResult.Success -> f.data
         }
         val report = applyMerge(fetched, System.currentTimeMillis())
-        runCatching { settingsDataStore.setLastSyncedBangumiUser(username) }
+        runCatchingCancellable { settingsDataStore.setLastSyncedBangumiUser(username) }
         return AppResult.Success(report)
     }
 

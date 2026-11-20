@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.designsystem.WorkCardUiModel
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
@@ -117,7 +118,7 @@ class RecommenderViewModel @Inject constructor(
 
     init {
         // 进入推荐页只从本地缓存恢复画像；远端特征补齐由独立后台任务负责。
-        viewModelScope.launch { runCatching { tasteEngine.ensureReady() } }
+        viewModelScope.launch { runCatchingCancellable { tasteEngine.ensureReady() } }
     }
 
     // region 输入选择
@@ -258,11 +259,11 @@ class RecommenderViewModel @Inject constructor(
         // 推荐热路径只读取本地特征；后台补齐不会阻塞提交。画像由收藏变化时的自动更新器重建，
         // 这里直接用现成的（没有才用缓存建一次），打分记忆因此能跨多次提交复用。
         // 画像尚未就绪时回退到 PersonalTasteScorer，继续使用个人标签偏好完成即时排序。
-        runCatching { tasteEngine.ensureReady() }
+        runCatchingCancellable { tasteEngine.ensureReady() }
         // 用户可调的社区评分下限与口味匹配度阈值。
         val minScore = settingsDataStore.recommendMinCommunityScore.first()
         val tasteThreshold = settingsDataStore.tasteMatchThreshold.first()
-        val excludeIds = runCatching {
+        val excludeIds = runCatchingCancellable {
             personalCollections.getAll()
                 .filter { it.status == "看过" || it.status == "抛弃" }
                 .map { it.workId }
@@ -329,7 +330,7 @@ class RecommenderViewModel @Inject constructor(
         // 会在这里被藏两周）。最近 [HARD_REPEAT_MS] 内推过的本次直接回避（保证「再来一次」能换一批），
         // 更早的曝光交给排序器做随时间衰减的软惩罚；回避后候选为空则忽略冷却（绝不无结果）。
         val now = System.currentTimeMillis()
-        val exposureAt: Map<String, Long> = runCatching {
+        val exposureAt: Map<String, Long> = runCatchingCancellable {
             exposures.exposuresInContextSince(TONIGHT_CONTEXT, now - REPEAT_COOLDOWN_MS)
                 .associate { it.subjectId to it.exposedAt }
         }.getOrDefault(emptyMap())
@@ -340,7 +341,7 @@ class RecommenderViewModel @Inject constructor(
         // 引擎对该候选不可用（无特征 / 非 Bangumi / 画像未建）时回退共享 [PersonalTasteScorer] 旧标签重合估计。
         // 特征只读一次：打分、意图匹配、风险气质都用这一份；只用本地缓存，不联网（缺的由后台任务补齐）。
         val featureById = tasteEngine.cachedFeatures(workingSet.mapNotNull { subjectIdOf(it.first) })
-        val engineScores: Map<String, com.acgcompass.domain.taste.TasteMatchResult> = runCatching {
+        val engineScores: Map<String, com.acgcompass.domain.taste.TasteMatchResult> = runCatchingCancellable {
             tasteEngine.scoreFeatures(featureById)
         }.getOrDefault(emptyMap())
 
@@ -591,7 +592,7 @@ class RecommenderViewModel @Inject constructor(
 
     /** 记录本次「今晚看什么」曝光（支撑重复推荐冷却与后续点击统计）。best-effort，失败静默不影响结果。 */
     private suspend fun recordExposure(works: List<Work>) {
-        runCatching {
+        runCatchingCancellable {
             val now = System.currentTimeMillis()
             exposures.upsertAll(
                 works.map { w ->

@@ -2,6 +2,7 @@ package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.ApplicationScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.RequestPriority
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.WorkFeatureDao
@@ -43,7 +44,7 @@ class LocalPoolExpander @Inject constructor(
         _state.value = PoolExpansion(startRank = 0, done = 0, total = target, running = true)
         scope.launch {
             taskRecorder.started(BackgroundTaskKind.POOL_EXPAND)
-            runCatching { run(target) }.onFailure { error ->
+            runCatchingCancellable { run(target) }.onFailure { error ->
                 markFailed()
                 taskRecorder.failed(BackgroundTaskKind.POOL_EXPAND, TaskRunRecorder.describe(error))
             }

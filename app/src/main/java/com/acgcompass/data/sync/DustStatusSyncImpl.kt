@@ -1,5 +1,6 @@
 package com.acgcompass.data.sync
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.data.local.dao.UserCollectionDao
@@ -25,12 +26,12 @@ class DustStatusSyncImpl @Inject constructor(
      * 已「看过」的作品不因吃灰回退状态；非数字 id（非 Bangumi 来源）仅本地标记。失败忽略（绝不崩溃）。
      */
     override suspend fun archive(workId: String) {
-        runCatching {
+        runCatchingCancellable {
             val now = System.currentTimeMillis()
             val existing = userCollectionDao.getByWork(workId)
             // 先记住归档前原状态（即便无收藏记录也归档，prevStatus=null）。
             backlogRepository.archiveToDust(workId, existing?.status)
-            if (existing?.status == "看过") return@runCatching
+            if (existing?.status == "看过") return@runCatchingCancellable
             userCollectionDao.upsert(
                 UserCollectionEntity(
                     id = existing?.id ?: "BANGUMI:$workId",
@@ -49,10 +50,10 @@ class DustStatusSyncImpl @Inject constructor(
                     isPrivate = existing?.isPrivate ?: false,
                 ),
             )
-            val subjectId = workId.toIntOrNull() ?: return@runCatching
+            val subjectId = workId.toIntOrNull() ?: return@runCatchingCancellable
             val configured =
                 credentialStore.observeStatus().first()[CredentialSourceId.BANGUMI]?.configured == true
-            if (!configured) return@runCatching
+            if (!configured) return@runCatchingCancellable
             bangumi.updateUserCollection(subjectId = subjectId, type = 4)
         }
     }
@@ -63,18 +64,18 @@ class DustStatusSyncImpl @Inject constructor(
      * 才还原，避免覆盖用户在吃灰期间的手动改动。Bangumi 无删除收藏端点，原状态为空时无法还原（保持现状）。
      */
     override suspend fun restore(workId: String) {
-        val prev = runCatching { backlogRepository.restoreFromDust(workId) }.getOrNull()
+        val prev = runCatchingCancellable { backlogRepository.restoreFromDust(workId) }.getOrNull()
         if (prev == null || prev == "搁置") return
-        runCatching {
-            val existing = userCollectionDao.getByWork(workId) ?: return@runCatching
-            if (existing.status != "搁置") return@runCatching
+        runCatchingCancellable {
+            val existing = userCollectionDao.getByWork(workId) ?: return@runCatchingCancellable
+            if (existing.status != "搁置") return@runCatchingCancellable
             val now = System.currentTimeMillis()
             userCollectionDao.upsert(existing.copy(status = prev, updatedAt = now))
-            val subjectId = workId.toIntOrNull() ?: return@runCatching
+            val subjectId = workId.toIntOrNull() ?: return@runCatchingCancellable
             val configured =
                 credentialStore.observeStatus().first()[CredentialSourceId.BANGUMI]?.configured == true
-            if (!configured) return@runCatching
-            val type = bangumiTypeOf(prev) ?: return@runCatching
+            if (!configured) return@runCatchingCancellable
+            val type = bangumiTypeOf(prev) ?: return@runCatchingCancellable
             bangumi.updateUserCollection(subjectId = subjectId, type = type)
         }
     }

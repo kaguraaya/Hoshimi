@@ -3,6 +3,7 @@ package com.acgcompass.feature.cache
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.domain.cache.CacheAssetKind
 import com.acgcompass.domain.cache.CacheClearRequest
@@ -194,7 +195,7 @@ class CacheManagementViewModel @Inject constructor(
         "已清理 ${result.removedWorks} 部作品、${result.removedAssets} 项资源"
     }
 
-    suspend fun resetLocalData(): Boolean = runCatching { localDataResetter.reset() }.isSuccess
+    suspend fun resetLocalData(): Boolean = runCatchingCancellable { localDataResetter.reset() }.isSuccess
 
     fun consumeMessage() {
         message.value = null
@@ -210,7 +211,7 @@ class CacheManagementViewModel @Inject constructor(
         if (busy.value) return
         viewModelScope.launch {
             busy.value = true
-            message.value = runCatching { block() }.getOrElse { "操作失败，请稍后重试" }
+            message.value = runCatchingCancellable { block() }.getOrElse { "操作失败，请稍后重试" }
             busy.value = false
         }
     }

@@ -2,6 +2,7 @@ package com.acgcompass.data.local.di
 
 import android.content.Context
 import androidx.room.Room
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.AcgCompassDatabase
 import com.acgcompass.data.local.dao.AiResultDao
 import com.acgcompass.data.local.dao.BackgroundTaskStateDao
@@ -50,7 +51,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AcgCompassDatabase {
         // 打开之前先看要不要升级：要升级就把数据库文件原样备份一份（见 DatabaseUpgradeBackup）。
-        runCatching { com.acgcompass.data.local.migration.DatabaseUpgradeBackup.backupIfUpgrading(context) }
+        runCatchingCancellable { com.acgcompass.data.local.migration.DatabaseUpgradeBackup.backupIfUpgrading(context) }
         return Room.databaseBuilder(
             context,
             AcgCompassDatabase::class.java,

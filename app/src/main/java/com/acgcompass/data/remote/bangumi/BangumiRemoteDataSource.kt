@@ -4,6 +4,7 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.asException
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.common.withCause
 import com.acgcompass.core.network.HttpErrorMapper
 import com.acgcompass.core.network.RequestPriority
@@ -221,7 +222,7 @@ class BangumiRemoteDataSource @Inject constructor(
         val collected = first.data.toMutableList()
         var lastPageSize = first.data.size
         while (lastPageSize > 0 && collected.size < limit && offset + collected.size < first.total) {
-            val next = runCatching {
+            val next = runCatchingCancellable {
                 api.searchSubjects(request, limit - collected.size, offset + collected.size, requestAuth).bodyOrThrow()
             }.getOrNull()
             lastPageSize = next?.data?.size ?: 0
@@ -313,7 +314,7 @@ class BangumiRemoteDataSource @Inject constructor(
         if (!response.isSuccessful) {
             // 暴露真实失败详情（HTTP 码 + 服务端错误体）便于定位，而非只给「请稍后重试」。
             val code = response.code()
-            val errBody = runCatching { response.errorBody()?.string() }.getOrNull()
+            val errBody = runCatchingCancellable { response.errorBody()?.string() }.getOrNull()
                 ?.replace(Regex("\\s+"), " ")?.trim()?.take(300)
             val detail = "Bangumi 收藏写入失败 HTTP $code（$method /v0/users/-/collections/$subjectId）" +
                 (if (!errBody.isNullOrBlank()) "：$errBody" else "")
@@ -390,7 +391,7 @@ class BangumiRemoteDataSource @Inject constructor(
         )
         if (!response.isSuccessful) {
             val code = response.code()
-            val errBody = runCatching { response.errorBody()?.string() }.getOrNull()
+            val errBody = runCatchingCancellable { response.errorBody()?.string() }.getOrNull()
                 ?.replace(Regex("\\s+"), " ")?.trim()?.take(200)
             val detail = "Bangumi 章节进度写入失败 HTTP $code" +
                 (if (!errBody.isNullOrBlank()) "：$errBody" else "")

@@ -1,5 +1,6 @@
 package com.acgcompass.data.taste
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.taste.TasteAlgorithmConfig
 import com.acgcompass.domain.taste.TasteAlgorithmConfigSource
 import com.acgcompass.domain.taste.TasteAlgorithmConfigSource.ImportResult
@@ -13,7 +14,7 @@ class BuiltInTasteAlgorithmConfigSource @Inject constructor() : TasteAlgorithmCo
     override fun current(): TasteAlgorithmConfig = TasteAlgorithmConfig.DEFAULT
 
     override suspend fun importReplacement(text: String): ImportResult {
-        val parsed = runCatching { TasteAlgorithmConfig.decode(text) }
+        val parsed = runCatchingCancellable { TasteAlgorithmConfig.decode(text) }
         val problems = parsed.fold(
             onSuccess = { it.validate() },
             onFailure = { listOf("无法解析：${it.message.orEmpty().take(MAX_MESSAGE)}") },

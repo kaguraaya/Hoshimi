@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.acgcompass.BuildConfig
 import com.acgcompass.R
 import com.acgcompass.core.common.AppInfo
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.designsystem.AcgCompassTheme
 import com.acgcompass.core.designsystem.IconWell
 import com.acgcompass.core.designsystem.NavRow
@@ -172,7 +173,7 @@ private fun AboutInfoSection(version: String, author: String, repoUrl: String) {
             NavRow(
                 title = "项目仓库",
                 supporting = repoUrl,
-                onClick = { runCatching { uriHandler.openUri(repoUrl) } },
+                onClick = { runCatchingCancellable { uriHandler.openUri(repoUrl) } },
                 modifier = Modifier.copyOnLongPress(repoUrl),
                 leading = {
                     IconWell(icon = ImageVector.vectorResource(id = R.drawable.ic_github))
@@ -239,7 +240,7 @@ fun AboutDocumentScreen(title: String, paragraphs: List<String>, onBack: () -> U
 fun AboutLicenseScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val notice = androidx.compose.runtime.remember(context) {
-        runCatching {
+        runCatchingCancellable {
             context.assets.open("third_party_notices.txt").bufferedReader(Charsets.UTF_8).use { it.readText() }
         }.getOrElse { "许可证清单暂时无法读取，请重新安装或联系开发者。" }
     }

@@ -27,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.designsystem.FlatFilterChip
 import com.acgcompass.core.ui.AcgScreenScaffold
 import com.acgcompass.core.ui.ScreenContentPadding
@@ -80,7 +81,7 @@ class TagManualReviewViewModel @Inject constructor(
 
     private fun reload() {
         viewModelScope.launch {
-            val items = runCatching { controller.manualReviewItems() }.getOrDefault(emptyList())
+            val items = runCatchingCancellable { controller.manualReviewItems() }.getOrDefault(emptyList())
             _state.update { it.copy(items = items, selected = emptySet(), saving = false) }
         }
     }

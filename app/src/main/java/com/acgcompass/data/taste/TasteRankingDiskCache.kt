@@ -1,6 +1,7 @@
 package com.acgcompass.data.taste
 
 import android.content.Context
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.taste.RankOwnership
 import com.acgcompass.domain.taste.TasteRankItem
 import com.acgcompass.domain.taste.TasteRanking
@@ -20,7 +21,7 @@ class TasteRankingDiskCache @Inject constructor(
     private val file: File get() = File(context.filesDir, FILE_NAME)
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun read(): TasteRanking? = runCatching {
+    fun read(): TasteRanking? = runCatchingCancellable {
         file.takeIf { it.exists() }?.readText()?.let {
             json.decodeFromString(
                 StoredRanking.serializer(),
@@ -31,7 +32,7 @@ class TasteRankingDiskCache @Inject constructor(
 
     /** 先写临时文件再改名，写到一半被打断也不会留下坏文件。 */
     fun write(ranking: TasteRanking) {
-        runCatching {
+        runCatchingCancellable {
             val temp = File(context.filesDir, "$FILE_NAME.tmp")
             temp.writeText(json.encodeToString(StoredRanking.serializer(), StoredRanking.of(ranking)))
             temp.renameTo(file)

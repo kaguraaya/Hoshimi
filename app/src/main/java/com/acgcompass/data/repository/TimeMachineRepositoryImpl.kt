@@ -1,6 +1,7 @@
 package com.acgcompass.data.repository
 
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.dao.SnapshotDao
 import com.acgcompass.data.local.entity.ChangeLogEntity
 import com.acgcompass.data.local.entity.SnapshotEntity
@@ -127,7 +128,7 @@ class TimeMachineRepositoryImpl @Inject constructor(
 
     private fun decodeState(raw: String?): List<CollectionState> {
         if (raw.isNullOrEmpty()) return emptyList()
-        return runCatching {
+        return runCatchingCancellable {
             json.decodeFromString<List<PersistedState>>(raw).map { it.toDomain() }
         }.getOrDefault(emptyList())
     }

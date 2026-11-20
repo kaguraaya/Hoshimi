@@ -2,6 +2,7 @@ package com.acgcompass.feature.tasteranking
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.domain.taste.LocalPoolStatus
 import com.acgcompass.domain.taste.PoolExpansion
@@ -95,7 +96,7 @@ class TasteRankingViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             // 先显示上次的结果，再在后台重算；算完有变化就整列换掉。
-            runCatching { repository.lastResult() }.getOrNull()?.let { last ->
+            runCatchingCancellable { repository.lastResult() }.getOrNull()?.let { last ->
                 _state.update { it.copy(loading = false, ranking = last, updating = true) }
             }
             load(force = false)
@@ -130,7 +131,7 @@ class TasteRankingViewModel @Inject constructor(
         _state.update { it.copy(refreshing = true, updating = true) }
         viewModelScope.launch {
             val startedAt = System.currentTimeMillis()
-            val job = viewModelScope.async { runCatching { repository.load(force = true) }.getOrNull() }
+            val job = viewModelScope.async { runCatchingCancellable { repository.load(force = true) }.getOrNull() }
             refreshGate.awaitIndicator(job, startedAt)
             _state.update { it.copy(refreshing = false) }
             val ranking = job.await()
@@ -188,14 +189,14 @@ class TasteRankingViewModel @Inject constructor(
     }
 
     private suspend fun refreshPoolStatus() {
-        val status = runCatching { repository.poolStatus() }.getOrNull()
+        val status = runCatchingCancellable { repository.poolStatus() }.getOrNull()
         _state.update { it.copy(pool = status) }
     }
 
     fun onMessageShown() = _state.update { it.copy(message = null) }
 
     private suspend fun load(force: Boolean) {
-        val ranking = runCatching { repository.load(force) }.getOrNull()
+        val ranking = runCatchingCancellable { repository.load(force) }.getOrNull()
         _state.update {
             it.copy(
                 loading = false,

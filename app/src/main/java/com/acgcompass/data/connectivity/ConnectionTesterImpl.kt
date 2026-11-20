@@ -4,6 +4,7 @@ import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.asException
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -42,7 +43,7 @@ class ConnectionTesterImpl @Inject constructor(
 
     override suspend fun test(target: ConnectionTarget): ConnectionTestResult {
         val docUrl = target.documentationUrl.takeIf(String::isNotBlank)
-        val configured = runCatching {
+        val configured = runCatchingCancellable {
             credentialStore.observeStatus().first()[target.toCredentialSource()]?.configured == true
         }.getOrDefault(false)
 
@@ -77,7 +78,7 @@ class ConnectionTesterImpl @Inject constructor(
         docUrl: String?,
     ): ConnectionTestResult {
         val probe: AppResult<List<WorkMatch>>? = withTimeoutOrNull(TIMEOUT_MS) {
-            runCatching { sourceProbe(target) }.getOrElse { AppResult.Failure(AppError.Network()) }
+            runCatchingCancellable { sourceProbe(target) }.getOrElse { AppResult.Failure(AppError.Network()) }
         }
 
         return when (probe) {
@@ -110,7 +111,7 @@ class ConnectionTesterImpl @Inject constructor(
     }
 
     private suspend fun testBangumi(configured: Boolean, docUrl: String?): ConnectionTestResult {
-        val settings = runCatching { settingsDataStore.settings.first() }.getOrNull()
+        val settings = runCatchingCancellable { settingsDataStore.settings.first() }.getOrNull()
         val official = settings?.isBangumiOfficialApi ?: true
         val currentUrl = settings?.bangumiApiBaseUrl.orEmpty()
         val addressType = when {
@@ -121,7 +122,7 @@ class ConnectionTesterImpl @Inject constructor(
         val lines = mutableListOf("当前地址：$addressType（${currentUrl.ifBlank { "?" }}）")
 
         val search = withTimeoutOrNull(TIMEOUT_MS) {
-            runCatching { bangumi.searchSubjects(keyword = PROBE_KEYWORD, limit = 1) }
+            runCatchingCancellable { bangumi.searchSubjects(keyword = PROBE_KEYWORD, limit = 1) }
                 .getOrElse { AppResult.Failure(AppError.Network()) }
         }
         return when (search) {

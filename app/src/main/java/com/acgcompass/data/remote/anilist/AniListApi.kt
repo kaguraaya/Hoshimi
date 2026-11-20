@@ -2,6 +2,7 @@ package com.acgcompass.data.remote.anilist
 
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.asException
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.HttpErrorMapper
 import com.acgcompass.core.network.NetworkJson
 import com.acgcompass.core.network.RequestPriority
@@ -125,7 +126,14 @@ class AniListApi(
     /** 把 GraphQL `errors[]` 映射为领域错误：优先按首个 error 的 `status` 映射，否则兜底 [AppError.Server]。 */
     private fun mapGraphQlErrors(errors: JsonArray): AppError {
         val status = errors.asSequence()
-            .mapNotNull { runCatching { json.decodeFromJsonElement(AniListGraphQlError.serializer(), it) }.getOrNull() }
+            .mapNotNull {
+                runCatchingCancellable {
+                    json.decodeFromJsonElement(
+                        AniListGraphQlError.serializer(),
+                        it,
+                    )
+                }.getOrNull()
+            }
             .firstNotNullOfOrNull { it.status }
         return if (status != null) HttpErrorMapper.mapStatusCode(status) else AppError.Server()
     }

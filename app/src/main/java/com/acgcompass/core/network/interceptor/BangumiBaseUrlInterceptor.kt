@@ -1,5 +1,6 @@
 package com.acgcompass.core.network.interceptor
 
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.BangumiNetworkConfigProvider
 import com.acgcompass.core.network.NetworkSource
 import kotlinx.coroutines.runBlocking
@@ -31,7 +32,7 @@ class BangumiBaseUrlInterceptor(
         if (request.sourceAuth()?.sourceId != NetworkSource.BANGUMI) {
             return chain.proceed(request)
         }
-        val config = runCatching {
+        val config = runCatchingCancellable {
             runBlocking { configProvider.get() }
         }.getOrNull() ?: return chain.proceed(request)
 

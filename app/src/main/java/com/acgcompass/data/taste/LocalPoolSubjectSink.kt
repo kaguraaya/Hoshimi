@@ -1,6 +1,7 @@
 package com.acgcompass.data.taste
 
 import com.acgcompass.core.common.ApplicationScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.remote.bangumi.BangumiSubjectDto
 import com.acgcompass.data.remote.bangumi.BangumiSubjectSink
 import com.acgcompass.data.remote.bangumi.toBasicWorkFeature
@@ -26,6 +27,6 @@ class LocalPoolSubjectSink @Inject constructor(
             .mapNotNull { it.toBasicWorkFeature() }
             .toList()
         if (seeds.isEmpty()) return
-        scope.launch { runCatching { features.get().seedLightweight(seeds) } }
+        scope.launch { runCatchingCancellable { features.get().seedLightweight(seeds) } }
     }
 }

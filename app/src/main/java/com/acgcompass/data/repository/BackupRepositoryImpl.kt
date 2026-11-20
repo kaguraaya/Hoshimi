@@ -5,6 +5,7 @@ import com.acgcompass.BuildConfig
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.runCatchingApp
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.backup.BackupEnvelope
 import com.acgcompass.data.backup.BackupMerger
 import com.acgcompass.data.backup.BackupSerializer
@@ -137,30 +138,47 @@ class BackupRepositoryImpl @Inject constructor(
 
     // --- importBackup (merge-not-overwrite) -----------------------
 
-    override suspend fun importBackup(json: String): AppResult<ImportReport> = withContext(dispatchers.io) {
-        runCatchingApp {
-            val incoming = BackupSerializer.deserialize(json)
-            // 读出当前本地数据（不含凭据）作为合并基线。
-            val local = readLocalEnvelope(includeCredentials = false)
-            val result = BackupMerger.merge(local = local, incoming = incoming)
-
-            database.withTransaction {
-                persist(result.merged)
-                settingsDataStore.replaceSettings(result.merged.settings.toSettingsState())
+    override suspend fun exportBackupTo(output: java.io.OutputStream, includeCredentials: Boolean): AppResult<Unit> =
+        withContext(dispatchers.io) {
+            runCatchingApp {
+                val envelope = readLocalEnvelope(includeCredentials)
+                BackupSerializer.serializeTo(envelope, output)
+                output.flush()
             }
-
-            ImportReport(
-                added = result.addedCount,
-                updated = result.updatedCount,
-                conflicts = result.conflicts.map { conflict ->
-                    ImportConflict(
-                        table = conflict.table,
-                        key = conflict.key,
-                        keptLocal = conflict.resolution == BackupMerger.Resolution.KEPT_LOCAL,
-                    )
-                },
-            )
         }
+
+    override suspend fun importBackup(json: String): AppResult<ImportReport> = withContext(dispatchers.io) {
+        runCatchingApp { mergeIncoming(BackupSerializer.deserialize(json)) }
+    }
+
+    override suspend fun importBackupFrom(input: java.io.InputStream): AppResult<ImportReport> =
+        withContext(dispatchers.io) {
+            runCatchingApp { mergeIncoming(BackupSerializer.deserializeFrom(input)) }
+        }
+
+    private suspend fun mergeIncoming(incoming: BackupEnvelope): ImportReport {
+        // 读出当前本地数据（不含凭据）作为合并基线。
+        val local = readLocalEnvelope(includeCredentials = false)
+        val result = BackupMerger.merge(local = local, incoming = incoming)
+
+        database.withTransaction {
+            persist(result.merged)
+            settingsDataStore.replaceSettings(result.merged.settings.toSettingsState())
+        }
+
+        return ImportReport(
+            added = result.addedCount,
+            updated = result.updatedCount,
+            conflictCount = result.conflictCount,
+            keptLocalCount = result.keptLocalCount,
+            conflicts = result.conflicts.map { conflict ->
+                ImportConflict(
+                    table = conflict.table,
+                    key = conflict.key,
+                    keptLocal = conflict.resolution == BackupMerger.Resolution.KEPT_LOCAL,
+                )
+            },
+        )
     }
 
     // --- CSV export ----------------------------------------------
@@ -327,7 +345,7 @@ internal fun BackupEnvelope.toRatedWorkCsvRows(): List<RatedWorkCsvRow> {
     }
 }
 
-private fun parseFeatureTags(json: String): List<Pair<String, Int>> = runCatching {
+private fun parseFeatureTags(json: String): List<Pair<String, Int>> = runCatchingCancellable {
     Json.parseToJsonElement(json).jsonArray.mapNotNull { element ->
         val value = element.jsonObject
         val name = value["name"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank) ?: return@mapNotNull null

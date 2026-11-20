@@ -56,3 +56,15 @@ inline fun <T> runCatchingResult(block: () -> T): Result<T> = try {
 } catch (e: Throwable) {
     Result.failure(e.toAppError().asException())
 }
+
+/**
+ * 和标准库 `runCatching` 一样返回 `kotlin.Result`，失败侧保留原始异常；区别是协程取消（[CancellationException]）
+ * 会重新抛出，不被当成普通失败吞掉。离开页面、任务被取消时，后续代码不会继续把结果写回界面或数据库。
+ */
+inline fun <T> runCatchingCancellable(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Throwable) {
+    Result.failure(e)
+}

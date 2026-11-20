@@ -2,6 +2,7 @@ package com.acgcompass.data.tasks
 
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.local.dao.TaskRunDao
 import com.acgcompass.data.local.entity.TaskRunEntity
 import com.acgcompass.domain.model.BackgroundTaskKind
@@ -66,7 +67,7 @@ class TaskRunRecorder @Inject constructor(
 
     /** 进程被杀后「运行中」不会自己清掉：启动时调用。 */
     suspend fun clearStaleRunning() {
-        runCatching { dao.clearRunning() }
+        runCatchingCancellable { dao.clearRunning() }
     }
 
     private suspend fun write(kind: BackgroundTaskKind, change: (TaskRunEntity) -> TaskRunEntity) {

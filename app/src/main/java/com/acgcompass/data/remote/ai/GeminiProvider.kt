@@ -2,6 +2,7 @@ package com.acgcompass.data.remote.ai
 
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.asException
+import com.acgcompass.core.common.runCatchingCancellable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -103,7 +104,7 @@ class GeminiProvider(
     }
 
     private fun parseResponse(rawBody: String): AiRawResponse {
-        val parsed = runCatching { json.decodeFromString<GeminiResponse>(rawBody) }
+        val parsed = runCatchingCancellable { json.decodeFromString<GeminiResponse>(rawBody) }
             .getOrElse { throw AppError.AiMalformed().asException() }
         val candidate = parsed.candidates.firstOrNull()
         val content = candidate?.content?.parts

@@ -11,6 +11,7 @@ import androidx.work.WorkerParameters
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.domain.repository.BackupRepository
 import com.acgcompass.domain.repository.ImportReport
@@ -79,23 +80,25 @@ class AutoBackupManager @Inject constructor(
 
     /** 从一份自动备份恢复（与导入备份相同，按现有规则合并）。 */
     suspend fun restore(backup: AutoBackupFile): AppResult<ImportReport> = withContext(dispatchers.io) {
-        val json = runCatching { backup.file.readText() }.getOrNull()
-            ?: return@withContext AppResult.Failure(AppError.FieldMissing(cause = "备份文件读不出来"))
-        backupRepository.importBackup(json)
+        if (!backup.file.canRead()) {
+            return@withContext AppResult.Failure(AppError.FieldMissing(cause = "备份文件读不出来"))
+        }
+        backup.file.inputStream().buffered().use { backupRepository.importBackupFrom(it) }
     }
 
     private suspend fun writeBackup(now: Long): AppResult<AutoBackupFile> {
-        val json = when (val exported = backupRepository.exportBackup(includeCredentials = false)) {
-            is AppResult.Success -> exported.data
-            is AppResult.Failure -> return exported
-        }
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(Date(now))
         val target = File(dir, "$PREFIX$stamp.json")
         val temp = File(dir, "$PREFIX$stamp.json.tmp")
-        return runCatching {
-            temp.writeText(json)
+        // 直接写进临时文件，不在内存里拼出整段 JSON。
+        val exported = temp.outputStream().buffered().use { backupRepository.exportBackupTo(it) }
+        if (exported is AppResult.Failure) {
+            temp.delete()
+            return exported
+        }
+        return runCatchingCancellable {
             // 读回来能解析才算成功：防止写了一半或格式错误的文件冒充备份。
-            BackupSerializer.deserialize(temp.readText())
+            temp.inputStream().buffered().use { BackupSerializer.deserializeFrom(it) }
             if (!temp.renameTo(target)) error("无法保存备份文件")
             prune()
             AutoBackupFile(target, target.lastModified(), target.length())

@@ -2,6 +2,7 @@ package com.acgcompass.feature.tasks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.model.BackgroundTaskStatus
 import com.acgcompass.domain.repository.BackgroundTaskRepository
@@ -29,7 +30,7 @@ class BackgroundTasksViewModel @Inject constructor(
 
     fun onRetry(kind: BackgroundTaskKind) {
         viewModelScope.launch {
-            val queued = runCatching { repository.retry(kind) }.getOrDefault(false)
+            val queued = runCatchingCancellable { repository.retry(kind) }.getOrDefault(false)
             _message.value = if (queued) "已安排「${kind.label()}」马上再跑一次" else "这个任务现在不能手动重试"
         }
     }

@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
+import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.data.credential.CredentialStore
 import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.data.datastore.SettingsDataStore
@@ -181,7 +182,7 @@ class BangumiOutboxWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val outbox: BangumiOutbox,
 ) : CoroutineWorker(appContext, params) {
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result = runCatchingCancellable {
         when (outbox.pushPending()) {
             is AppResult.Success -> Result.success()
             is AppResult.Failure -> if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
