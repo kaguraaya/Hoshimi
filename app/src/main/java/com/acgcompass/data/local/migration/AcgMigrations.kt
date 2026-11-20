@@ -52,6 +52,7 @@ object AcgMigrations {
     private const val VERSION_18 = 18
     private const val VERSION_19 = 19
     private const val VERSION_20 = 20
+    private const val VERSION_21 = 21
 
     /**
      * v1 → v2：新增 `user_collections` 表（用户个人收藏：状态、评分、进度、短评和标签）。
@@ -431,6 +432,23 @@ object AcgMigrations {
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_trash_items_batchId` ON `trash_items` (`batchId`)")
     }
 
+    private val MIGRATION_20_21 = Migration(VERSION_20, VERSION_21) { db ->
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `rating_backfill_state` (`workId` TEXT NOT NULL, " +
+                "`lastAttemptAt` INTEGER NOT NULL, `lastCheckedAt` INTEGER, `failureCount` INTEGER NOT NULL, " +
+                "`nextAttemptAt` INTEGER NOT NULL, `lastOutcome` TEXT NOT NULL, PRIMARY KEY(`workId`))",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_rating_backfill_state_nextAttemptAt` " +
+                "ON `rating_backfill_state` (`nextAttemptAt`)",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `task_runs` (`taskKey` TEXT NOT NULL, `running` INTEGER NOT NULL, " +
+                "`lastStartedAt` INTEGER, `lastSuccessAt` INTEGER, `lastFailureAt` INTEGER, `lastError` TEXT, " +
+                "`lastSummary` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`taskKey`))",
+        )
+    }
+
     private val MIGRATION_17_18 = Migration(VERSION_17, VERSION_18) { db ->
         db.execSQL(
             "ALTER TABLE `background_task_state` ADD COLUMN `personalInputFingerprint` TEXT NOT NULL DEFAULT ''",
@@ -472,5 +490,6 @@ object AcgMigrations {
         MIGRATION_17_18,
         MIGRATION_18_19,
         MIGRATION_19_20,
+        MIGRATION_20_21,
     )
 }

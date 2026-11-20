@@ -204,6 +204,12 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindBackgroundTaskRepository(
+        impl: com.acgcompass.data.tasks.BackgroundTaskRepositoryImpl,
+    ): com.acgcompass.domain.repository.BackgroundTaskRepository
+
+    @Binds
+    @Singleton
     abstract fun bindTasteAnalysisController(impl: TasteAnalysisCoordinator): TasteAnalysisController
 
     @Binds

@@ -4,6 +4,7 @@ import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingAggregate
+import com.acgcompass.domain.model.RatingBackfillOutcome
 import com.acgcompass.domain.model.SourceRef
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.WorkMatch
@@ -77,6 +78,15 @@ interface WorkRepository {
      */
     suspend fun backfillRatings(workId: String): AppResult<RatingAggregate> =
         aggregateRatings(workId, forceRefresh = false)
+
+    /**
+     * 后台补评分并给出结果分类：查过了（不论有没有找到）、这次因网络 / 限流没查成、或其它错误。
+     * 默认实现只看 [backfillRatings] 的返回值。
+     */
+    suspend fun backfillRatingsOutcome(workId: String): RatingBackfillOutcome = when (backfillRatings(workId)) {
+        is AppResult.Success -> RatingBackfillOutcome.CHECKED
+        is AppResult.Failure -> RatingBackfillOutcome.TRANSIENT_FAILURE
+    }
 
     /**
      * 仅读取本地已缓存的多源评分聚合（**不触发网络刷新**）。用于发现页榜单 / 评分差异 / 筛选

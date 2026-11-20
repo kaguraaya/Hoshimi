@@ -160,4 +160,18 @@ object DatabaseModule {
     @Singleton
     fun provideWorkIdMigrationDao(db: AcgCompassDatabase): com.acgcompass.data.local.dao.WorkIdMigrationDao =
         db.workIdMigrationDao()
+
+    @Provides
+    @Singleton
+    fun provideRatingBackfillDao(db: AcgCompassDatabase): com.acgcompass.data.local.dao.RatingBackfillDao =
+        db.ratingBackfillDao()
+
+    @Provides
+    @Singleton
+    fun provideTaskRunDao(db: AcgCompassDatabase): com.acgcompass.data.local.dao.TaskRunDao = db.taskRunDao()
+
+    @Provides
+    @Singleton
+    fun provideLocalTransactionRunner(db: AcgCompassDatabase): com.acgcompass.data.local.LocalTransactionRunner =
+        com.acgcompass.data.local.RoomTransactionRunner(db)
 }

@@ -162,7 +162,10 @@ class SettingsDataStore @Inject constructor(
     /** 评分差异页：进入时是否自动去其它平台补评分。 */
     val scoreDiffAutoBackfill: Flow<Boolean> = dataStore.data.map { it[Keys.SCORE_DIFF_AUTO_BACKFILL] ?: true }
 
-    /** 后台补评分最近查过的作品（作品 id → 查询时间）：一段时间内不重复查。 */
+    /**
+     * 旧版本记录的后台补评分「最近查过」（作品 id → 查询时间）。现在记录在数据库里，
+     * 只在第一次运行时读出来搬过去，然后 [clearRatingBackfillAttempts]。
+     */
     val ratingBackfillAttempts: Flow<Map<String, Long>> = dataStore.data.map { prefs ->
         prefs[Keys.RATING_BACKFILL_ATTEMPTS].orEmpty().mapNotNull { entry ->
             val at = entry.substringAfterLast('@').toLongOrNull()
@@ -170,10 +173,8 @@ class SettingsDataStore @Inject constructor(
         }.toMap()
     }
 
-    suspend fun setRatingBackfillAttempts(attempts: Map<String, Long>) {
-        dataStore.edit { prefs ->
-            prefs[Keys.RATING_BACKFILL_ATTEMPTS] = attempts.mapTo(HashSet()) { (id, at) -> "$id@$at" }
-        }
+    suspend fun clearRatingBackfillAttempts() {
+        dataStore.edit { prefs -> prefs.remove(Keys.RATING_BACKFILL_ATTEMPTS) }
     }
 
     /** 是否记录本地时光机快照。 */

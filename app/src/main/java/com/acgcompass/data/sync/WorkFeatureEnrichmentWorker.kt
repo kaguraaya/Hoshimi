@@ -7,12 +7,15 @@ import androidx.work.WorkerParameters
 import com.acgcompass.data.local.dao.BacklogDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkFeatureDao
+import com.acgcompass.data.tasks.TaskRunRecorder
+import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.taste.WorkFeatureRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
 @HiltWorker
+@Suppress("LongParameterList") // Hilt 注入
 class WorkFeatureEnrichmentWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
@@ -21,6 +24,7 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
     private val backlogDao: BacklogDao,
     private val workFeatureRepository: WorkFeatureRepository,
     private val scheduler: WorkFeatureEnrichmentScheduler,
+    private val taskRecorder: TaskRunRecorder,
 ) : CoroutineWorker(appContext, params) {
     /**
      * 每次一小批，顺序是：
@@ -31,6 +35,26 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
      * 这一批有进展且还有剩余时再排下一批。
      */
     override suspend fun doWork(): Result = runCatching {
+        taskRecorder.started(BackgroundTaskKind.FEATURE_ENRICHMENT)
+        val batch = enrichBatch()
+        if (batch.stalled) {
+            // 有要补的作品却一部都没补上：多半是网络或限流，记为失败并交给 WorkManager 退避重试几次。
+            taskRecorder.failed(
+                BackgroundTaskKind.FEATURE_ENRICHMENT,
+                "这批 ${batch.attempted} 部一部都没补上，多半是网络不通或被限速，稍后会自动再试",
+            )
+            if (runAttemptCount < MAX_STALLED_RETRIES) Result.retry() else Result.success()
+        } else {
+            taskRecorder.succeeded(BackgroundTaskKind.FEATURE_ENRICHMENT, batch.summary())
+            Result.success()
+        }
+    }.getOrElse { error ->
+        if (error is kotlin.coroutines.cancellation.CancellationException) throw error
+        taskRecorder.failed(BackgroundTaskKind.FEATURE_ENRICHMENT, TaskRunRecorder.describe(error))
+        Result.retry()
+    }
+
+    private suspend fun enrichBatch(): EnrichmentBatch {
         val priorityIds = buildSet {
             userCollectionDao.getAll().forEach { add(it.sourceItemId.ifBlank { it.localWorkId }) }
             backlogDao.getAll().forEach { add(it.workId) }
@@ -45,17 +69,25 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
         } else {
             emptyList()
         }
+        val rest = if (personal.isEmpty() && missing.isEmpty()) {
+            workFeatureDao.getIncompleteIds(
+                BATCH_SIZE,
+            )
+        } else {
+            emptyList()
+        }
         val progressed = when {
             personal.isNotEmpty() -> upgrade(personal)
             missing.isNotEmpty() ->
                 workFeatureRepository.ensureBasic(missing, networkBudget = missing.size, background = true).isNotEmpty()
-            else -> workFeatureDao.getIncompleteIds(BATCH_SIZE).takeIf { it.isNotEmpty() }?.let { upgrade(it) } ?: false
+            rest.isNotEmpty() -> upgrade(rest)
+            else -> false
         }
         val remaining = workFeatureDao.getIncompleteIds(1).isNotEmpty() ||
             workFeatureDao.getPoolIdsWithoutFeature(MediaType.ANIME.name, 1).isNotEmpty()
         if (progressed && remaining) scheduler.enqueue()
-        Result.success()
-    }.getOrElse { Result.retry() }
+        return EnrichmentBatch(attempted = personal.size + missing.size + rest.size, progressed, remaining)
+    }
 
     /** 把这批补成完整资料，返回是否至少补完一部。 */
     private suspend fun upgrade(ids: List<String>): Boolean {
@@ -65,7 +97,22 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
 
     companion object {
         const val UNIQUE_WORK_NAME = "work_feature_enrichment"
+
+        /** 一部都没补上时最多让 WorkManager 退避重试几次。 */
+        private const val MAX_STALLED_RETRIES = 3
         private const val BATCH_SIZE = 20
         private const val POOL_BATCH_SIZE = 40
+    }
+}
+
+/** 一批补资料的结果：尝试了多少部、有没有进展、还有没有剩余。 */
+internal data class EnrichmentBatch(val attempted: Int, val progressed: Boolean, val remaining: Boolean) {
+    /** 有要补的作品却一部都没补上。 */
+    val stalled: Boolean get() = attempted > 0 && !progressed
+
+    fun summary(): String = when {
+        attempted == 0 -> "没有要补的作品"
+        remaining -> "补了一批，还有作品没补完"
+        else -> "都补完了"
     }
 }

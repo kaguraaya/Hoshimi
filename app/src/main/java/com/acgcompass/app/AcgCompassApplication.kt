@@ -91,6 +91,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
 
     @Inject lateinit var autoBackupScheduler: Lazy<com.acgcompass.data.backup.AutoBackupScheduler>
 
+    @Inject lateinit var taskRunRecorder: Lazy<com.acgcompass.data.tasks.TaskRunRecorder>
+
     @Inject lateinit var dataSafety: Lazy<com.acgcompass.data.backup.DataSafety>
 
     @Inject lateinit var trashRepository: Lazy<com.acgcompass.domain.repository.TrashRepository>
@@ -161,6 +163,8 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
             val justUpgraded = databaseHealthMonitor.get().upgradeVerified
             if (health is com.acgcompass.data.local.migration.DatabaseHealth.Failed) return@launch
             dataSafety.get().restoreAutoBackupIfRequested()
+            // 上次进程被杀时留下的「运行中」标记清掉，后台任务页才不会一直显示在运行。
+            taskRunRecorder.get().clearStaleRunning()
             // 其它平台作品的旧编号改成「来源:编号」，免得和同号的 Bangumi 作品串在一起。
             runCatching { workIdMigration.get().run() }
             settingsDataStore.autoBackupEnabled
