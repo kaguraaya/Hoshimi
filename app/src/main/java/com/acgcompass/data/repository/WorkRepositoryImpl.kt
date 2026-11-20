@@ -13,7 +13,6 @@ import com.acgcompass.core.network.SourceFetcher
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.data.datastore.SettingsDataStore
-import com.acgcompass.data.datastore.SettingsState
 import com.acgcompass.data.local.dao.CacheDao
 import com.acgcompass.data.local.dao.RankingCacheDao
 import com.acgcompass.data.local.dao.RatingDao
@@ -51,6 +50,7 @@ import com.acgcompass.domain.matching.ResolvedLink
 import com.acgcompass.domain.matching.decideMatch
 import com.acgcompass.domain.matching.matchConfidence
 import com.acgcompass.domain.matching.resolveLink
+import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingAggregate
 import com.acgcompass.domain.model.RatingBackfillOutcome
@@ -132,6 +132,8 @@ class WorkRepositoryImpl @Inject constructor(
     private val cacheFillCoordinator: PublicCacheFillCoordinator,
     private val cacheFillSourcePager: CacheFillSourcePager,
     private val workFeatureRepository: WorkFeatureRepository,
+    private val sourceQuota: com.acgcompass.core.network.SourceQuota,
+    private val taskRecorder: com.acgcompass.data.tasks.TaskRunRecorder,
 ) : WorkRepository, PublicCacheWorkRepository, CacheFillController {
 
     private val profileAttempts = java.util.concurrent.ConcurrentHashMap<String, Long>()
@@ -302,18 +304,21 @@ class WorkRepositoryImpl @Inject constructor(
         return found
     }
 
-    private suspend fun safeSearch(block: suspend () -> AppResult<List<WorkMatch>>): List<WorkMatch> = try {
+    private suspend fun safeSearch(
+        source: SourceId? = null,
+        block: suspend () -> AppResult<List<WorkMatch>>,
+    ): List<WorkMatch> = try {
         when (val result = block()) {
             is AppResult.Success -> result.data
             is AppResult.Failure -> {
-                recordTransientFailure(result.error)
+                recordTransientFailure(result.error, source)
                 emptyList()
             }
         }
     } catch (e: CancellationException) {
         throw e
     } catch (_: Exception) {
-        recordTransientFailure(null)
+        recordTransientFailure(null, source)
         emptyList()
     }
 
@@ -739,41 +744,6 @@ class WorkRepositoryImpl @Inject constructor(
             policy.normalizedSpaceLimitBytes
     }.coerceAtLeast(0f)
 
-    private fun SettingsState.toCachePolicy(): CachePolicy = CachePolicy(
-        mode = cacheLimitMode,
-        countLimit = autoCacheMaxCount,
-        spaceLimitBytes = cacheSpaceLimitMb.toLong() * 1024L * 1024L,
-        backgroundFillEnabled = cacheBackgroundFillEnabled,
-    )
-
-    private fun CachePolicy.targetWorkSlots(): Int = when (mode) {
-        CacheLimitMode.COUNT -> normalizedCountLimit
-        CacheLimitMode.SPACE -> (normalizedSpaceLimitBytes / ESTIMATED_PUBLIC_WORK_SLOT_BYTES)
-            .toInt()
-            .coerceIn(CachePolicy.MIN_COUNT_LIMIT, CachePolicy.MAX_COUNT_LIMIT)
-    }
-
-    private fun estimateMetadataBytes(work: Work): Long = 512L +
-        listOfNotNull(
-            work.titles.canonical,
-            work.titles.ja,
-            work.titles.romaji,
-            work.titles.en,
-            work.summary,
-            work.coverUrl,
-        ).sumOf { it.toByteArray(Charsets.UTF_8).size.toLong() } +
-        work.titles.aliases.sumOf { it.toByteArray(Charsets.UTF_8).size.toLong() }
-
-    /** 当前季度的开播日期范围过滤，用于本季榜单 `sort=rank` 浏览。 */
-    private fun currentSeasonAirDateRange(): List<String> {
-        val now = java.time.LocalDate.now()
-        val startMonth = ((now.monthValue - 1) / 3) * 3 + 1
-        val start = java.time.LocalDate.of(now.year, startMonth, 1)
-        val end = start.plusMonths(3)
-        val fmt = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
-        return listOf(">=${start.format(fmt)}", "<${end.format(fmt)}")
-    }
-
     override suspend fun refreshHomeSeasonal(
         fresh: Boolean,
         onFetched: suspend (HomeSeasonal) -> Unit,
@@ -889,7 +859,7 @@ class WorkRepositoryImpl @Inject constructor(
                     settingsDataStore.jikanEnabled.first()
                 val stale = cachedRows.isEmpty() || tenraiMissing || cachedRows.any {
                     val ttl = if (it.missing) {
-                        DetailCacheTtl.MISSING_RATING_MILLIS
+                        missingRatingTtl(workId)
                     } else {
                         DetailCacheTtl.COMMENTS_MILLIS
                     }
@@ -897,13 +867,71 @@ class WorkRepositoryImpl @Inject constructor(
                 }
                 val needsProfile = needsFullProfile(workId, now)
                 if (forceRefresh || stale || needsProfile) {
-                    refreshRatingsAndWork(workId, forceRefresh, refreshProfile = needsProfile)
+                    val counter = TransientFailureCounter()
+                    withContext(counter) { refreshRatingsAndWork(workId, forceRefresh, refreshProfile = needsProfile) }
+                    recordDetailRatingOutcome(workId, counter.failedSources)
                 }
                 // 单一可信源：从 Room 读取每源评分行，聚合（缺失源保留 null，绝不回填）。
                 val perSource = ratingDao.getByWork(workId).toRatingAggregate().perSource
                 aggregateRatingsUseCase(perSource)
             }
         }
+
+    /** 「暂无评分」的缓存多久后再查：放送中或近一年的作品一天，其余一周。 */
+    private suspend fun missingRatingTtl(workId: String): Long {
+        val work = workDao.getById(workId)
+        val currentYear = java.time.Year.now().value
+        val recent = work != null &&
+            (
+                work.status == com.acgcompass.domain.model.ReleaseStatus.RELEASING.name ||
+                    (work.year ?: 0) >= currentYear - 1
+                )
+        return if (recent) DetailCacheTtl.MISSING_RATING_RECENT_MILLIS else DetailCacheTtl.MISSING_RATING_MILLIS
+    }
+
+    /**
+     * 刷新后仍然没有评分的补充平台各是什么情况：已关联但平台上暂无评分（附上次查询时间），还是没找到对应条目。
+     * 写进「后台任务」页的说明，方便判断「暂无数据」是真没有还是没对上。
+     */
+    private suspend fun noDataNotes(workId: String): List<String> {
+        val enabled = buildList {
+            if (settingsDataStore.anilistEnabled.first()) add(SourceId.ANILIST)
+            if (settingsDataStore.jikanEnabled.first()) add(SourceId.TENRAI)
+        }
+        val ratings = ratingDao.getByWork(workId).associateBy { it.sourceId }
+        val links = sourceLinkDao.getByWork(workId).associateBy { it.sourceId }
+        return enabled.mapNotNull { source ->
+            val row = ratings[source.name]
+            if (row != null && !row.missing) return@mapNotNull null
+            val link = links[source.name]
+            when {
+                link == null -> "${source.name} 没找到对应条目"
+                row == null -> "${source.name} 已关联 ${link.sourceItemId}，还没查到评分"
+                else ->
+                    "${source.name} 已关联 ${link.sourceItemId}，平台上暂无评分（${
+                        java.text.SimpleDateFormat(
+                            "M月d日 HH:mm",
+                            java.util.Locale.ROOT,
+                        ).format(java.util.Date(row.fetchedAt))
+                    } 查询）"
+            }
+        }
+    }
+
+    /** 详情页刷新各平台评分的结果记到「后台任务」页：哪个平台没拿到、为什么。 */
+    private suspend fun recordDetailRatingOutcome(workId: String, failed: Map<SourceId, AppError>) {
+        val title = workDao.getById(workId)?.canonicalTitle ?: workId
+        if (failed.isEmpty()) {
+            val notes = noDataNotes(workId)
+            val suffix = notes.takeIf { it.isNotEmpty() }?.joinToString("；", prefix = "；").orEmpty()
+            taskRecorder.succeeded(BackgroundTaskKind.DETAIL_RATINGS, "《$title》各平台评分已更新$suffix")
+        } else {
+            val parts = failed.entries.joinToString("；") { (source, error) ->
+                "${source.name} ${com.acgcompass.data.tasks.TaskRunRecorder.describe(error)}"
+            }
+            taskRecorder.failed(BackgroundTaskKind.DETAIL_RATINGS, "《$title》有平台的评分没拿到：$parts")
+        }
+    }
 
     override suspend fun backfillRatings(workId: String): AppResult<RatingAggregate> = withContext(dispatchers.io) {
         runCatchingApp {
@@ -1021,12 +1049,15 @@ class WorkRepositoryImpl @Inject constructor(
             if (source == SourceId.BANGUMI) return@filter false
             val cached = cachedRatings[source.name]
             val ttl = if (cached?.missing == true) {
-                DetailCacheTtl.MISSING_RATING_MILLIS
+                missingRatingTtl(workId)
             } else {
                 DetailCacheTtl.COMMENTS_MILLIS
             }
             val stale = cached == null || now - cached.fetchedAt >= ttl
-            forceRefresh || stale
+            // 前台打开详情时，这个源的额度快用完而本地已有它的评分：先用本地的，免得排队等额度、挤掉别的请求。
+            val keepCached = priority == RequestPriority.FOREGROUND && !forceRefresh &&
+                cached != null && !cached.missing && sourceQuota.isTight(source.toNetworkSource())
+            (forceRefresh || stale) && !keepCached
         }
         coroutineScope {
             stalePairs.map { (source, itemId) ->
@@ -1080,7 +1111,7 @@ class WorkRepositoryImpl @Inject constructor(
         val subjectId = sourcePair?.second?.toIntOrNull() ?: return
         val cached = ratingDao.getByWorkAndSource(workId, SourceId.BANGUMI.name)
         val ttl = if (cached?.missing == true) {
-            DetailCacheTtl.MISSING_RATING_MILLIS
+            missingRatingTtl(workId)
         } else {
             DetailCacheTtl.COMMENTS_MILLIS
         }
@@ -1195,7 +1226,7 @@ class WorkRepositoryImpl @Inject constructor(
                 )
                 true
             } else {
-                recordTransientFailure(result.error)
+                recordTransientFailure(result.error, source)
                 false
             }
             null -> false
@@ -1297,7 +1328,7 @@ class WorkRepositoryImpl @Inject constructor(
         emptyList()
     } else {
         coroutineScope {
-            queries.flatMap { q -> searchers.map { (_, search) -> async { safeSearch { search(q) } } } }
+            queries.flatMap { q -> searchers.map { (sid, search) -> async { safeSearch(sid) { search(q) } } } }
                 .flatMap { it.await() }
         }
     }
@@ -1315,7 +1346,12 @@ class WorkRepositoryImpl @Inject constructor(
                 add(SourceId.ANILIST to { query -> anilist.searchMedia(keyword = query, priority = priority) })
             }
             if (tenraiEnabled && SourceId.TENRAI.name !in existingSources) {
-                add(SourceId.TENRAI to { query -> tenrai.searchAnime(keyword = query, priority = priority) })
+                // 给本地已有作品找 Tenrai（MAL）对应条目：不带 sfw 过滤，否则 R+ 分级的普通作品搜不到。
+                add(
+                    SourceId.TENRAI to { query ->
+                        tenrai.searchAnime(keyword = query, priority = priority, safeForWork = false)
+                    },
+                )
             }
             if (mal.isEnabled() && SourceId.MAL.name !in existingSources) {
                 add(SourceId.MAL to { query -> mal.searchAnime(keyword = query, priority = priority) })
@@ -1409,7 +1445,6 @@ class WorkRepositoryImpl @Inject constructor(
         const val SECOND_STAGE_QUERY_LIMIT = 3
         const val SUPPLEMENTARY_PAGE_SIZE = 25
         const val POPULAR_YEAR_POOL_COUNT = 15
-        const val ESTIMATED_PUBLIC_WORK_SLOT_BYTES = 64L * 1024L
     }
 }
 
@@ -1417,3 +1452,13 @@ class WorkRepositoryImpl @Inject constructor(
 private fun Work.hasMissingDisplayFields(): Boolean = coverUrl == null ||
     year == null ||
     status == com.acgcompass.domain.model.ReleaseStatus.UNKNOWN
+
+/** 领域里的数据源对应到限速器用的网络来源。 */
+private fun SourceId.toNetworkSource(): com.acgcompass.core.network.NetworkSource = when (this) {
+    SourceId.BANGUMI -> com.acgcompass.core.network.NetworkSource.BANGUMI
+    SourceId.ANILIST -> com.acgcompass.core.network.NetworkSource.ANILIST
+    SourceId.TENRAI -> com.acgcompass.core.network.NetworkSource.TENRAI
+    SourceId.JIKAN -> com.acgcompass.core.network.NetworkSource.JIKAN
+    SourceId.MAL -> com.acgcompass.core.network.NetworkSource.MAL
+    SourceId.VNDB -> com.acgcompass.core.network.NetworkSource.VNDB
+}

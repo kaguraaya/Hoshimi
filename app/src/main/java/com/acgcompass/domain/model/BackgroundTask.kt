@@ -10,6 +10,7 @@ enum class BackgroundTaskKind(val key: String) {
     POOL_EXPAND("local_pool_expand"),
     AUTO_BACKUP("auto_backup"),
     DETAIL_EXTRAS("detail_extras"),
+    DETAIL_RATINGS("detail_ratings"),
     ;
 
     companion object {
