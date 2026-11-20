@@ -142,6 +142,8 @@ class ExploreQueueViewModel @Inject constructor(
             candidates = candidates.mapNotNull { work -> scores[work.id]?.let { rankerCandidate(work, it) } },
             model = model,
             batchSize = BATCH_SIZE,
+            // 在高分段里加权随机挑，每次进来的顺序不再和「为你排行」完全一样。
+            random = kotlin.random.Random.Default,
         )
 
         if (ranked.isEmpty()) {
