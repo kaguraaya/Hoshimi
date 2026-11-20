@@ -6,14 +6,14 @@
     <ID>ComplexCondition:DiscoverViewModel.kt$DiscoverViewModel$(tab == DiscoverTab.RANKING || tab == DiscoverTab.SCORE_DIFF || tab == DiscoverTab.FILTER) &amp;&amp; !publicPoolLoadedOnce</ID>
     <ID>CyclomaticComplexMethod:BacklogScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun BacklogScreen( state: UiState&lt;List&lt;BacklogCardItem&gt;&gt;, filter: BacklogFilter, sort: BacklogSort, selectionMode: Boolean, selectedIds: Set&lt;String&gt;, drawResult: DrawUiResult?, gridMode: Boolean = false, onToggleGridMode: () -&gt; Unit = {}, onSortSelected: (BacklogSort) -&gt; Unit, onTogglePriorityFilter: (Priority) -&gt; Unit, onToggleMediaTypeFilter: (MediaType) -&gt; Unit, onToggleDustMuseumFilter: (Boolean?) -&gt; Unit, onClearFilters: () -&gt; Unit, onSetPriority: (String, Priority) -&gt; Unit, onSetNote: (String, String?) -&gt; Unit, onToggleSelectionMode: () -&gt; Unit, onToggleSelect: (String) -&gt; Unit, onBulk: (BulkOp) -&gt; Unit, onDraw: () -&gt; Unit, onDismissDraw: () -&gt; Unit, onOpenDetail: (String) -&gt; Unit, onGoImport: () -&gt; Unit = {}, onGoSearch: () -&gt; Unit = {}, onOpenDustMuseum: () -&gt; Unit = {}, modifier: Modifier = Modifier, )</ID>
     <ID>CyclomaticComplexMethod:ComputeTasteMatchUseCase.kt$ComputeTasteMatchUseCase$private fun buildReasons( f: TasteRawScorer.Featurized, feature: WorkFeature, profile: AdvancedTasteProfile, ): List&lt;TasteReason&gt;</ID>
+    <ID>CyclomaticComplexMethod:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$suspend fun analyze(work: Work, profile: TasteProfile?, community: RatingAggregate?): AiMatchUi</ID>
     <ID>CyclomaticComplexMethod:DetailDecisionBuilders.kt$internal fun Work.toDecisionUiModel( consensus: ConsensusUiModel, tasteMatch: TasteMatchUiModel, completionCost: CompletionCostUiModel, radar: SpoilerRadarResult?, ): DecisionUiModel</ID>
     <ID>CyclomaticComplexMethod:DetailPersonalSection.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable internal fun EditMyRecordDialog( personal: PersonalUiModel, localOnly: Boolean = false, onDismiss: () -&gt; Unit, onSave: (String?, Int?, Int?, String?, List&lt;String&gt;?, Boolean) -&gt; Unit, )</ID>
-    <ID>CyclomaticComplexMethod:DetailViewModel.kt$DetailViewModel$fun onAnalyzeMatchWithAi()</ID>
-    <ID>CyclomaticComplexMethod:DetailViewModel.kt$DetailViewModel$fun onUpdateMyRecord( statusLabel: String?, rating: Int?, progress: Int?, comment: String?, tags: List&lt;String&gt;? = null, private: Boolean = false, )</ID>
+    <ID>CyclomaticComplexMethod:DetailRouteEntries.kt$internal fun buildRouteEntries( current: Work, relations: List&lt;com.acgcompass.domain.detail.DetailRelation&gt;, ): List&lt;RouteEntryUi&gt;</ID>
     <ID>CyclomaticComplexMethod:DetailViewModel.kt$DetailViewModel$private fun loadExtras(forceRefresh: Boolean = false)</ID>
-    <ID>CyclomaticComplexMethod:DetailViewModel.kt$DetailViewModel$private fun loadRadar(forceRefresh: Boolean = false)</ID>
-    <ID>CyclomaticComplexMethod:DetailViewModel.kt$private fun buildRouteEntries( current: Work, relations: List&lt;com.acgcompass.domain.detail.DetailRelation&gt;, ): List&lt;RouteEntryUi&gt;</ID>
     <ID>CyclomaticComplexMethod:DiscoverBoards.kt$private fun WorkRatings.matches(filter: DiscoverFilter): Boolean</ID>
+    <ID>CyclomaticComplexMethod:PublicCacheFiller.kt$PublicCacheFiller$private suspend fun backfillCacheToPolicy(startPage: Int, policy: CachePolicy, background: Boolean): Int</ID>
+    <ID>CyclomaticComplexMethod:PublicCacheFiller.kt$PublicCacheFiller$suspend fun loadPublicDiscovery(background: Boolean): AppResult&lt;Int&gt;</ID>
     <ID>CyclomaticComplexMethod:RecommenderViewModel.kt$RecommenderViewModel$private suspend fun recommendFromWorks( input: RecommenderInput, candidates: List&lt;Work&gt;, ): UiState&lt;List&lt;RecommendationUiModel&gt;&gt;</ID>
     <ID>CyclomaticComplexMethod:SettingsStateMapping.kt$internal fun Preferences.toSettingsState(): SettingsState</ID>
     <ID>CyclomaticComplexMethod:TagClassifier.kt$TagClassifier$fun classify( rawTag: String, context: Context = Context.EMPTY, overrides: Map&lt;String, TasteCategory&gt; = emptyMap(), ): TasteCategory</ID>
@@ -21,11 +21,7 @@
     <ID>CyclomaticComplexMethod:TasteRawScorer.kt$TasteRawScorer$fun featurize(feature: WorkFeature, overrides: Map&lt;String, TasteCategory&gt; = emptyMap()): Featurized</ID>
     <ID>CyclomaticComplexMethod:TimeMachineContract.kt$fun buildTimeMachineUiState( changeLogs: List&lt;ChangeLog&gt;, titlesById: Map&lt;String, String&gt;, zoneId: ZoneId = ZoneId.systemDefault(), ): TimeMachineUiState</ID>
     <ID>CyclomaticComplexMethod:TimeMachineContract.kt$private fun ChangeLog.describe(): String</ID>
-    <ID>CyclomaticComplexMethod:WorkRepositoryImpl.kt$WorkRepositoryImpl$override suspend fun loadPublicDiscovery(background: Boolean): AppResult&lt;Int&gt;</ID>
-    <ID>CyclomaticComplexMethod:WorkRepositoryImpl.kt$WorkRepositoryImpl$private suspend fun backfillCacheToPolicy(startPage: Int, policy: CachePolicy, background: Boolean): Int</ID>
     <ID>EmptyFunctionBlock:ImportRepositoryImplTest.kt$FakeWorkRepository${}</ID>
-    <ID>LargeClass:DetailViewModel.kt$DetailViewModel : ViewModel</ID>
-    <ID>LargeClass:WorkRepositoryImpl.kt$WorkRepositoryImpl : WorkRepositoryPublicCacheWorkRepositoryCacheFillController</ID>
     <ID>LongMethod:AiCard.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun AiCard( model: AiCardUiModel, modifier: Modifier = Modifier, onRegenerate: () -&gt; Unit = {}, content: @Composable () -&gt; Unit = {}, )</ID>
     <ID>LongMethod:AiTagClassifier.kt$AiTagClassifier$@Suppress("ReturnCount") private suspend fun prepareStablePlanLocked(): Int</ID>
     <ID>LongMethod:AppNavHost.kt$@Composable fun AppNavHost( navController: NavHostController, modifier: Modifier = Modifier, predictiveBackEnabled: Boolean = true, )</ID>
@@ -36,24 +32,22 @@
     <ID>LongMethod:BangumiOAuthScreen.kt$@SuppressLint("SetJavaScriptEnabled") @Composable private fun OAuthWebView( authorizeUrl: String, isRedirect: (String) -&gt; Boolean, isAllowedNavigation: (String) -&gt; Boolean, onBlockedNavigation: () -&gt; Unit, onRedirect: (String) -&gt; Unit, onSwitchAccount: () -&gt; Unit, )</ID>
     <ID>LongMethod:BroadcastScheduleRepositoryImpl.kt$BroadcastScheduleRepositoryImpl$private fun mergeScheduleEntries( scope: String, now: Long, primaryEntries: List&lt;BroadcastScheduleEntry&gt;, bangumiEntries: List&lt;BroadcastScheduleEntry&gt;, remoteEntries: List&lt;BroadcastScheduleEntry&gt;?, tenraiEntries: List&lt;BroadcastScheduleEntry&gt;, ): List&lt;BroadcastScheduleEntity&gt;</ID>
     <ID>LongMethod:CacheManagementScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun CacheManagementScreen( onBack: () -&gt; Unit, onOpenItemCleanup: () -&gt; Unit, onResetComplete: () -&gt; Unit = {}, modifier: Modifier = Modifier, viewModel: CacheManagementViewModel = hiltViewModel(), )</ID>
+    <ID>LongMethod:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$suspend fun analyze(work: Work, profile: TasteProfile?, community: RatingAggregate?): AiMatchUi</ID>
     <ID>LongMethod:DetailDecisionBuilders.kt$internal fun Work.toDecisionUiModel( consensus: ConsensusUiModel, tasteMatch: TasteMatchUiModel, completionCost: CompletionCostUiModel, radar: SpoilerRadarResult?, ): DecisionUiModel</ID>
     <ID>LongMethod:DetailPersonalSection.kt$@Composable internal fun PersonalSection( personal: PersonalUiModel, actions: PersonalSectionActions, options: PersonalSectionOptions, modifier: Modifier = Modifier, )</ID>
     <ID>LongMethod:DetailPersonalSection.kt$@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class) @Composable internal fun EditMyRecordDialog( personal: PersonalUiModel, localOnly: Boolean = false, onDismiss: () -&gt; Unit, onSave: (String?, Int?, Int?, String?, List&lt;String&gt;?, Boolean) -&gt; Unit, )</ID>
     <ID>LongMethod:DetailScreenPreviews.kt$@Preview(showBackground = true) @Composable internal fun DetailScreenPreview()</ID>
     <ID>LongMethod:DetailTasteSections.kt$@Composable internal fun DecisionSection( decision: DecisionUiModel, modifier: Modifier = Modifier, aiMatch: AiMatchUi = AiMatchUi.Idle, onAnalyzeMatchWithAi: () -&gt; Unit = {}, )</ID>
     <ID>LongMethod:DetailTasteSections.kt$@Composable internal fun TasteMatchBlock( tasteMatch: TasteMatchUiModel, modifier: Modifier = Modifier, aiMatch: AiMatchUi = AiMatchUi.Idle, onAnalyzeMatchWithAi: () -&gt; Unit = {}, )</ID>
-    <ID>LongMethod:DetailViewModel.kt$DetailViewModel$fun onAnalyzeMatchWithAi()</ID>
-    <ID>LongMethod:DetailViewModel.kt$DetailViewModel$fun onUpdateMyRecord( statusLabel: String?, rating: Int?, progress: Int?, comment: String?, tags: List&lt;String&gt;? = null, private: Boolean = false, )</ID>
-    <ID>LongMethod:DetailViewModel.kt$DetailViewModel$private fun loadRadar(forceRefresh: Boolean = false)</ID>
     <ID>LongMethod:DiscoverRankingSection.kt$@OptIn(ExperimentalLayoutApi::class) @Composable internal fun RankingSection( boards: List&lt;RankingBoard&gt;, poolLoading: Boolean, poolError: String?, rankingScope: RankingScope, scopedRanking: UiState&lt;List&lt;RankedWork&gt;&gt;, rankingLoadingMore: Boolean, rankingCanLoadMore: Boolean, onSelectRankingScope: (RankingScope) -&gt; Unit, onRetryRanking: () -&gt; Unit, onLoadMoreRanking: () -&gt; Unit, onLoadPool: () -&gt; Unit, onOpenWork: (String) -&gt; Unit, )</ID>
     <ID>LongMethod:ExploreQueueScreen.kt$@Composable private fun ExploreCardFront(card: ExploreCardUiModel)</ID>
     <ID>LongMethod:ImportScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun ImportScreen( state: ImportUiState, items: List&lt;ImportItem&gt;, onBack: () -&gt; Unit, onTextChange: (String) -&gt; Unit, onParse: () -&gt; Unit, onAddToBacklog: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:PublicCacheFiller.kt$PublicCacheFiller$private suspend fun backfillCacheToPolicy(startPage: Int, policy: CachePolicy, background: Boolean): Int</ID>
+    <ID>LongMethod:PublicCacheFiller.kt$PublicCacheFiller$suspend fun loadPublicDiscovery(background: Boolean): AppResult&lt;Int&gt;</ID>
     <ID>LongMethod:RecommenderViewModel.kt$RecommenderViewModel$private suspend fun recommendFromWorks( input: RecommenderInput, candidates: List&lt;Work&gt;, ): UiState&lt;List&lt;RecommendationUiModel&gt;&gt;</ID>
     <ID>LongMethod:RouteMapSection.kt$@OptIn(ExperimentalLayoutApi::class) @Composable fun RouteMapSection( nodes: List&lt;RouteNodeUiModel&gt;, modifier: Modifier = Modifier, routeConfirmed: Boolean = true, progressText: String? = null, onOpenWork: (String) -&gt; Unit = {}, onAddSeries: (Boolean) -&gt; Unit = {}, )</ID>
     <ID>LongMethod:SettingsSourceCards.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun AiProviderSettingsCard( card: AiProviderCardState, actions: SettingsActions, modifier: Modifier = Modifier, )</ID>
     <ID>LongMethod:TimeMachineScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun TimeMachineScreen( state: UiState&lt;TimeMachineUiState&gt;, message: String? = null, syncing: Boolean = false, onSyncFromBangumi: () -&gt; Unit = {}, onMessageShown: () -&gt; Unit = {}, onOpenWork: (String) -&gt; Unit = {}, modifier: Modifier = Modifier, )</ID>
-    <ID>LongMethod:WorkRepositoryImpl.kt$WorkRepositoryImpl$override suspend fun loadPublicDiscovery(background: Boolean): AppResult&lt;Int&gt;</ID>
-    <ID>LongMethod:WorkRepositoryImpl.kt$WorkRepositoryImpl$private suspend fun backfillCacheToPolicy(startPage: Int, policy: CachePolicy, background: Boolean): Int</ID>
     <ID>LongParameterList:BacklogScreen.kt$( card: BacklogCardItem, selectionMode: Boolean, selected: Boolean, onSetPriority: (String, Priority) -&gt; Unit, onSetNote: (String, String?) -&gt; Unit, onToggleSelect: (String) -&gt; Unit, onOpenDetail: (String) -&gt; Unit, )</ID>
     <ID>LongParameterList:BacklogScreen.kt$( filter: BacklogFilter, sort: BacklogSort, onSortSelected: (BacklogSort) -&gt; Unit, onTogglePriorityFilter: (Priority) -&gt; Unit, onToggleMediaTypeFilter: (MediaType) -&gt; Unit, onToggleDustMuseumFilter: (Boolean?) -&gt; Unit, onClearFilters: () -&gt; Unit, )</ID>
     <ID>LongParameterList:BacklogScreen.kt$( filter: BacklogFilter, sort: BacklogSort, onSortSelected: (BacklogSort) -&gt; Unit, onTogglePriorityFilter: (Priority) -&gt; Unit, onToggleMediaTypeFilter: (MediaType) -&gt; Unit, onToggleDustMuseumFilter: (Boolean?) -&gt; Unit, onClearFilters: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
@@ -93,10 +87,10 @@
     <ID>LoopWithTooManyJumpStatements:CacheRepositoryImpl.kt$CacheRepositoryImpl$for</ID>
     <ID>LoopWithTooManyJumpStatements:ComputeTasteMatchUseCase.kt$ComputeTasteMatchUseCase$for</ID>
     <ID>LoopWithTooManyJumpStatements:DataSourceOrchestrator.kt$DefaultDataSourceOrchestrator$for</ID>
+    <ID>LoopWithTooManyJumpStatements:PublicCacheFiller.kt$PublicCacheFiller$while</ID>
     <ID>LoopWithTooManyJumpStatements:SnapshotDiff.kt$SnapshotDiff$for</ID>
     <ID>LoopWithTooManyJumpStatements:TasteRawScorer.kt$TasteRawScorer$for</ID>
-    <ID>LoopWithTooManyJumpStatements:WorkRepositoryImpl.kt$WorkRepositoryImpl$for</ID>
-    <ID>LoopWithTooManyJumpStatements:WorkRepositoryImpl.kt$WorkRepositoryImpl$while</ID>
+    <ID>LoopWithTooManyJumpStatements:WorkSearchCoordinator.kt$WorkSearchCoordinator$for</ID>
     <ID>MagicNumber:AcgCompassApplication.kt$AcgCompassApplication$0.25</ID>
     <ID>MagicNumber:AcgMigrations.kt$AcgMigrations$10</ID>
     <ID>MagicNumber:AcgMigrations.kt$AcgMigrations$11</ID>
@@ -169,6 +163,15 @@
     <ID>MagicNumber:CrossSourceMerge.kt$7</ID>
     <ID>MagicNumber:CrossSourceMerge.kt$8</ID>
     <ID>MagicNumber:CrossSourceMerge.kt$9</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$100</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$100f</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$10f</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$20</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$4</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$40</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$400</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$5</ID>
+    <ID>MagicNumber:DetailAiMatchAnalyzer.kt$DetailAiMatchAnalyzer$6</ID>
     <ID>MagicNumber:DetailCompletionCost.kt$60f</ID>
     <ID>MagicNumber:DetailDecisionBuilders.kt$0.25f</ID>
     <ID>MagicNumber:DetailDecisionBuilders.kt$0.33f</ID>
@@ -184,24 +187,19 @@
     <ID>MagicNumber:DetailDecisionBuilders.kt$6</ID>
     <ID>MagicNumber:DetailPersonalSection.kt$10</ID>
     <ID>MagicNumber:DetailPersonalSection.kt$4</ID>
+    <ID>MagicNumber:DetailRadarLoader.kt$DetailRadarLoader$10f</ID>
+    <ID>MagicNumber:DetailRadarLoader.kt$DetailRadarLoader$15</ID>
     <ID>MagicNumber:DetailRatingBuilders.kt$0.33f</ID>
     <ID>MagicNumber:DetailRatingBuilders.kt$0.66f</ID>
+    <ID>MagicNumber:DetailRecordEditor.kt$3</ID>
+    <ID>MagicNumber:DetailRecordEditor.kt$4</ID>
+    <ID>MagicNumber:DetailRecordEditor.kt$5</ID>
     <ID>MagicNumber:DetailScreenPreviews.kt$0.18f</ID>
     <ID>MagicNumber:DetailScreenPreviews.kt$0.82f</ID>
     <ID>MagicNumber:DetailScreenPreviews.kt$0.90f</ID>
     <ID>MagicNumber:DetailTabBuilders.kt$6</ID>
     <ID>MagicNumber:DetailUiBuilders.kt$60f</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$100</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$100f</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$10f</ID>
     <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$15</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$20</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$3</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$4</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$40</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$400</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$5</ID>
-    <ID>MagicNumber:DetailViewModel.kt$DetailViewModel$6</ID>
     <ID>MagicNumber:DiscoverBoards.kt$1000</ID>
     <ID>MagicNumber:DiscoverBoards.kt$10f</ID>
     <ID>MagicNumber:DiscoverBoards.kt$3</ID>
@@ -274,6 +272,8 @@
     <ID>MagicNumber:PersonalTasteScorer.kt$PersonalTasteScorer$0.9f</ID>
     <ID>MagicNumber:PersonalTasteScorer.kt$PersonalTasteScorer$10f</ID>
     <ID>MagicNumber:PersonalTasteScorer.kt$TasteScore.Companion$0.5f</ID>
+    <ID>MagicNumber:PublicCacheFiller.kt$PublicCacheFiller$3</ID>
+    <ID>MagicNumber:PublicCacheFiller.kt$PublicCacheFiller$50</ID>
     <ID>MagicNumber:RateLimitInterceptor.kt$RateLimiterRegistry.Companion$1_000_000L</ID>
     <ID>MagicNumber:RateLimiter.kt$RateLimiter$1_000_000L</ID>
     <ID>MagicNumber:RateLimiter.kt$RateLimiter.Rule.Companion$1_000L</ID>
@@ -373,12 +373,10 @@
     <ID>MagicNumber:VndbMappers.kt$4</ID>
     <ID>MagicNumber:VndbRemoteDataSource.kt$VndbRemoteDataSource$100</ID>
     <ID>MagicNumber:WorkFeatureRepositoryImpl.kt$WorkFeatureRepositoryImpl$900</ID>
-    <ID>MagicNumber:WorkRepositoryImpl.kt$WorkRepositoryImpl$3</ID>
-    <ID>MagicNumber:WorkRepositoryImpl.kt$WorkRepositoryImpl$4</ID>
-    <ID>MagicNumber:WorkRepositoryImpl.kt$WorkRepositoryImpl$5</ID>
-    <ID>MagicNumber:WorkRepositoryImpl.kt$WorkRepositoryImpl$50</ID>
-    <ID>MagicNumber:WorkRepositoryImpl.kt$WorkRepositoryImpl$512L</ID>
     <ID>MagicNumber:WorkRepositoryImpl.kt$WorkRepositoryImpl$900</ID>
+    <ID>MagicNumber:WorkSearchCoordinator.kt$WorkSearchCoordinator$3</ID>
+    <ID>MagicNumber:WorkSearchCoordinator.kt$WorkSearchCoordinator$4</ID>
+    <ID>MagicNumber:WorkSearchCoordinator.kt$WorkSearchCoordinator$5</ID>
     <ID>MatchingDeclarationName:BangumiOAuthDtos.kt$BangumiTokenResponseDto</ID>
     <ID>MatchingDeclarationName:BingePersona.kt$TasteSignals</ID>
     <ID>MatchingDeclarationName:HomeModulesScreen.kt$HomeModulesViewModel : ViewModel</ID>
@@ -393,7 +391,7 @@
     <ID>NestedBlockDepth:BuildTasteProfileUseCase.kt$BuildTasteProfileUseCase$private fun enumerateCombos(tags: Set&lt;String&gt;): List&lt;Set&lt;String&gt;&gt;</ID>
     <ID>NestedBlockDepth:CrossSourceMerge.kt$internal fun seasonNumberOf(titles: List&lt;String&gt;): Int</ID>
     <ID>NestedBlockDepth:ImportTextParser.kt$ImportTextParser$private fun emitSegment( content: String, start: Int, endExclusive: Int, baseOffset: Int, out: MutableList&lt;ParsedCandidate&gt;, )</ID>
-    <ID>NestedBlockDepth:WorkRepositoryImpl.kt$WorkRepositoryImpl$private suspend fun backfillCacheToPolicy(startPage: Int, policy: CachePolicy, background: Boolean): Int</ID>
+    <ID>NestedBlockDepth:PublicCacheFiller.kt$PublicCacheFiller$private suspend fun backfillCacheToPolicy(startPage: Int, policy: CachePolicy, background: Boolean): Int</ID>
     <ID>ReturnCount:AiEngineImpl.kt$AiEngineImpl$override suspend fun &lt;T&gt; run(task: AiTask&lt;T&gt;, options: AiRunOptions): AiRunResult&lt;T&gt;</ID>
     <ID>ReturnCount:AiEngineImpl.kt$AiEngineImpl$private fun &lt;T&gt; parseValidatedScrubbed( task: AiTask&lt;T&gt;, rawContent: String, schema: JsonObject?, ): AiRunResult.Success&lt;T&gt;?</ID>
     <ID>ReturnCount:AiEngineImpl.kt$AiEngineImpl$private fun arrayFieldName(schema: JsonObject?, requiredFields: List&lt;String&gt;): String?</ID>
@@ -412,8 +410,8 @@
     <ID>ReturnCount:BangumiOAuthViewModel.kt$BangumiOAuthViewModel$fun onRedirect(url: String)</ID>
     <ID>ReturnCount:BangumiSyncManager.kt$BangumiSyncManager$private suspend fun runSyncInternal(): AppResult&lt;SyncReport&gt;</ID>
     <ID>ReturnCount:BuildTasteProfileUseCase.kt$BuildTasteProfileUseCase$private fun quantile(values: List&lt;Double&gt;, q: Double): Double</ID>
+    <ID>ReturnCount:CrossSourceLinker.kt$CrossSourceLinker$suspend fun enrich(workId: String, priority: RequestPriority = RequestPriority.FOREGROUND)</ID>
     <ID>ReturnCount:CrossSourceMerge.kt$private fun mediaTypesConflict( a: com.acgcompass.domain.model.MediaType, b: com.acgcompass.domain.model.MediaType, ): Boolean</ID>
-    <ID>ReturnCount:CrossSourceMerge.kt$public fun sameWork(a: Work, b: Work): Boolean</ID>
     <ID>ReturnCount:DetailRatingBuilders.kt$internal fun Map&lt;SourceId, RatingEntry?&gt;.validEntry(source: SourceId): SourcedRating?</ID>
     <ID>ReturnCount:DiscoverBoards.kt$private fun WorkRatings.matches(filter: DiscoverFilter): Boolean</ID>
     <ID>ReturnCount:DiscoverBoards.kt$private fun preferredSourceScore(ratings: RatingAggregate?): Pair&lt;SourceId, Float&gt;?</ID>
@@ -441,7 +439,6 @@
     <ID>ReturnCount:VisualNovelRepositoryImpl.kt$VisualNovelRepositoryImpl$private suspend fun addBangumiRating(detail: VisualNovelDetail): VisualNovelDetail</ID>
     <ID>ReturnCount:VndbMappers.kt$fun VndbVnDto.isAdult(): Boolean</ID>
     <ID>ReturnCount:VndbMappers.kt$fun VndbVnDto.toRatingEntry(): RatingEntry?</ID>
-    <ID>ReturnCount:WorkRepositoryImpl.kt$WorkRepositoryImpl$private suspend fun enrichViaCrossSourceSearch( workId: String, priority: RequestPriority = RequestPriority.FOREGROUND, )</ID>
     <ID>SpreadOperator:DatabaseModule.kt$DatabaseModule$(*AcgMigrations.ALL)</ID>
     <ID>ThrowsCount:AniListApi.kt$AniListApi$private fun &lt;T&gt; queryDataExecute(response: GraphQlResponse, deserializer: DeserializationStrategy&lt;T&gt;): T</ID>
     <ID>ThrowsCount:BangumiOAuthClient.kt$BangumiOAuthClient$private fun Response&lt;BangumiTokenResponseDto&gt;.tokenOrThrow(): BangumiTokenResponseDto</ID>
@@ -456,6 +453,7 @@
     <ID>TooManyFunctions:BacklogScreen.kt$com.acgcompass.feature.backlog.BacklogScreen.kt</ID>
     <ID>TooManyFunctions:BacklogViewModel.kt$BacklogViewModel : ViewModel</ID>
     <ID>TooManyFunctions:BackupMapping.kt$com.acgcompass.data.backup.BackupMapping.kt</ID>
+    <ID>TooManyFunctions:BackupRepositoryImpl.kt$BackupRepositoryImpl : BackupRepository</ID>
     <ID>TooManyFunctions:BangumiApi.kt$BangumiApi</ID>
     <ID>TooManyFunctions:BangumiMappers.kt$com.acgcompass.data.remote.bangumi.BangumiMappers.kt</ID>
     <ID>TooManyFunctions:BangumiRemoteDataSource.kt$BangumiRemoteDataSource</ID>
@@ -491,6 +489,7 @@
     <ID>TooManyFunctions:VndbRemoteDataSource.kt$VndbRemoteDataSource</ID>
     <ID>TooManyFunctions:WorkDao.kt$WorkDao</ID>
     <ID>TooManyFunctions:WorkFeatureRepositoryImpl.kt$WorkFeatureRepositoryImpl : WorkFeatureRepository</ID>
+    <ID>TooManyFunctions:WorkRatingRefresher.kt$WorkRatingRefresher</ID>
     <ID>TooManyFunctions:WorkRepositoryImpl.kt$WorkRepositoryImpl : WorkRepositoryPublicCacheWorkRepositoryCacheFillController</ID>
     <ID>UnusedParameter:BangumiRemoteDataSource.kt$BangumiRemoteDataSource$epStatus: Int? = null</ID>
     <ID>UnusedParameter:BangumiRemoteDataSource.kt$BangumiRemoteDataSource$volStatus: Int? = null</ID>
@@ -518,11 +517,7 @@
     <ID>UnusedPrivateMember:TimeMachineScreen.kt$@Preview(showBackground = true) @Composable private fun TimeMachineScreenPreview()</ID>
     <ID>UnusedPrivateMember:TimeMachineScreen.kt$@Preview(showBackground = true, name = "Empty") @Composable private fun TimeMachineScreenEmptyPreview()</ID>
     <ID>UnusedPrivateMember:WorkCard.kt$@Preview(showBackground = true, widthDp = 360) @Composable private fun WorkCardPreview()</ID>
-    <ID>UnusedPrivateMember:WorkRepositoryImpl.kt$WorkRepositoryImpl$private fun anilistSearchFetcher(query: String): SourceFetcher&lt;List&lt;WorkMatch&gt;&gt;</ID>
-    <ID>UnusedPrivateMember:WorkRepositoryImpl.kt$WorkRepositoryImpl$private fun bangumiSearchFetcher(query: String): SourceFetcher&lt;List&lt;WorkMatch&gt;&gt;</ID>
-    <ID>UnusedPrivateMember:WorkRepositoryImpl.kt$WorkRepositoryImpl$private fun malSearchFetcher(query: String): SourceFetcher&lt;List&lt;WorkMatch&gt;&gt;</ID>
     <ID>UnusedPrivateProperty:DiscoverViewModel.kt$DiscoverViewModel$private val backlogRepository: BacklogRepository</ID>
     <ID>UnusedPrivateProperty:WorkCard.kt$private const val NO_DATA = "暂无数据"</ID>
-    <ID>UnusedPrivateProperty:WorkRepositoryImpl.kt$WorkRepositoryImpl$private val orchestrator: DataSourceOrchestrator</ID>
   </CurrentIssues>
 </SmellBaseline>

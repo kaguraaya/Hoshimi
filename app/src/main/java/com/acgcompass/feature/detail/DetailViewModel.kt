@@ -7,21 +7,10 @@ import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.ui.UiState
 import com.acgcompass.domain.ai.AiEngine
-import com.acgcompass.domain.ai.AiRunOptions
-import com.acgcompass.domain.ai.AiRunResult
-import com.acgcompass.domain.ai.AiTask
-import com.acgcompass.domain.ai.RadarCachePolicy
-import com.acgcompass.domain.ai.RadarSummarySource
-import com.acgcompass.domain.ai.SpoilerLevel
-import com.acgcompass.domain.ai.SpoilerRadarOutput
 import com.acgcompass.domain.ai.SpoilerRadarResult
-import com.acgcompass.domain.detail.BangumiRecordUpdate
 import com.acgcompass.domain.detail.PersonalRecord
-import com.acgcompass.domain.model.AiResult
-import com.acgcompass.domain.model.AiTaskType
 import com.acgcompass.domain.model.CollectionState
 import com.acgcompass.domain.model.RatingAggregate
-import com.acgcompass.domain.model.TagBucket
 import com.acgcompass.domain.model.TasteProfile
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.repository.AiRepository
@@ -37,8 +26,6 @@ import com.acgcompass.domain.taste.TasteAnalysisController
 import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.toFallbackFeature
 import com.acgcompass.domain.usecase.GenerateSpoilerRadarUseCase
-import com.acgcompass.domain.usecase.RadarOutcome
-import com.acgcompass.domain.usecase.RadarRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.delay
@@ -56,8 +43,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
@@ -135,12 +120,12 @@ class DetailViewModel @Inject constructor(
 
     /** 详情页角色·Staff / 关联作品 / 观看路线（来自各源端点拉取后折叠的可读正文）。 */
     private val vndbTranslator = VndbDescriptionTranslator(detailInteractions, aiRepository, aiEngine, json)
+    private val aiMatchAnalyzer = DetailAiMatchAnalyzer(detailInteractions, aiEngine, tasteAnalysis)
+    private val radarLoader =
+        DetailRadarLoader(workRepository, detailInteractions, aiRepository, generateSpoilerRadar, json)
+    private val recordEditor = DetailRecordEditor(detailInteractions, backlogRepository, undoController)
 
     private val detailExtras = MutableStateFlow(DetailExtras())
-
-    /** 当前系列的 Bangumi subject id，供批量加入待补池。 */
-    @Volatile
-    private var seriesSubjectIds: List<Int> = emptyList()
 
     /** 我的个人记录（来自同步入库的用户收藏）；`null` 表示未记录 → 个人区显示「暂无数据」。 */
     private val myCollection: StateFlow<CollectionState?> =
@@ -499,10 +484,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 生成无剧透评价雷达。等待作品就绪后以其标题 / 标签 / 个人短评为输入调用
-     * [GenerateSpoilerRadarUseCase]：未配置 AI 时自动回退本地规则版（generator=RULE），保证雷达可展示；
-     * 当 AI 已配置但需成本确认（[RadarOutcome.NeedsCostConfirmation]）时不擅自发起付费请求，
-     * 决策区维持「暂无数据」直至用户在 AI 流程中确认。
+     * 生成无剧透评价雷达。等待作品就绪后交给 [DetailRadarLoader]：未配置 AI 时自动回退本地规则版，保证雷达可展示。
      */
     private fun loadRadar(forceRefresh: Boolean = false) {
         if (workId.isBlank()) return
@@ -516,110 +498,13 @@ class DetailViewModel @Inject constructor(
                     }
                 }
                 .first()
-            val stableRequest = RadarRequest(
-                workId = work.id,
-                title = work.titles.canonical,
-                summary = work.summary.orEmpty(),
-                mediaType = work.mediaType.name,
-                tags = work.tags.map { it.name },
-                userComments = listOfNotNull(myCollection.value?.shortReview?.takeIf { it.isNotBlank() }),
-                // 隐私开关：未允许时，评论只参与本地规则版雷达，不进 AI 请求。
-                allowReviewsToAi = detailInteractions.isAiReviewAnalysisAllowed(),
+            radarLoader.load(
+                work = work,
+                myComment = myCollection.value?.shortReview,
+                forceRefresh = forceRefresh,
+                onAiFallback = { _recordMessage.value = it },
+                publish = { radar.value = it },
             )
-            val fingerprint = RadarCachePolicy.fingerprint(stableRequest)
-            if (!forceRefresh) {
-                val cached = (aiRepository.getCached(work.id, AiTaskType.SPOILER_RADAR) as? AppResult.Success)?.data
-                if (
-                    cached?.inputFingerprint == fingerprint &&
-                    cached.promptVersion == RadarCachePolicy.PROMPT_VERSION
-                ) {
-                    val output = runCatchingCancellable {
-                        json.decodeFromString<SpoilerRadarOutput>(
-                            cached.payloadJson,
-                        )
-                    }.getOrNull()
-                    if (output != null) {
-                        radar.value = SpoilerRadarResult(
-                            workId = work.id,
-                            output = output,
-                            generator = cached.generator,
-                            requestedLevel = SpoilerLevel.NO_SPOILER,
-                            effectiveLevel = SpoilerLevel.NO_SPOILER,
-                            summarySources = cached.dataSources.mapNotNull { label ->
-                                RadarSummarySource.entries.firstOrNull { it.label == label }
-                            },
-                            generatedAt = cached.generatedAt,
-                        )
-                        return@launch
-                    }
-                }
-            }
-            // 社区评分信号（仅读本地缓存，不联网），让 AI 校准口碑判断。
-            val communitySignal = runCatchingCancellable {
-                val agg = workRepository.aggregateRatingsCached(work.id)
-                val scored = agg.perSource.entries.mapNotNull { (src, entry) ->
-                    val s = entry?.score ?: return@mapNotNull null
-                    if (s <= 0f) return@mapNotNull null
-                    val ten = when (src) {
-                        com.acgcompass.domain.model.SourceId.ANILIST,
-                        com.acgcompass.domain.model.SourceId.VNDB,
-                        -> s / 10f
-                        else -> s
-                    }.coerceIn(0f, 10f)
-                    ten to (entry.voteCount.coerceAtLeast(0))
-                }
-                if (scored.isEmpty()) {
-                    null
-                } else {
-                    scored.map { it.first }.average() to scored.sumOf { it.second }
-                }
-            }.getOrNull()
-            // 真实他人短评作为雷达 publicReviews 输入（AI/规则都更有料）。
-            // 用解析出的真实 Bangumi subjectId（主源或链接），避免对非 Bangumi 作品取错条目短评。
-            val publicComments = resolveBangumiSubjectId(work)
-                ?.let { detailInteractions.fetchBangumiComments(it, limit = 20) as? AppResult.Success }
-                ?.data.orEmpty()
-                .filter { it.isNotBlank() }
-                .take(15)
-            val request = stableRequest.copy(
-                publicReviews = publicComments,
-                communityScore = communitySignal?.first,
-                communityVotes = communitySignal?.second,
-            )
-            // 雷达走 AI 驱动——已配置 AI 时直接以「成本已确认」运行，产出真实无剧透分析；
-            // 未配置 AI 时回退本地规则（占位 + 引导配置 AI）。决策助手/评论摘要均消费该结果。
-            val aiConfigured = detailInteractions.isAiConfigured()
-            val generated = when (
-                val outcome = generateSpoilerRadar(request, AiRunOptions(confirmed = aiConfigured))
-            ) {
-                is RadarOutcome.Ready -> {
-                    // 已配置 AI 却回退到规则时，把原因暴露给用户（便于诊断 AI 为何没跑成）。
-                    if (aiConfigured && outcome.aiFallbackReason != null) {
-                        _recordMessage.value =
-                            "AI 雷达本次回退本地规则：" + outcome.aiFallbackReason.cause +
-                            "（" + outcome.aiFallbackReason.nextStep + "）"
-                    }
-                    outcome.result
-                }
-                is RadarOutcome.NeedsCostConfirmation -> generateSpoilerRadar.local(request)
-            }
-            radar.value = generated
-            runCatchingCancellable {
-                aiRepository.put(
-                    AiResult(
-                        id = "spoiler-radar:${work.id}",
-                        workId = work.id,
-                        taskType = AiTaskType.SPOILER_RADAR,
-                        generator = generated.generator,
-                        payloadJson = json.encodeToString(generated.output),
-                        confidence = generated.confidence,
-                        dataSources = generated.summarySources.map { it.label },
-                        generatedAt = generated.generatedAt,
-                        inputFingerprint = fingerprint,
-                        promptVersion = RadarCachePolicy.PROMPT_VERSION,
-                    ),
-                )
-            }
         }
     }
 
@@ -742,7 +627,6 @@ class DetailViewModel @Inject constructor(
     private suspend fun collectBangumiExtras(work: Work, subjectId: Int, forceRefresh: Boolean) {
         detailRepository.observeBangumiExtras(work.id, subjectId, forceRefresh).collect { data ->
             val routeEntries = buildRouteEntries(work, data.relations)
-            seriesSubjectIds = routeEntries.mapNotNull { it.workId.toIntOrNull() }
             val tags = data.tags.ifEmpty { work.tags.map { it.name } }
                 .filter { it.isNotBlank() }
                 .distinct()
@@ -804,11 +688,8 @@ class DetailViewModel @Inject constructor(
     /**
      * 点击 AI 匹配度分析按钮后：
      * 1. 未配置 AI → [AiMatchUi.NotConfigured]（提示可用本地模型估计），不发请求。
-     * 2. 已配置 → [AiMatchUi.Loading] → 组装作品信息 + 口味画像高低分标签为输入，
-     *    经 [AiEngine] 运行 [AiTask.TasteMatch]（成本已确认）。
-     * 3. 成功 → [AiMatchUi.Result]（结构化 matchScore / likedReasons / riskReasons / confidence，
-     *    AiEngine 自动写入 AI_RESULT 缓存）。
-     * 4. 低置信 / 失败 / 未配置 → [AiMatchUi.Error]，提示已回退本地模型，页面不无响应。
+     * 2. 已配置 → [AiMatchUi.Loading] → [DetailAiMatchAnalyzer] 组装输入并经 [AiEngine] 运行（成本已确认）。
+     * 3. 成功 → [AiMatchUi.Result]；低置信 / 失败 → [AiMatchUi.Error]，提示已回退本地模型，页面不无响应。
      */
     fun onAnalyzeMatchWithAi() {
         val work = currentWork ?: return
@@ -820,170 +701,12 @@ class DetailViewModel @Inject constructor(
                 return@launch
             }
             _aiMatch.value = AiMatchUi.Loading
-
-            val profile = tasteProfile.value
-            val highTags = profile?.tagStats
-                ?.filter { it.bucket == TagBucket.HIGH_SCORE }
-                ?.map { it.tagName }
-                ?.take(20)
-                .orEmpty()
-            val lowTags = profile?.tagStats
-                ?.filter { it.bucket == TagBucket.LOW_SCORE }
-                ?.map { it.tagName }
-                ?.take(20)
-                .orEmpty()
-            val community = ratings.value
-            // 纳入近期评分作品 + 历史最高/最低分锚点，比仅用标签更具参考价值。
-            val allRated = runCatchingCancellable { detailInteractions.ratedWorkContexts() }.getOrDefault(emptyList())
-            val recentRated = allRated.sortedByDescending { it.updatedAt }.take(20)
-            // 口味锚点——历史最高分（最喜欢）与最低分（最不喜欢），各取前若干。
-            val topRated = allRated.sortedByDescending { it.rating }.take(5)
-            val lowRated = allRated.filter { it.rating <= 6 }.sortedBy { it.rating }.take(5)
-            // 隐私开关「允许把短评发给 AI」：关闭（默认）时，发给 AI 的内容里不带任何短评文本。
-            val allowComments = detailInteractions.isAiReviewAnalysisAllowed()
-            val lineOf: (com.acgcompass.domain.detail.RatedWorkContext) -> String = { context ->
-                buildString {
-                    append(context.title).append(" · ").append(context.rating).append("分")
-                    context.comment?.takeIf { allowComments && it.isNotBlank() }?.let {
-                        append("（短评：").append(it.take(40)).append("）")
-                    }
-                }
-            }
-            val ratedLines = recentRated.map(lineOf)
-            val topLines = topRated.map(lineOf)
-            val lowLines = lowRated.map(lineOf)
-            // 本地个人分歧模型给出的证据：大众基线 / 预计评分 / 分歧来源、题材相近的已评分作品、
-            // 与大众分歧最大的评分。让 AI 在有数据支撑的先验上做归因，而不是只看一堆标签凭感觉打分。
-            val divergenceEvidence = runCatchingCancellable {
-                buildDivergenceEvidence(
-                    work,
-                    allRated,
-                    allowComments,
-                )
-            }.getOrDefault("")
-            val content = buildString {
-                append("作品：").append(work.titles.canonical).append('\n')
-                community?.let { agg ->
-                    agg.perSource[com.acgcompass.domain.model.SourceId.BANGUMI]?.let { entry ->
-                        append("Bangumi 社区评分：").append(entry.score)
-                        entry.voteCount?.let { append("（").append(it).append(" 人评分）") }
-                        append('\n')
-                    }
-                }
-                work.titles.ja?.let { append("原名：").append(it).append('\n') }
-                append("类型：").append(work.mediaType.name).append('\n')
-                work.year?.let { append("年份：").append(it).append('\n') }
-                val workTags = work.tags.map { it.name }
-                if (workTags.isNotEmpty()) append("作品标签：").append(workTags.joinToString("、")).append('\n')
-                work.summary?.takeIf { it.isNotBlank() }?.let {
-                    append("简介：").append(it.take(400)).append('\n')
-                }
-                if (topLines.isNotEmpty()) {
-                    append("用户历史高评分作品：\n").append(topLines.joinToString("\n")).append('\n')
-                }
-                if (lowLines.isNotEmpty()) {
-                    append("用户历史低评分作品：\n").append(lowLines.joinToString("\n")).append('\n')
-                }
-                if (ratedLines.isNotEmpty()) {
-                    append("用户近期评分作品（标题、评分、短评）：\n")
-                    append(ratedLines.joinToString("\n")).append('\n')
-                }
-                append(divergenceEvidence)
-                if (highTags.isNotEmpty()) append("高评分作品常见标签：").append(highTags.joinToString("、")).append('\n')
-                if (lowTags.isNotEmpty()) append("低评分作品常见标签：").append(lowTags.joinToString("、")).append('\n')
-                profile?.avgScore?.takeIf { it > 0f }?.let { append("用户平均分：").append("%.1f".format(it)).append('\n') }
-            }
-            val dataSources = buildList {
-                add("作品资料")
-                if (recentRated.isNotEmpty()) add("近期评分作品")
-                if (profile != null) add("口味画像")
-                if (community != null) add("社区评分")
-            }
-
-            val result = runCatchingCancellable {
-                aiEngine.run(
-                    AiTask.TasteMatch(workId = work.id, content = content, dataSources = dataSources),
-                    AiRunOptions(confirmed = true),
-                )
-            }.getOrElse { AiRunResult.Failure(com.acgcompass.core.common.AppError.Server()) }
-
-            _aiMatch.value = when (result) {
-                is AiRunResult.Success -> {
-                    val out = result.payload
-                    val fraction = (out.matchScore.coerceIn(0, 100)) / 100f
-                    AiMatchUi.Result(
-                        predictedRatingText = out.predictedRating.takeIf { it in 1f..10f }?.let { "%.1f".format(it) },
-                        divergenceReason = out.divergenceReason.trim().takeIf { it.isNotEmpty() },
-                        ratingAngles = out.ratingAngles.map { it.trim() }.filter { it.isNotEmpty() }.take(4),
-                        matchPercentText = "${out.matchScore.coerceIn(0, 100)}%",
-                        fraction = fraction,
-                        likedReasons = out.likedReasons,
-                        riskReasons = out.riskReasons,
-                        confidenceText = "置信度 ${(out.confidence.coerceIn(0f, 1f) * 100).toInt()}%",
-                        dataSources = result.result.dataSources.ifEmpty { dataSources },
-                    )
-                }
-                is AiRunResult.LowConfidence ->
-                    AiMatchUi.Error("AI 未返回可靠的结构化结果，当前显示本地口味匹配度")
-                is AiRunResult.NotConfigured ->
-                    AiMatchUi.NotConfigured("未配置 AI，可使用本地模型估计（见上方「口味匹配度」）")
-                is AiRunResult.NeedsConfirmation ->
-                    AiMatchUi.Error("AI 分析需确认成本，已回退本地模型估计")
-                is AiRunResult.Failure ->
-                    AiMatchUi.Error("AI 分析失败（${result.error.nextStep ?: "请稍后重试"}），已回退本地模型估计")
-            }
+            _aiMatch.value = aiMatchAnalyzer.analyze(work, tasteProfile.value, ratings.value)
         }
     }
 
     /**
-     * 组装「个人分歧」证据文本（供 AI 口味匹配）。模型未就绪（评分太少）时返回空串——AI 只拿到原有输入。
-     */
-    private suspend fun buildDivergenceEvidence(
-        work: Work,
-        rated: List<com.acgcompass.domain.detail.RatedWorkContext>,
-        allowComments: Boolean,
-    ): String {
-        val model = tasteAnalysis.advancedProfile.value?.divergence ?: return ""
-        val bangumiId = runCatchingCancellable { resolveBangumiSubjectId(work) }.getOrNull()
-        val match = tasteAnalysis.score(bangumiId?.toString() ?: work.id, null, allowNetwork = false)
-        val byId = rated.filter { it.subjectId.isNotBlank() }.associateBy { it.subjectId }
-        fun line(e: com.acgcompass.domain.taste.RatedExample): String? {
-            val context = byId[e.subjectId] ?: return null
-            return buildString {
-                append("- ").append(context.title).append("：你 ").append(e.rating).append(" 分，大众基线 ")
-                append("%.1f".format(e.baseline)).append("（").append("%+.1f".format(e.divergence)).append("）")
-                context.comment?.takeIf { allowComments && it.isNotBlank() }
-                    ?.let { append("，短评：").append(it.take(AI_COMMENT_CHARS)) }
-            }
-        }
-        return buildString {
-            append("【本地模型】该用户均分 ").append("%.1f".format(model.meanRating))
-            append("，比同批作品的社区均分").append(if (model.leniency >= 0) "高 " else "低 ")
-            append("%.1f".format(kotlin.math.abs(model.leniency))).append(" 分\n")
-            match?.prediction?.let { p ->
-                append("大众基线 ").append("%.1f".format(p.baseline)).append("，预计评分 ").append("%.1f".format(p.rating))
-                append("（个人分歧 ").append("%+.1f".format(p.divergence)).append("）\n")
-                if (p.factors.isNotEmpty()) {
-                    append("分歧来源：")
-                    append(p.factors.joinToString("、") { "${it.label} ${"%+.1f".format(it.delta)}" }).append('\n')
-                }
-            }
-            val similar = match?.similarRated.orEmpty().mapNotNull(::line)
-            if (similar.isNotEmpty()) {
-                append("【题材相近的已评分作品】\n").append(similar.joinToString("\n")).append('\n')
-            }
-            val (above, below) = model.strongestDivergences(AI_DIVERGENCE_EXAMPLES)
-            val extremes = (above + below).mapNotNull(::line)
-            if (extremes.isNotEmpty()) {
-                append("【与大众分歧最大的评分】\n").append(extremes.joinToString("\n")).append('\n')
-            }
-        }
-    }
-
-    /**
-     * 编辑「我的记录」并回写 Bangumi（状态 / 评分 / 进度 / 短评）。
-     * 流程：本地先写 user_collections（即时反映 UI）→ 调 Bangumi `POST /v0/users/-/collections/{id}`
-     * 回传；未配置 Bangumi 或非 Bangumi 条目则只本地保存并提示。失败不回滚本地，提示同步失败原因。
+     * 编辑「我的记录」并回写 Bangumi（状态 / 评分 / 进度 / 短评），由 [DetailRecordEditor] 完成；结果提示写进 [recordMessage]。
      */
     fun onUpdateMyRecord(
         statusLabel: String?,
@@ -993,106 +716,10 @@ class DetailViewModel @Inject constructor(
         tags: List<String>? = null,
         private: Boolean = false,
     ) {
-        // 进度不得超过总集数；并据进度自动推导状态（用户未显式选状态时）。
-        val totalEps = currentWork?.units?.episodes?.takeIf { it > 0 }
-        val clampedProgress = progress?.let { p ->
-            if (totalEps != null) p.coerceIn(0, totalEps) else p.coerceAtLeast(0)
-        }
-        val effectiveStatus = statusLabel ?: when {
-            clampedProgress == null || clampedProgress <= 0 -> null
-            totalEps != null && clampedProgress >= totalEps -> "看过"
-            else -> "在看"
-        }
+        val edit = RecordEdit(statusLabel, rating, progress, comment, tags, private)
+        val work = currentWork
         viewModelScope.launch {
-            // 本地先写——采用「编辑对话框即完整意图」的覆盖语义：未选状态/留空即清空该字段
-            // （不再回退既有值），从而支持清空状态/评分/进度/短评。
-            val now = System.currentTimeMillis()
-            val existing = detailInteractions.personalRecord(workId)
-            // 解析真实 Bangumi subjectId（非 Bangumi 作品的裸数字 id 绝不当 subjectId）。
-            val subjectId = currentWork
-                ?.takeUnless { it.primarySource == com.acgcompass.domain.model.SourceId.VNDB }
-                ?.let { resolveBangumiSubjectId(it) }
-            val configured = detailInteractions.isBangumiConfigured()
-            // 全字段为空（无状态/评分/进度/短评/标签）→ 删除该收藏行，避免残留一条「暂无数据」空记录
-            // 空白短评不写入，避免污染时光机基线和个人收藏记录。
-            val fullyCleared = effectiveStatus == null && rating == null && clampedProgress == null &&
-                comment.isNullOrBlank() && tags.isNullOrEmpty()
-            if (fullyCleared) {
-                // 清空记录表示停止追踪：记录和待补池条目一起移进回收站（可撤销）。Bangumi 上的收藏不动——
-                // 公开接口不能删除收藏，网页上的记录在回收站里提供入口，由用户自己移除。
-                val batchId = java.util.UUID.randomUUID().toString()
-                val trashed = detailInteractions.trashPersonalRecord(workId, batchId)
-                backlogRepository.removeToTrash(listOf(workId), batchId)
-                undoController.offer(if (trashed) "已清空记录，可在回收站恢复" else "已清空记录", batchId)
-                return@launch
-            }
-            detailInteractions.savePersonalRecord(
-                PersonalRecord(
-                    id = existing?.id ?: "${currentWork?.primarySource?.name ?: "BANGUMI"}:$workId",
-                    source = existing?.source ?: currentWork?.primarySource?.name ?: "BANGUMI",
-                    sourceItemId = existing?.sourceItemId ?: workId,
-                    workId = workId,
-                    status = effectiveStatus,
-                    rating = rating,
-                    progress = clampedProgress,
-                    comment = comment,
-                    tags = tags ?: emptyList(),
-                    updatedAt = now,
-                    syncedAt = existing?.syncedAt ?: now,
-                    sourceUpdatedAt = existing?.sourceUpdatedAt,
-                    // 本地持久化可见性，供编辑对话框回显。
-                    isPrivate = private,
-                ),
-            )
-            // 应用级画像协调器会观察这次本地写入并防抖更新，避免详情页重复计算。
-            val tasteNote = if (rating != null) "；口味画像将在后台更新" else ""
-
-            if (subjectId == null) {
-                _recordMessage.value = "已本地保存（该作品在 Bangumi 无对应词条，仅本地，不同步）$tasteNote"
-                return@launch
-            }
-            if (!configured) {
-                _recordMessage.value = "已本地保存；未配置 Bangumi Token，未同步到云端$tasteNote"
-                return@launch
-            }
-            // 写回前确认条目在 Bangumi 存在，避免对无词条作品反复 PATCH/POST 报错。
-            if (!detailInteractions.bangumiSubjectExists(subjectId)) {
-                _recordMessage.value = "已本地保存；该作品在 Bangumi 无词条，无法同步到云端$tasteNote"
-                return@launch
-            }
-            val result = detailInteractions.updateBangumiRecord(
-                subjectId,
-                BangumiRecordUpdate(
-                    type = effectiveStatus?.let { bangumiTypeOf(it) },
-                    rating = rating ?: 0,
-                    comment = comment ?: "",
-                    tags = tags ?: emptyList(),
-                    isPrivate = private,
-                ),
-            )
-            // 动画进度通过专用章节端点上传（书籍 / 漫画不上传进度，仅本地）。
-            val isAnime = currentWork?.mediaType == com.acgcompass.domain.model.MediaType.ANIME
-            val progressResult: AppResult<Unit>? =
-                if (isAnime && clampedProgress != null && clampedProgress > 0) {
-                    detailInteractions.markEpisodesWatched(subjectId, clampedProgress)
-                } else {
-                    null
-                }
-            _recordMessage.value = when (result) {
-                is AppResult.Success -> {
-                    detailInteractions.markPersonalRecordSynced(workId, System.currentTimeMillis())
-                    val progressNote = when (progressResult) {
-                        is AppResult.Failure -> "（进度同步失败：${progressResult.error.cause}）"
-                        else -> ""
-                    }
-                    "已保存并同步到 Bangumi$progressNote$tasteNote"
-                }
-                is AppResult.Failure -> {
-                    // 失败的修改进待推送队列，联网后自动重试。
-                    detailInteractions.schedulePendingPush()
-                    "本地已保存，同步 Bangumi 失败，联网后会自动重试：${result.error.cause}"
-                }
-            }
+            recordEditor.save(workId, work, edit)?.let { _recordMessage.value = it }
         }
     }
 
@@ -1104,53 +731,8 @@ class DetailViewModel @Inject constructor(
         val work = currentWork ?: return
         if (work.primarySource != com.acgcompass.domain.model.SourceId.VNDB) return
         viewModelScope.launch {
-            val existing = detailInteractions.personalRecord(work.id)
-            if (existing == null) {
-                _recordMessage.value = "当前没有可同步的本地记录"
-                return@launch
-            }
-            val subjectId = resolveBangumiSubjectId(work)
-            if (subjectId == null) {
-                _recordMessage.value = "没有达到自动关联门槛的 Bangumi 词条，未同步"
-                return@launch
-            }
-            val configured = detailInteractions.isBangumiConfigured()
-            if (!configured) {
-                _recordMessage.value = "请先登录 Bangumi，再手动同步这条记录"
-                return@launch
-            }
-            if (!detailInteractions.bangumiSubjectExists(subjectId)) {
-                _recordMessage.value = "匹配的 Bangumi 词条当前不可用，未同步"
-                return@launch
-            }
-            val result = detailInteractions.updateBangumiRecord(
-                subjectId,
-                BangumiRecordUpdate(
-                    type = existing.status?.let(::bangumiTypeOf),
-                    rating = existing.rating ?: 0,
-                    comment = existing.comment.orEmpty(),
-                    tags = existing.tags,
-                    isPrivate = existing.isPrivate,
-                ),
-            )
-            _recordMessage.value = when (result) {
-                is AppResult.Success -> {
-                    detailInteractions.markPersonalRecordSynced(work.id, System.currentTimeMillis())
-                    "已将这条本地记录同步到 Bangumi"
-                }
-                is AppResult.Failure -> "同步失败：${result.error.nextStep ?: "请稍后重试"}"
-            }
+            _recordMessage.value = recordEditor.syncVndbToBangumi(work)
         }
-    }
-
-    /** 状态标签 → Bangumi 收藏 type（想看1/看过2/在看3/搁置4/抛弃5）。未知返回 null。 */
-    private fun bangumiTypeOf(label: String): Int? = when (label) {
-        "想看" -> 1
-        "看过" -> 2
-        "在看" -> 3
-        "搁置" -> 4
-        "抛弃" -> 5
-        else -> null
     }
 
     private companion object {
@@ -1184,62 +766,6 @@ data class BacklogMembership(
     val inBacklog: Boolean = false,
     val inDustMuseum: Boolean = false,
 )
-
-/**
- * 本地规则把 Bangumi 关联作品分为主线、可选和可跳过，不调用 AI。
- * - 主线 MAIN：前传 / 续集 / 正篇（含「本作」）。
- * - 可跳过 SKIPPABLE：总集篇 / PV / 角色歌 / 预告。
- * - 可选 OPTIONAL：其余（番外 / 外传 / 剧场版 / OVA / 其他）。
- * 排序：主线（前传→本作→续集）→ 可选 → 可跳过。
- */
-private fun buildRouteEntries(
-    current: Work,
-    relations: List<com.acgcompass.domain.detail.DetailRelation>,
-): List<RouteEntryUi> {
-    if (relations.isEmpty()) return emptyList()
-    fun sectionOf(rel: String?): RouteSection {
-        val r = rel ?: ""
-        return when {
-            r.contains("总集") || r.contains("PV") || r.contains("预告") || r.contains("角色歌") -> RouteSection.SKIPPABLE
-            r.contains("前") || r.contains("续") || r.contains("正篇") || r.contains("主线") -> RouteSection.MAIN
-            else -> RouteSection.OPTIONAL
-        }
-    }
-    fun mainOrder(rel: String?): Int = when {
-        rel?.contains("前") == true -> 0
-        rel?.contains("续") == true -> 2
-        else -> 1
-    }
-    val others = relations.mapNotNull { rel ->
-        val title = rel.nameCn.ifBlank { rel.name }.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-        // 非动画（游戏=4 / 书籍画集=1 / 音乐=3 / 三次元=6 等）归为衍生作/原作，不进可选/可跳过。
-        val section = if (rel.type != null && rel.type != 2) RouteSection.DERIVED else sectionOf(rel.relation)
-        RouteEntryUi(
-            workId = rel.id.toString(),
-            title = title,
-            relationLabel = rel.relation?.takeIf { it.isNotBlank() } ?: "关联",
-            section = section,
-        )
-    }
-    // 当前作品作为主线「本作」。
-    val self =
-        RouteEntryUi(
-            workId = current.id,
-            title = current.titles.canonical,
-            relationLabel = "本作",
-            section = RouteSection.MAIN,
-        )
-    val main = (others.filter { it.section == RouteSection.MAIN } + self)
-        .sortedBy { if (it.relationLabel == "本作") 1 else mainOrder(it.relationLabel) }
-    val optional = others.filter { it.section == RouteSection.OPTIONAL }
-    val skippable = others.filter { it.section == RouteSection.SKIPPABLE }
-    val derived = others.filter { it.section == RouteSection.DERIVED }
-    return main + optional + skippable + derived
-}
-
-/** AI 输入里每条短评最多带多少字，以及「分歧最大的评分」高低各取几部。 */
-private const val AI_COMMENT_CHARS = 60
-private const val AI_DIVERGENCE_EXAMPLES = 4
 
 private data class TasteInputs(
     val work: Work?,
