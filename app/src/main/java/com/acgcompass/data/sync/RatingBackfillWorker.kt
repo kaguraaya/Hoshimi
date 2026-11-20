@@ -13,14 +13,10 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.acgcompass.data.datastore.SettingsDataStore
-import com.acgcompass.data.local.dao.BacklogDao
-import com.acgcompass.data.local.dao.RatingDao
-import com.acgcompass.data.local.dao.UserCollectionDao
-import com.acgcompass.data.local.dao.WorkDao
-import com.acgcompass.data.local.entity.RatingEntity
-import com.acgcompass.data.local.entity.WorkEntity
-import com.acgcompass.domain.model.MediaType
-import com.acgcompass.domain.model.SourceId
+import com.acgcompass.data.local.dao.RatingBackfillDao
+import com.acgcompass.data.tasks.TaskRunRecorder
+import com.acgcompass.domain.model.BackgroundTaskKind
+import com.acgcompass.domain.model.RatingBackfillOutcome
 import com.acgcompass.domain.repository.WorkRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -36,7 +32,8 @@ import kotlinx.coroutines.flow.first
  * （含按标题去 AniList、Tenrai 等平台匹配）。收藏和待补池里的作品优先，其余按评分人数。
  *
  * 一次最多 [BATCH] 部、一部一部地做；请求全部走后台优先级，前台页面（例如正在打开的详情页）的请求先走。
- * 查过的作品 [RETRY_AFTER_MS] 内不重复查。
+ * 每部作品的结果记在 `rating_backfill_state` 表里：查过了就一周后再看，因网络 / 限流没查成的几小时后就再试
+ * （见 [RatingBackfillPolicy]）。候选在数据库里筛选，不整表读。
  */
 @HiltWorker
 @Suppress("LongParameterList") // Hilt 注入
@@ -45,82 +42,79 @@ class RatingBackfillWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val settings: SettingsDataStore,
     private val workRepository: WorkRepository,
-    private val workDao: WorkDao,
-    private val ratingDao: RatingDao,
-    private val userCollectionDao: UserCollectionDao,
-    private val backlogDao: BacklogDao,
+    private val backfillDao: RatingBackfillDao,
+    private val recorder: TaskRunRecorder,
 ) : CoroutineWorker(appContext, params) {
+    @Suppress("TooGenericExceptionCaught") // 任何异常都只记为这次失败，下个周期再跑
     override suspend fun doWork(): Result {
         if (!settings.scoreDiffAutoBackfill.first()) return Result.success()
+        recorder.started(BackgroundTaskKind.RATING_BACKFILL)
+        return try {
+            migrateLegacyAttempts()
+            val batch = runBatch()
+            if (batch.failed == 0) {
+                recorder.succeeded(BackgroundTaskKind.RATING_BACKFILL, batch.summary())
+            } else {
+                // 有作品没查成就记为失败：全部没查成、部分没查成都要在「后台任务」页看得出来。
+                recorder.failed(BackgroundTaskKind.RATING_BACKFILL, batch.failureReason(), batch.summary())
+            }
+            Result.success()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            recorder.failed(BackgroundTaskKind.RATING_BACKFILL, TaskRunRecorder.describe(error))
+            Result.success()
+        }
+    }
+
+    private suspend fun runBatch(): RatingBackfillBatch {
         val now = System.currentTimeMillis()
-        val attempts = settings.ratingBackfillAttempts.first().filterValues { now - it < RETRY_AFTER_MS }
-        val tried = LinkedHashMap(attempts)
-        for (id in targets(now, attempts.keys)) {
-            try {
-                workRepository.backfillRatings(id)
+        val targets = backfillDao.selectTargets(now, now - RatingBackfillPolicy.CHECKED_RETRY_MS, BATCH)
+        var checked = 0
+        var transient = 0
+        for (id in targets) {
+            val outcome = try {
+                workRepository.backfillRatingsOutcome(id)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                // 单部失败不影响其它作品，下次到期再试。
+                RatingBackfillOutcome.FAILED
             }
-            tried[id] = System.currentTimeMillis()
+            if (outcome == RatingBackfillOutcome.CHECKED) checked++ else transient++
+            val at = System.currentTimeMillis()
+            backfillDao.upsert(RatingBackfillPolicy.next(id, backfillDao.get(id), outcome, at))
         }
-        settings.setRatingBackfillAttempts(
-            tried.entries.sortedByDescending {
-                it.value
-            }.take(MAX_ATTEMPTS).associate { it.toPair() },
-        )
-        return Result.success()
+        return RatingBackfillBatch(total = targets.size, checked = checked, failed = transient)
     }
 
-    private suspend fun targets(now: Long, recentlyTried: Set<String>): List<String> {
-        val personal = buildSet {
-            userCollectionDao.getAll().forEach { add(it.localWorkId) }
-            backlogDao.getAll().forEach { add(it.workId) }
-        }
-        return selectBackfillTargets(workDao.getAll(), ratingDao.getAll(), personal, recentlyTried, now, BATCH)
+    /** 旧版本把「最近查过」存在设置里：第一次运行时搬进数据库表，然后清掉。 */
+    private suspend fun migrateLegacyAttempts() {
+        val legacy = settings.ratingBackfillAttempts.first()
+        if (legacy.isEmpty()) return
+        if (backfillDao.count() == 0) backfillDao.upsertAll(RatingBackfillPolicy.fromLegacy(legacy))
+        settings.clearRatingBackfillAttempts()
     }
 
     companion object {
         const val UNIQUE_WORK_NAME = "rating_backfill"
         const val UNIQUE_NOW_NAME = "rating_backfill_now"
         private const val BATCH = 20
-        private const val MAX_ATTEMPTS = 3_000
-        internal const val RETRY_AFTER_MS = 7L * 24 * 60 * 60 * 1000
     }
 }
 
-/**
- * 挑出需要补评分的动画：有效评分（未缺失、分数大于 0）不超过一个平台，最近没查过，其它平台最近也没查过。
- * 收藏 / 待补池里的作品（[personal]）优先，其余按评分人数从多到少，最多 [limit] 部。
- */
-@Suppress("LongParameterList") // 纯函数，输入逐个列出便于测试
-internal fun selectBackfillTargets(
-    works: List<WorkEntity>,
-    ratings: List<RatingEntity>,
-    personal: Set<String>,
-    recentlyTried: Set<String>,
-    now: Long,
-    limit: Int,
-): List<String> {
-    val byWork = ratings.groupBy { it.workId }
-    return works.asSequence()
-        .filter { MediaType.fromStorage(it.mediaType) == MediaType.ANIME && it.id !in recentlyTried }
-        .filter { work ->
-            val rows = byWork[work.id].orEmpty()
-            val valid = rows.count { !it.missing && it.score > 0f }
-            val othersChecked = rows.any {
-                it.sourceId != SourceId.BANGUMI.name && now - it.fetchedAt < RatingBackfillWorker.RETRY_AFTER_MS
-            }
-            valid <= 1 && !othersChecked
-        }
-        .sortedWith(
-            compareByDescending<WorkEntity> { it.id in personal }
-                .thenByDescending { work -> byWork[work.id].orEmpty().maxOfOrNull { it.voteCount } ?: 0 },
-        )
-        .take(limit)
-        .map { it.id }
-        .toList()
+/** 一批补评分的结果：挑了多少部、查完多少部、多少部因网络 / 限流 / 其它错误没查成。 */
+internal data class RatingBackfillBatch(val total: Int, val checked: Int, val failed: Int) {
+    fun summary(): String = when {
+        total == 0 -> "没有需要补的作品"
+        failed == 0 -> "查了 $total 部"
+        else -> "挑了 $total 部，查完 $checked 部，$failed 部没查成"
+    }
+
+    fun failureReason(): String = if (checked == 0) {
+        "这批 $total 部都没查成，多半是网络不通或被限速，会在几小时后自动再试"
+    } else {
+        "$failed 部没查成（网络或限速），会在几小时后自动再试"
+    }
 }
 
 /** 按「自动补充其它平台评分」开关调度后台补评分：打开时马上补一批，之后联网且电量不低时约每 6 小时一次。 */

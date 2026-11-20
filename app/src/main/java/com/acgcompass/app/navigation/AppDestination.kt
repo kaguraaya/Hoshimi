@@ -129,6 +129,11 @@ sealed interface AppDestination {
         override val route: String = "data_safety"
     }
 
+    /** 后台任务：各后台任务的运行状况与手动重试（设置 → 数据 → 后台任务）。 */
+    data object BackgroundTasks : AppDestination {
+        override val route: String = "background_tasks"
+    }
+
     /** 关于页。 */
     data object About : AppDestination {
         override val route: String = "about"

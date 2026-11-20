@@ -303,17 +303,17 @@ internal const val HOME_EMPTY_MESSAGE: String = "待补池暂无作品，可通�
  */
 @VisibleForTesting
 internal fun buildContinueItems(
-    collections: List<com.acgcompass.data.local.entity.UserCollectionEntity>,
+    collections: List<com.acgcompass.domain.detail.PersonalRecord>,
     worksById: Map<String, Work>,
     limit: Int = 3,
 ): List<ContinueItem> = collections.asSequence()
     .filter { it.status == "在看" }
     .sortedByDescending { it.updatedAt }
     .map { c ->
-        val work = worksById[c.localWorkId]
+        val work = worksById[c.workId]
         val card = WorkCardUiModel(
             coverUrl = work?.coverUrl,
-            title = work?.titles?.canonical ?: c.localWorkId,
+            title = work?.titles?.canonical ?: c.workId,
             subtitle = work?.let { workSubtitle(it) } ?: "",
             type = work?.mediaType?.displayLabel() ?: "",
             ratingText = null,
@@ -327,7 +327,7 @@ internal fun buildContinueItems(
             if (total != null && p >= total) "已看完" else "下一话：第 ${p + 1} 话"
         }
         ContinueItem(
-            workId = c.localWorkId,
+            workId = c.workId,
             card = card,
             progressText = progressText,
             nextUpText = nextUp,

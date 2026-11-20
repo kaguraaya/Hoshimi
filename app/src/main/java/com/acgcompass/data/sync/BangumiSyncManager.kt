@@ -9,7 +9,6 @@ import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkDao
 import com.acgcompass.data.local.entity.UserCollectionEntity
-import com.acgcompass.data.local.mapper.toEntity
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
 import com.acgcompass.data.remote.bangumi.BangumiTokenRefresher
 import com.acgcompass.data.remote.bangumi.BangumiUserSubjectCollectionDto
@@ -101,6 +100,8 @@ class BangumiSyncManager @Inject constructor(
     private val tokenRefresher: BangumiTokenRefresher,
     private val trash: com.acgcompass.data.repository.TrashRepositoryImpl,
     private val outbox: BangumiOutbox,
+    private val taskRecorder: com.acgcompass.data.tasks.TaskRunRecorder,
+    private val transaction: com.acgcompass.data.local.LocalTransactionRunner,
     private val dispatchers: DispatcherProvider,
 ) {
     /** 同步在自己的作用域里跑：发起同步的页面离开时，同步本身不会被取消。 */
@@ -127,6 +128,7 @@ class BangumiSyncManager @Inject constructor(
     }
 
     private suspend fun syncAndRecord(): AppResult<SyncReport> {
+        taskRecorder.started(com.acgcompass.domain.model.BackgroundTaskKind.SYNC)
         runCatching { tokenRefresher.refreshIfNeeded() }
         val result = when (val raw = runSyncInternal()) {
             is AppResult.Failure -> AppResult.Failure(raw.error.withBangumiApiHint())
@@ -135,6 +137,9 @@ class BangumiSyncManager @Inject constructor(
         when (result) {
             is AppResult.Success -> syncStatusRepository.recordSuccess(result.data)
             is AppResult.Failure -> syncStatusRepository.recordFailure(result.error.cause)
+        }
+        taskRecorder.finish(com.acgcompass.domain.model.BackgroundTaskKind.SYNC, result) { report ->
+            "共 ${report.total} 部，新增 ${report.added}、更新 ${report.updated}"
         }
         return result
     }
@@ -225,18 +230,27 @@ class BangumiSyncManager @Inject constructor(
             pendingWish = settingsDataStore.pendingWishWorkIds.first(),
             complete = fetched.complete,
         )
-        val written = persistUpsertedWorks(plan.upserts, dtoByWork, local, now)
-        val added = written.added
-        val syncedWorks = written.syncedWorks
-        val backlogWorks = written.backlogWorks
-        val lightweightFeatures = written.features
         // 先写入收藏响应内嵌的特征，再发布个人收藏，避免画像观察器看到个人记录已更新而特征池仍为空。
+        val lightweightFeatures = embeddedFeatures(plan.upserts, dtoByWork, now)
         if (lightweightFeatures.isNotEmpty()) {
             workFeatureRepository.seedLightweight(lightweightFeatures)
             featureEnrichmentScheduler.enqueue()
         }
-        if (plan.upserts.isNotEmpty()) userCollectionDao.upsertAll(plan.upserts)
-        (plan.clearRemovals + plan.obsoleteMarkers).forEach { trash.clearCollectionRemoval(it) }
+        // 作品、收藏和移除标记按批放进短事务一起写（见 [CollectionMergeWriter]）。
+        val written = CollectionMergeWriter(transaction, workDao, userCollectionDao, trash::clearCollectionRemoval)
+            .write(
+                upserts = plan.upserts,
+                works = plan.upserts.mapNotNull { e ->
+                    dtoByWork[e.localWorkId]?.subject?.toWork()?.let { e.localWorkId to it }
+                }.toMap(),
+                local = local,
+                clearRemovals = plan.clearRemovals,
+                obsoleteMarkers = plan.obsoleteMarkers,
+                now = now,
+            )
+        val added = written.added
+        val syncedWorks = written.syncedWorks
+        val backlogWorks = written.backlogWorks
         val batchId = java.util.UUID.randomUUID().toString()
         val removed = plan.remoteRemoved.count {
             trash.trashCollection(it, com.acgcompass.domain.model.TrashReason.REMOTE_REMOVED, batchId, now)
@@ -264,56 +278,16 @@ class BangumiSyncManager @Inject constructor(
         )
     }
 
-    /** 并入的收藏对应的作品、内嵌特征和需要加进待补池的作品。 */
-    private class WrittenWorks {
-        var added = 0
-        val syncedWorks = mutableListOf<com.acgcompass.domain.model.Work>()
-        val backlogWorks = mutableListOf<com.acgcompass.domain.model.Work>()
-        val features = mutableListOf<WorkFeature>()
-    }
-
-    /**
-     * 写入要并入的收藏对应的作品资料，收集内嵌特征。
-     * 想看 / 在看只在首次出现时并入待补池，避免把用户已经从待补池删掉的作品同步「复活」。
-     */
-    private suspend fun persistUpsertedWorks(
+    /** 收藏响应里内嵌的条目资料（标签、评分等），先存成轻量作品资料。 */
+    private fun embeddedFeatures(
         upserts: List<UserCollectionEntity>,
         dtoByWork: Map<String, BangumiUserSubjectCollectionDto>,
-        local: Map<String, UserCollectionEntity>,
         now: Long,
-    ): WrittenWorks {
-        val written = WrittenWorks()
-        for (entity in upserts) {
-            val subject = (dtoByWork[entity.localWorkId] ?: continue).subject
-            val existing = local[entity.localWorkId]
-            if (existing == null) written.added += 1
-            val becameWish = entity.status.isWishOrWatching() && !existing?.status.isWishOrWatching()
-            subject?.toWork()?.let { work ->
-                persistWork(work, now)
-                written.syncedWorks += work
-                if (becameWish) written.backlogWorks += work
-            }
-            subject?.toBasicWorkFeature(
-                subjectId = entity.localWorkId,
-                updatedAt = now,
-                completeness = WorkFeatureCompleteness.EMBEDDED,
-            )?.let { written.features += it }
-        }
-        return written
-    }
-
-    /** 写入作品；收藏列表里的精简条目没有信息框（别名），保留之前从搜索 / 详情写入的别名，跨源匹配要用。 */
-    private suspend fun persistWork(work: com.acgcompass.domain.model.Work, now: Long) {
-        val existingWork = workDao.getById(work.id)
-        val entity = work.toEntity(createdAt = existingWork?.createdAt ?: now, updatedAt = now)
-        workDao.upsert(
-            if (entity.aliases.isEmpty() && existingWork != null) {
-                entity.copy(
-                    aliases = existingWork.aliases,
-                )
-            } else {
-                entity
-            },
+    ): List<WorkFeature> = upserts.mapNotNull { entity ->
+        dtoByWork[entity.localWorkId]?.subject?.toBasicWorkFeature(
+            subjectId = entity.localWorkId,
+            updatedAt = now,
+            completeness = WorkFeatureCompleteness.EMBEDDED,
         )
     }
 
@@ -363,7 +337,7 @@ class BangumiSyncManager @Inject constructor(
     }
 }
 
-private fun String?.isWishOrWatching(): Boolean = this == "想看" || this == "在看"
+internal fun String?.isWishOrWatching(): Boolean = this == "想看" || this == "在看"
 
 /**
  * 一次拉取的收藏：按条目编号去重后的全部收藏、接口报的总数，以及有没有分页失败。

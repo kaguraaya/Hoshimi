@@ -134,7 +134,8 @@ private fun FillRunStatus(state: CacheManagementUiState) {
     }
 }
 
-private fun String?.toSourceStatusText(): String = when (this) {
+/** 一个来源本次补充的结果说明；「后台任务」页也用这一份，保证两边说法一致。 */
+internal fun String?.toSourceStatusText(): String = when (this) {
     "TARGET_REACHED" -> "此源本次配额已完成"
     "EXHAUSTED" -> "此源候选已耗尽"
     "RUNNING" -> "正在补充"

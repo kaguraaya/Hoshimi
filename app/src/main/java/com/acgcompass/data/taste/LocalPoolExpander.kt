@@ -7,6 +7,8 @@ import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.WorkFeatureDao
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
 import com.acgcompass.data.remote.bangumi.toBasicWorkFeature
+import com.acgcompass.data.tasks.TaskRunRecorder
+import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.taste.PoolExpansion
 import com.acgcompass.domain.taste.WorkFeatureRepository
 import javax.inject.Inject
@@ -30,6 +32,7 @@ class LocalPoolExpander @Inject constructor(
     private val features: WorkFeatureRepository,
     private val workFeatureDao: WorkFeatureDao,
     private val settings: SettingsDataStore,
+    private val taskRecorder: com.acgcompass.data.tasks.TaskRunRecorder,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val _state = MutableStateFlow<PoolExpansion?>(null)
@@ -38,7 +41,13 @@ class LocalPoolExpander @Inject constructor(
     fun start(target: Int) {
         if (_state.value?.running == true) return
         _state.value = PoolExpansion(startRank = 0, done = 0, total = target, running = true)
-        scope.launch { runCatching { run(target) }.onFailure { markFailed() } }
+        scope.launch {
+            taskRecorder.started(BackgroundTaskKind.POOL_EXPAND)
+            runCatching { run(target) }.onFailure { error ->
+                markFailed()
+                taskRecorder.failed(BackgroundTaskKind.POOL_EXPAND, TaskRunRecorder.describe(error))
+            }
+        }
     }
 
     private suspend fun run(target: Int) {
@@ -65,6 +74,11 @@ class LocalPoolExpander @Inject constructor(
         }
         val added = (workFeatureDao.count() - before).coerceAtLeast(0)
         _state.update { it?.copy(running = false, added = added, failed = failed && added == 0) }
+        if (failed && added == 0) {
+            taskRecorder.failed(BackgroundTaskKind.POOL_EXPAND, "排行榜没取到，可能是网络或限速")
+        } else {
+            taskRecorder.succeeded(BackgroundTaskKind.POOL_EXPAND, "新增 $added 部作品资料")
+        }
     }
 
     private fun markFailed() = _state.update { it?.copy(running = false, failed = true, added = 0) }

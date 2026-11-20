@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.first
 
 /** Replenishes the public metadata cache when the user explicitly enables background filling. */
 @HiltWorker
+@Suppress("LongParameterList") // Hilt 注入
 class CacheFillWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
@@ -24,17 +25,20 @@ class CacheFillWorker @AssistedInject constructor(
     private val workRepository: WorkRepository,
     private val cacheRepository: CacheRepository,
     private val fillStateDao: VndbRankingCacheDao,
+    private val taskRecorder: com.acgcompass.data.tasks.TaskRunRecorder,
 ) : CoroutineWorker(appContext, params) {
     @Suppress("TooGenericExceptionCaught")
     override suspend fun doWork(): Result {
         if (!settings.cacheBackgroundFillEnabled.first()) return Result.success()
         updateStatus("RUNNING")
+        taskRecorder.started(com.acgcompass.domain.model.BackgroundTaskKind.CACHE_FILL)
         return try {
             cacheRepository.trimToPolicy()
             when (val fill = workRepository.loadPublicDiscovery(background = true)) {
                 is AppResult.Success -> {
                     cacheRepository.trimToPolicy()
                     updateStatus("SUCCESS")
+                    taskRecorder.succeeded(com.acgcompass.domain.model.BackgroundTaskKind.CACHE_FILL)
                     Result.success()
                 }
                 is AppResult.Failure -> {
@@ -44,6 +48,10 @@ class CacheFillWorker @AssistedInject constructor(
                             .filter(String::isNotBlank)
                             .joinToString(" · "),
                     )
+                    taskRecorder.failed(
+                        com.acgcompass.domain.model.BackgroundTaskKind.CACHE_FILL,
+                        com.acgcompass.data.tasks.TaskRunRecorder.describe(fill.error),
+                    )
                     Result.retry()
                 }
             }
@@ -51,6 +59,10 @@ class CacheFillWorker @AssistedInject constructor(
             throw error
         } catch (error: Exception) {
             updateStatus("FAILED", error.message ?: error.javaClass.simpleName)
+            taskRecorder.failed(
+                com.acgcompass.domain.model.BackgroundTaskKind.CACHE_FILL,
+                com.acgcompass.data.tasks.TaskRunRecorder.describe(error),
+            )
             Result.retry()
         }
     }

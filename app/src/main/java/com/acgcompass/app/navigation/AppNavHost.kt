@@ -401,6 +401,7 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
             expandPrivacy = entry.arguments?.getString("section") == "privacy",
             onClearCache = { navController.navigateOnce(AppDestination.CacheManagement.route) },
             onOpenCacheManagement = { navController.navigateOnce(AppDestination.CacheManagement.route) },
+            onOpenBackgroundTasks = { navController.navigateOnce(AppDestination.BackgroundTasks.route) },
             onOpenSource = { sourceKey ->
                 navController.navigateOnce(settingsSourceRoute(sourceKey))
             },
@@ -424,6 +425,9 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
             onOpenCacheManagement = { navController.navigateOnce(AppDestination.CacheManagement.route) },
             onOpenDataSafety = { navController.navigateOnce(AppDestination.DataSafety.route) },
         )
+    }
+    composable(AppDestination.BackgroundTasks.route) {
+        com.acgcompass.feature.tasks.BackgroundTasksRoute(onBack = { navController.popBackOnce() })
     }
     composable(AppDestination.DataSafety.route) {
         com.acgcompass.feature.safety.DataSafetyRoute(onBack = { navController.popBackOnce() })

@@ -5,8 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.domain.repository.BacklogRepository
+import com.acgcompass.domain.repository.PersonalCollectionRepository
 import com.acgcompass.domain.repository.WorkRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  *
  * 数据来源（单一可信源 = Room）：
  * - [UserCollectionDao.observeAll]：同步入库的用户收藏（我的库的主体）。
- * - [WorkRepository.observeWorks]：本地规范化作品，按 `localWorkId == work.id` 关联出封面 / 标题 / 类型 / 年份。
+ * - [WorkRepository.observeWorks]：本地规范化作品，按 `workId == work.id` 关联出封面 / 标题 / 类型 / 年份。
  * - [BacklogRepository.observeBacklog]：判定条目是否已在待补池（驱动「加入待补池」按钮）。
  *
  * 三流合并为 [MyLibraryData]（全部条目 + 各 Tab 计数），由 UI 按选中 Tab 过滤展示。
@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
  */
 @HiltViewModel
 class MyLibraryViewModel @Inject constructor(
-    private val userCollectionDao: UserCollectionDao,
+    private val personalCollections: PersonalCollectionRepository,
     private val workRepository: WorkRepository,
     private val backlogRepository: BacklogRepository,
     private val syncManager: com.acgcompass.data.sync.BangumiSyncManager,
@@ -92,7 +92,7 @@ class MyLibraryViewModel @Inject constructor(
 
     val uiState: StateFlow<UiState<MyLibraryData>> =
         combine(
-            userCollectionDao.observeAll(),
+            personalCollections.observeAll(),
             workRepository.observeWorks(),
             backlogRepository.observeBacklog(),
         ) { collections, works, backlog ->
@@ -102,13 +102,13 @@ class MyLibraryViewModel @Inject constructor(
                 .sortedByDescending { it.syncedAt }
                 .map { c ->
                     buildLibraryItem(
-                        workId = c.localWorkId,
+                        workId = c.workId,
                         status = c.status,
                         rating = c.rating,
                         progress = c.progress,
                         source = c.source,
-                        work = workById[c.localWorkId],
-                        inBacklog = c.localWorkId in backlogIds,
+                        work = workById[c.workId],
+                        inBacklog = c.workId in backlogIds,
                     )
                 }
             MyLibraryData(items = items, counts = countByTab(items))

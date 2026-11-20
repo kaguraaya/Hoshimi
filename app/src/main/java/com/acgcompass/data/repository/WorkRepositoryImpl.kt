@@ -42,6 +42,7 @@ import com.acgcompass.data.remote.vndb.VndbRemoteDataSource
 import com.acgcompass.data.sync.CacheFillBatch
 import com.acgcompass.data.sync.CacheFillSourcePager
 import com.acgcompass.data.sync.PublicCacheFillCoordinator
+import com.acgcompass.data.sync.isTransient
 import com.acgcompass.domain.cache.CacheLimitMode
 import com.acgcompass.domain.cache.CachePolicy
 import com.acgcompass.domain.cache.CacheSourceAllocation
@@ -52,6 +53,7 @@ import com.acgcompass.domain.matching.matchConfidence
 import com.acgcompass.domain.matching.resolveLink
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingAggregate
+import com.acgcompass.domain.model.RatingBackfillOutcome
 import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.SourceRef
 import com.acgcompass.domain.model.Tag
@@ -303,11 +305,15 @@ class WorkRepositoryImpl @Inject constructor(
     private suspend fun safeSearch(block: suspend () -> AppResult<List<WorkMatch>>): List<WorkMatch> = try {
         when (val result = block()) {
             is AppResult.Success -> result.data
-            is AppResult.Failure -> emptyList()
+            is AppResult.Failure -> {
+                recordTransientFailure(result.error)
+                emptyList()
+            }
         }
     } catch (e: CancellationException) {
         throw e
     } catch (_: Exception) {
+        recordTransientFailure(null)
         emptyList()
     }
 
@@ -906,6 +912,17 @@ class WorkRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun backfillRatingsOutcome(workId: String): RatingBackfillOutcome {
+        val counter = TransientFailureCounter()
+        val result = withContext(counter) { backfillRatings(workId) }
+        return when {
+            result is AppResult.Failure && result.error.isTransient() -> RatingBackfillOutcome.TRANSIENT_FAILURE
+            result is AppResult.Failure -> RatingBackfillOutcome.FAILED
+            counter.count > 0 -> RatingBackfillOutcome.TRANSIENT_FAILURE
+            else -> RatingBackfillOutcome.CHECKED
+        }
+    }
+
     /** 仅读本地缓存评分聚合，不触发网络刷新（发现页批量场景用，避免逐作品联网卡顿）。 */
     override suspend fun aggregateRatingsCached(workId: String): RatingAggregate = withContext(dispatchers.io) {
         val perSource = ratingDao.getByWork(workId).toRatingAggregate().perSource
@@ -1178,6 +1195,7 @@ class WorkRepositoryImpl @Inject constructor(
                 )
                 true
             } else {
+                recordTransientFailure(result.error)
                 false
             }
             null -> false

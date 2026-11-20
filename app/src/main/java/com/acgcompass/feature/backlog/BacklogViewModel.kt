@@ -5,12 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppError
 import com.acgcompass.core.ui.Cta
 import com.acgcompass.core.ui.UiState
-import com.acgcompass.data.credential.CredentialStore
-import com.acgcompass.data.credential.SourceId as CredentialSourceId
 import com.acgcompass.data.datastore.SettingsDataStore
-import com.acgcompass.data.local.dao.UserCollectionDao
-import com.acgcompass.data.local.entity.UserCollectionEntity
-import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.Priority
 import com.acgcompass.domain.repository.BacklogFilter
@@ -52,9 +47,7 @@ import kotlinx.coroutines.launch
 class BacklogViewModel @Inject constructor(
     private val backlogRepository: BacklogRepository,
     private val workRepository: WorkRepository,
-    private val userCollectionDao: UserCollectionDao,
-    private val bangumiDataSource: BangumiRemoteDataSource,
-    private val credentialStore: CredentialStore,
+    private val dustStatusSync: com.acgcompass.domain.repository.DustStatusSync,
     private val settingsDataStore: SettingsDataStore,
 ) : ViewModel() {
 
@@ -70,7 +63,7 @@ class BacklogViewModel @Inject constructor(
 
     /** 把作品移出吃灰馆，并还原归档前的 Bangumi 状态。 */
     fun onRestoreFromDust(workId: String) {
-        viewModelScope.launch { restoreFromDustWithStatus(workId) }
+        viewModelScope.launch { dustStatusSync.restore(workId) }
     }
 
     /** 吃灰馆专用——仅吃灰区条目，按加入时间倒序的卡片流（独立页面消费）。 */
@@ -229,83 +222,13 @@ class BacklogViewModel @Inject constructor(
         viewModelScope.launch {
             when (op) {
                 // 吃灰归档与移出需联动 Bangumi 状态，并通过专用路径保存或还原 prevStatus。
-                BulkOp.ARCHIVE_TO_DUST_MUSEUM -> ids.forEach { archiveToDustWithStatus(it) }
-                BulkOp.RESTORE_FROM_DUST_MUSEUM -> ids.forEach { restoreFromDustWithStatus(it) }
+                BulkOp.ARCHIVE_TO_DUST_MUSEUM -> ids.forEach { dustStatusSync.archive(it) }
+                BulkOp.RESTORE_FROM_DUST_MUSEUM -> ids.forEach { dustStatusSync.restore(it) }
                 else -> backlogRepository.bulk(op, ids)
             }
             _selectedIds.value = emptySet()
             _selectionMode.value = false
         }
-    }
-
-    /**
-     * 把作品移入吃灰馆时，本地标记为「搁置」并回写 Bangumi（type=4），同时保存归档前状态
-     * 到待补条目（prevStatus），以便移出吃灰馆时还原。
-     * 已「看过」的作品不因吃灰回退状态；非数字 id（非 Bangumi 来源）仅本地标记。失败忽略（绝不崩溃）。
-     */
-    private suspend fun archiveToDustWithStatus(workId: String) {
-        runCatching {
-            val now = System.currentTimeMillis()
-            val existing = userCollectionDao.getByWork(workId)
-            // 先记住归档前原状态（即便无收藏记录也归档，prevStatus=null）。
-            backlogRepository.archiveToDust(workId, existing?.status)
-            if (existing?.status == "看过") return@runCatching
-            userCollectionDao.upsert(
-                UserCollectionEntity(
-                    id = existing?.id ?: "BANGUMI:$workId",
-                    source = "BANGUMI",
-                    sourceItemId = existing?.sourceItemId ?: workId,
-                    localWorkId = workId,
-                    status = "搁置",
-                    rating = existing?.rating,
-                    progress = existing?.progress,
-                    comment = existing?.comment,
-                    tags = existing?.tags.orEmpty(),
-                    updatedAt = now,
-                    syncedAt = existing?.syncedAt ?: now,
-                    sourceUpdatedAt = existing?.sourceUpdatedAt,
-                    // 归档到吃灰馆时保留既有可见性。
-                    isPrivate = existing?.isPrivate ?: false,
-                ),
-            )
-            val subjectId = workId.toIntOrNull() ?: return@runCatching
-            val configured =
-                credentialStore.observeStatus().first()[CredentialSourceId.BANGUMI]?.configured == true
-            if (!configured) return@runCatching
-            bangumiDataSource.updateUserCollection(subjectId = subjectId, type = 4)
-        }
-    }
-
-    /**
-     * 移出吃灰馆时在本地还原归档前的 Bangumi 状态，并尽力同步到云端。
-     * 主操作先把条目移出吃灰区并取回 prevStatus；仅当当前本地状态确为「搁置」（由吃灰造成）且原状态非空非搁置时
-     * 才还原，避免覆盖用户在吃灰期间的手动改动。Bangumi 无删除收藏端点，原状态为空时无法还原（保持现状）。
-     */
-    private suspend fun restoreFromDustWithStatus(workId: String) {
-        val prev = runCatching { backlogRepository.restoreFromDust(workId) }.getOrNull()
-        if (prev == null || prev == "搁置") return
-        runCatching {
-            val existing = userCollectionDao.getByWork(workId) ?: return@runCatching
-            if (existing.status != "搁置") return@runCatching
-            val now = System.currentTimeMillis()
-            userCollectionDao.upsert(existing.copy(status = prev, updatedAt = now))
-            val subjectId = workId.toIntOrNull() ?: return@runCatching
-            val configured =
-                credentialStore.observeStatus().first()[CredentialSourceId.BANGUMI]?.configured == true
-            if (!configured) return@runCatching
-            val type = bangumiTypeOf(prev) ?: return@runCatching
-            bangumiDataSource.updateUserCollection(subjectId = subjectId, type = type)
-        }
-    }
-
-    /** Bangumi 收藏状态名 → type 编码（1想看/2看过/3在看/4搁置/5抛弃）；未知返回 null。 */
-    private fun bangumiTypeOf(status: String): Int? = when (status) {
-        "想看" -> 1
-        "看过" -> 2
-        "在看" -> 3
-        "搁置" -> 4
-        "抛弃" -> 5
-        else -> null
     }
 
     // endregion

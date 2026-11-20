@@ -8,6 +8,7 @@ import com.acgcompass.data.local.dao.SourceLinkDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkDao
 import com.acgcompass.data.local.entity.UserCollectionEntity
+import com.acgcompass.data.local.mapper.toDomain
 import com.acgcompass.data.local.mapper.toEntity
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
 import com.acgcompass.data.remote.bangumi.BangumiUserSubjectCollectionDto
@@ -140,38 +141,6 @@ class DetailInteractionRepositoryImpl @Inject constructor(
         return settings.autoTranslateVndbDescription.first()
     }
 }
-
-private fun UserCollectionEntity.toDomain() = PersonalRecord(
-    id = id,
-    source = source,
-    sourceItemId = sourceItemId,
-    workId = localWorkId,
-    status = status,
-    rating = rating,
-    progress = progress,
-    comment = comment,
-    tags = tags,
-    updatedAt = updatedAt,
-    syncedAt = syncedAt,
-    sourceUpdatedAt = sourceUpdatedAt,
-    isPrivate = isPrivate,
-)
-
-private fun PersonalRecord.toEntity() = UserCollectionEntity(
-    id = id,
-    source = source,
-    sourceItemId = sourceItemId,
-    localWorkId = workId,
-    status = status,
-    rating = rating,
-    progress = progress,
-    comment = comment,
-    tags = tags,
-    updatedAt = updatedAt,
-    syncedAt = syncedAt,
-    sourceUpdatedAt = sourceUpdatedAt,
-    isPrivate = isPrivate,
-)
 
 private fun BangumiUserSubjectCollectionDto.toEntity(
     workId: String,

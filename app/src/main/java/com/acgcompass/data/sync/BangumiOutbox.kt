@@ -44,6 +44,7 @@ class BangumiOutbox @Inject constructor(
     private val userCollectionDao: UserCollectionDao,
     private val credentialStore: CredentialStore,
     private val settingsDataStore: SettingsDataStore,
+    private val taskRecorder: com.acgcompass.data.tasks.TaskRunRecorder,
     private val dispatchers: DispatcherProvider,
 ) {
     private val lock = Mutex()
@@ -53,25 +54,38 @@ class BangumiOutbox @Inject constructor(
      * 返回推送结果：成功推送的条数，或第一个阻止继续推送的错误（网络等，留待下次重试）。
      */
     suspend fun pushPending(onlyWorkIds: Collection<String>? = null): AppResult<Int> = withContext(dispatchers.io) {
-        lock.withLock {
-            val username = settingsDataStore.bangumiUsername.first()
-            if (!canPush() || username == null) return@withLock AppResult.Success(0)
-            val filter = onlyWorkIds?.toSet()
-            val pending = userCollectionDao.getAll()
-                .filter { it.isPushable() && (filter == null || it.localWorkId in filter) }
-            var pushed = 0
-            for (record in pending) {
-                when (val result = pushOne(username, record)) {
-                    is AppResult.Success -> if (result.data) pushed += 1
-                    is AppResult.Failure -> if (result.error.isTransient()) {
-                        return@withLock AppResult.Failure(
-                            result.error,
-                        )
-                    }
+        val canPushNow = canPush()
+        val result = pushPendingLocked(onlyWorkIds)
+        // 每次运行都记一笔（包括没有要推送的），「后台任务」页才能看出它确实跑过。
+        taskRecorder.finish(com.acgcompass.domain.model.BackgroundTaskKind.OUTBOX, result) { pushed ->
+            outboxSummary(canPushNow, pushed)
+        }
+        result
+    }
+
+    private suspend fun pushPendingLocked(onlyWorkIds: Collection<String>?): AppResult<Int> = lock.withLock {
+        val username = settingsDataStore.bangumiUsername.first()
+        if (!canPush() || username == null) return@withLock AppResult.Success(0)
+        val filter = onlyWorkIds?.toSet()
+        val pending = userCollectionDao.getAll()
+            .filter { it.isPushable() && (filter == null || it.localWorkId in filter) }
+        var pushed = 0
+        for (record in pending) {
+            when (val result = pushOne(username, record)) {
+                is AppResult.Success -> if (result.data) pushed += 1
+                is AppResult.Failure -> if (result.error.isTransient()) {
+                    return@withLock AppResult.Failure(
+                        result.error,
+                    )
                 }
             }
-            AppResult.Success(pushed)
         }
+        AppResult.Success(pushed)
+    }
+
+    /** 待推送的记录条数。 */
+    suspend fun pendingCount(): Int = withContext(dispatchers.io) {
+        userCollectionDao.getAll().count { it.isPushable() }
     }
 
     /** 有没有待推送的记录。 */
@@ -178,4 +192,11 @@ class BangumiOutboxWorker @AssistedInject constructor(
         const val UNIQUE_WORK_NAME = "bangumi_outbox"
         private const val MAX_ATTEMPTS = 5
     }
+}
+
+/** 推送结果的一句话说明。 */
+internal fun outboxSummary(canPush: Boolean, pushed: Int): String = when {
+    !canPush -> "没登录 Bangumi（或没确认非官方地址），不推送"
+    pushed > 0 -> "推送了 $pushed 条"
+    else -> "没有要推送的修改"
 }

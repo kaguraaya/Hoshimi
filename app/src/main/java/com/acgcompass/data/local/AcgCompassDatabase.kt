@@ -107,8 +107,10 @@ import com.acgcompass.data.local.entity.WorkTagEntity
         BroadcastScheduleEntity::class,
         TasteTagProcessingEntity::class,
         TrashItemEntity::class,
+        com.acgcompass.data.local.entity.RatingBackfillStateEntity::class,
+        com.acgcompass.data.local.entity.TaskRunEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -161,6 +163,10 @@ abstract class AcgCompassDatabase : RoomDatabase() {
     abstract fun workIdMigrationDao(): com.acgcompass.data.local.dao.WorkIdMigrationDao
 
     abstract fun tasteTagProcessingDao(): TasteTagProcessingDao
+
+    abstract fun ratingBackfillDao(): com.acgcompass.data.local.dao.RatingBackfillDao
+
+    abstract fun taskRunDao(): com.acgcompass.data.local.dao.TaskRunDao
 
     companion object {
         /** Physical database file name. */

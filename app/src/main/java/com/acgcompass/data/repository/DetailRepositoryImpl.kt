@@ -6,6 +6,7 @@ import com.acgcompass.core.common.logging.RedactingLogger
 import com.acgcompass.data.local.dao.CacheDao
 import com.acgcompass.data.local.entity.DetailCacheEntity
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
+import com.acgcompass.data.tasks.TaskRunRecorder
 import com.acgcompass.domain.detail.DetailCacheTtl
 import com.acgcompass.domain.detail.DetailCharacter
 import com.acgcompass.domain.detail.DetailComment
@@ -13,6 +14,7 @@ import com.acgcompass.domain.detail.DetailExtrasData
 import com.acgcompass.domain.detail.DetailRelation
 import com.acgcompass.domain.detail.DetailStaff
 import com.acgcompass.domain.detail.ExtrasFailure
+import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.repository.DetailRepository
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -32,6 +34,7 @@ class DetailRepositoryImpl @Inject constructor(
     private val cacheDao: CacheDao,
     private val bangumi: BangumiRemoteDataSource,
     private val json: Json,
+    private val taskRecorder: com.acgcompass.data.tasks.TaskRunRecorder,
 ) : DetailRepository {
     private val validatedUntil = ConcurrentHashMap<String, Long>()
 
@@ -52,9 +55,7 @@ class DetailRepositoryImpl @Inject constructor(
             val creditsFailed = plan.credits && refreshed.credits?.complete != true
             val commentsFailed = plan.comments && refreshed.comments == null
             val failure = if (creditsFailed || commentsFailed) failureOf(errors) else null
-            if (failure != null) {
-                logger.w(TAG, "条目 $subjectId 扩展资料没拉全：$failure ${errors.map { it::class.simpleName }}")
-            }
+            taskRecorder.recordExtrasOutcome(subjectId, failure, errors.toList(), plan.credits || plan.comments)
             val merged = refreshed.mergeWith(cachedMerged).copy(
                 creditsFailed = creditsFailed,
                 commentsFailed = commentsFailed,
@@ -232,10 +233,7 @@ class DetailRepositoryImpl @Inject constructor(
         const val COMMENTS = "comments"
         const val BASE = "base"
         const val SCHEMA_VERSION = 1
-        const val TAG = "DetailExtras"
     }
-
-    private val logger = RedactingLogger()
 }
 
 private const val RETRY_DELAY_MILLIS = 2_500L
@@ -265,3 +263,27 @@ private fun DetailExtrasData.looksIncomplete(): Boolean = characters.isEmpty() &
 private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
     .digest(toByteArray(Charsets.UTF_8))
     .joinToString("") { "%02x".format(it) }
+
+/** 记下这次拉评论 / 角色的结果：失败写原因和错误类型（给「后台任务」页和日志），成功写一句说明。 */
+private suspend fun TaskRunRecorder.recordExtrasOutcome(
+    subjectId: Int,
+    failure: ExtrasFailure?,
+    errors: List<AppError>,
+    fetched: Boolean,
+) {
+    if (failure != null) {
+        val kinds = errors.mapNotNull { it::class.simpleName }.distinct()
+        extrasLogger.w(DETAIL_EXTRAS_TAG, "条目 $subjectId 扩展资料没拉全：$failure $kinds")
+        failed(
+            BackgroundTaskKind.DETAIL_EXTRAS,
+            "条目 $subjectId 的评论或角色没拉全：" +
+                (errors.firstOrNull()?.let(TaskRunRecorder::describe) ?: "原因不明") +
+                kinds.takeIf { it.isNotEmpty() }?.joinToString("、", prefix = "（", postfix = "）").orEmpty(),
+        )
+    } else if (fetched) {
+        succeeded(BackgroundTaskKind.DETAIL_EXTRAS, "条目 $subjectId 的评论和角色已更新")
+    }
+}
+
+private val extrasLogger = RedactingLogger()
+private const val DETAIL_EXTRAS_TAG = "DetailExtras"
