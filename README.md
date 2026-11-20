@@ -170,7 +170,7 @@ app/src/main/java/com/acgcompass/
 ```
 
 - 数据流：`Remote / Local → Repository → UseCase → ViewModel（StateFlow）→ Compose Screen`。
-- 依赖方向由 `DependencyRulesTest` 检查：feature 层不能新增对 `data.local` 与 `data.remote` 的引用（已有的少数例外记录在 `app/config/architecture-baseline.txt`）。
+- 依赖方向由 `DependencyRulesTest` 检查：feature 层不能引用 `data.local` 与 `data.remote`，页面通过 `domain` 里的仓库接口读写数据（`app/config/architecture-baseline.txt` 现在为空）。
 - 数据库是 Room，结构文件导出到 `app/schemas/`；每次升级版本都要写迁移（`data/local/migration/AcgMigrations.kt`），不使用破坏性迁移。
 - 后台任务用 WorkManager：作品资料补齐（`WorkFeatureEnrichmentWorker`）、补充其它平台评分（`RatingBackfillWorker`）、
   「想看」同步（`BangumiWishSyncWorker`）、口味画像自动更新（`TasteProfileAutoUpdater`）。
