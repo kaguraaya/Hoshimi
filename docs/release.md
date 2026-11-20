@@ -30,3 +30,16 @@
 
 Google Play 自 2025 年 8 月起要求新应用和更新以 Android 15（API 35）为目标版本。本应用目前通过 GitHub Releases 分发，不受此限制；
 以后要升到 `targetSdk 35` 时需要重点回归：强制全面屏下各页面的顶部 / 底部内边距、输入法弹出时的布局、预测性返回动画。
+
+## 4. 自动发布（GitHub Actions）
+
+`.github/workflows/release.yml`：合并到 `main` 后，如果 `versionName` 对应的标签 `v<版本>` 还不存在，就打开 R8 打正式包、
+用仓库 Secrets 签名，校验证书指纹与以往版本一致、包里没有 client secret、有 Bangumi client id，再从 `CHANGELOG.md`
+取出这个版本的段落作为说明，发布 `v<版本>` 的 Release 并附上 `Hoshimi-<版本>.apk`。
+
+- 需要的仓库 Secrets：`HOSHIMI_KEYSTORE_BASE64`（签名密钥文件的 base64）、`HOSHIMI_KEYSTORE_PASSWORD`、`HOSHIMI_KEY_ALIAS`、
+  `HOSHIMI_KEY_PASSWORD`、`BANGUMI_CLIENT_ID`、`BANGUMI_OAUTH_PROXY_BASE_URL`。Bangumi 的 client secret 只放在令牌代理上，不放进仓库或 CI。
+- 推到 `release-check/**` 分支只构建并校验签名，不发布，用来检查 Secrets 是否填对。
+- 手动运行（workflow_dispatch）可以指定提交，用来补发历史版本。
+- 只响应 `push` 和手动运行，不在 pull request 事件里读取 Secrets；签名文件在运行结束时删除。
+
