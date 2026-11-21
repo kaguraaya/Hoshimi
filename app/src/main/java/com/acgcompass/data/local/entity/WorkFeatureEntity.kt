@@ -38,4 +38,7 @@ data class WorkFeatureEntity(
     /** 封面地址与放送日期：和标签、评分存在一起，排行、列表不用再查别的表。 */
     val coverUrl: String? = null,
     val airDate: String? = null,
+    /** Bangumi 1–10 分各有多少人打（逗号分隔的 10 个数）；空串表示还没取到。 */
+    @ColumnInfo(defaultValue = "")
+    val ratingHistogram: String = "",
 )

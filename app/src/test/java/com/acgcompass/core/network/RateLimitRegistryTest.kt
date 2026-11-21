@@ -98,6 +98,14 @@ class RateLimitRegistryTest : StringSpec({
         limiter.backgroundCooldownMillis() shouldBe 0L
     }
 
+    "no cooldown when nothing was ever paused, whatever the clock reads" {
+        val limiter = RateLimiter(
+            rules = listOf(RateLimiter.Rule(maxRequests = 4, windowMillis = 1_000L)),
+            clock = { 9_876_543_210L },
+        )
+        limiter.backgroundCooldownMillis() shouldBe 0L
+    }
+
     "background requests only use half of each window so foreground keeps headroom" {
         var now = 0L
         val limiter = RateLimiter(

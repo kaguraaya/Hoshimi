@@ -84,11 +84,11 @@ class TasteProfileAutoUpdater @Inject constructor(
             }
             .flowOn(dispatchers.io)
             .launchIn(scope)
-        // 换了口味匹配度分支：用缓存重建一次画像，分数马上按新分支算。
+        // 换了口味匹配度分支：把新分支套到现有画像上，分数马上按新分支算（不用重新建画像）。
         settingsDataStore.tasteMatchBranch
             .distinctUntilChanged()
             .drop(1)
-            .onEach { runCatchingCancellable { tasteEngine.rebuildFromCache() } }
+            .onEach { runCatchingCancellable { tasteEngine.reapplyMatchBranch() } }
             .flowOn(dispatchers.io)
             .launchIn(scope)
         // 待补池新加的作品只需要把标签补回来（详情 / 推荐里好出分），安静地在后台做，不动画像。

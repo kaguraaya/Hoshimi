@@ -15,6 +15,7 @@ import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.taste.AdvancedTasteProfile
 import com.acgcompass.domain.taste.BuildTasteProfileUseCase
 import com.acgcompass.domain.taste.ComputeTasteMatchUseCase
+import com.acgcompass.domain.taste.DivergenceOptions
 import com.acgcompass.domain.taste.ImplicitSignal
 import com.acgcompass.domain.taste.LocalRankedWork
 import com.acgcompass.domain.taste.LocalRanking
@@ -64,6 +65,7 @@ import kotlinx.coroutines.withContext
 @Singleton
 class TasteEngine @Inject constructor(
     private val userCollectionDao: UserCollectionDao,
+    private val backlogDao: com.acgcompass.data.local.dao.BacklogDao,
     private val workDao: WorkDao,
     private val workFeatureRepository: WorkFeatureRepository,
     private val buildProfile: BuildTasteProfileUseCase,
@@ -197,16 +199,23 @@ class TasteEngine @Inject constructor(
         now: Long,
         calibrationPool: List<WorkFeature>,
         ratedIds: Set<String>,
-    ): AdvancedTasteProfile = buildProfile(
-        samples,
-        now,
-        calibrationPool,
-        loadTagOverrides(),
-        implicitSignals = runCatchingCancellable { loadImplicitSignals(ratedIds, now) }.getOrDefault(emptyList()),
-    )
+    ): AdvancedTasteProfile {
+        val options = DivergenceOptions.DEFAULT
+        return buildProfile(
+            samples,
+            now,
+            calibrationPool,
+            loadTagOverrides(),
+            implicitSignals = runCatchingCancellable { loadImplicitSignals(ratedIds, now) }.getOrDefault(emptyList()),
+            divergenceOptions = options,
+            // 另一版模型只用来往预测账本里记对照，不参与展示。
+            shadowOptions = DivergenceOptions.DEFAULT.takeIf { options == DivergenceOptions.LEGACY }
+                ?: DivergenceOptions.LEGACY,
+        )
+    }
 
     /**
-     * 收集隐式兴趣信号：未评分收藏的状态（想看 / 在看 / 搁置 / 抛弃）与探索队列的左右滑。
+     * 收集隐式兴趣信号：未评分收藏的状态（想看 / 在看 / 搁置 / 抛弃）、待补池与探索队列的左右滑。
      * 只用本地已缓存的作品特征（不联网）；没有特征的作品跳过。
      */
     private suspend fun loadImplicitSignals(ratedIds: Set<String>, now: Long): List<ImplicitSignal> {
@@ -218,7 +227,10 @@ class TasteEngine @Inject constructor(
                 e.dismissedAt != null -> kinds[e.subjectId] = ImplicitSignal.Kind.EXPLORE_SKIPPED
             }
         }
-        // 收藏状态比滑动更明确，后写入以覆盖同一作品的滑动信号。
+        // 加进待补池 = 想看（只认 Bangumi 条目号，作品资料按它存）。
+        backlogDao.getAll().map { it.workId }.filter { it.toIntOrNull() != null }
+            .forEach { kinds[it] = ImplicitSignal.Kind.WISH }
+        // 收藏状态比滑动、待补池更明确，后写入以覆盖同一作品的其它信号。
         userCollectionDao.getAll()
             .filter { it.rating == null && it.sourceItemId.isNotBlank() }
             .forEach { c -> statusSignal(c.status)?.let { kinds[c.sourceItemId] = it } }
@@ -525,6 +537,52 @@ class TasteEngine @Inject constructor(
         }
     }
 
+    /**
+     * 当前画像（和对照模型）对这些作品的预测，供预测账本记录：只用本地缓存的作品资料、不联网，
+     * 已经评过分的作品跳过（账本只记事前预测）。画像不可用或没有预计评分模型时返回空表。
+     */
+    @Suppress("ReturnCount") // 几种「没法记」的情况各自提前返回空表，比层层嵌套好读
+    suspend fun predictForLedger(subjectIds: Collection<String>): List<LedgerPrediction> {
+        val profile = profileState.value?.takeIf { it.isUsable } ?: return emptyList()
+        val main = profile.divergence ?: return emptyList()
+        val ids = subjectIds.filter { it.isNotBlank() && it !in profile.ratedSubjectScores }.distinct()
+        if (ids.isEmpty()) return emptyList()
+        val features = cachedFeatures(ids)
+        if (features.isEmpty()) return emptyList()
+        val overrides = loadTagOverrides()
+        val shadow = profile.shadowDivergence?.let { profile.copy(divergence = it) }
+        return withContext(dispatchers.default) {
+            features.values.flatMap { feature ->
+                listOfNotNull(
+                    LedgerPrediction(
+                        feature.subjectId,
+                        main.modelVersion,
+                        computeMatch(feature, profile, null, overrides, withNeighbors = false, withReasons = false),
+                        profile.sampleCount,
+                    ),
+                    shadow?.let {
+                        LedgerPrediction(
+                            feature.subjectId,
+                            it.divergence!!.modelVersion,
+                            computeMatch(feature, it, null, overrides, withNeighbors = false, withReasons = false),
+                            profile.sampleCount,
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * 换了口味匹配度分支：不用重新建画像（几秒），把新分支套到现有画像上即可，各页面马上按新分支出分。
+     * 还没有画像时什么都不做（建画像时会读到新分支）。
+     */
+    suspend fun reapplyMatchBranch() {
+        rebuildMutex.withLock {
+            profileState.value?.let { profileState.value = withMatchBranch(it) }
+        }
+    }
+
     /** 按设置里选的分支（常规 / 保守 / 激进）带上口味匹配度公式。 */
     private suspend fun withMatchBranch(profile: AdvancedTasteProfile): AdvancedTasteProfile {
         val key = runCatchingCancellable { settingsDataStore.tasteMatchBranch.first() }.getOrNull()
@@ -623,3 +681,11 @@ private fun AdvancedTasteProfile.withRatedScores(scores: Map<String, Int>): Adva
 
 private fun WorkFeature.needsExtendedRefresh(): Boolean =
     completeness != com.acgcompass.domain.taste.WorkFeatureCompleteness.EXTENDED
+
+/** 账本用的一条预测：哪个模型版本、对哪部作品、算出了什么。 */
+data class LedgerPrediction(
+    val subjectId: String,
+    val modelVersion: String,
+    val match: TasteMatchResult,
+    val profileSize: Int,
+)

@@ -53,6 +53,7 @@ object AcgMigrations {
     private const val VERSION_19 = 19
     private const val VERSION_20 = 20
     private const val VERSION_21 = 21
+    private const val VERSION_22 = 22
 
     /**
      * v1 → v2：新增 `user_collections` 表（用户个人收藏：状态、评分、进度、短评和标签）。
@@ -449,6 +450,24 @@ object AcgMigrations {
         )
     }
 
+    /** 评分分布（社区评分的争议度要用）和预测账本。 */
+    private val MIGRATION_21_22 = Migration(VERSION_21, VERSION_22) { db ->
+        db.execSQL("ALTER TABLE `work_features` ADD COLUMN `ratingHistogram` TEXT NOT NULL DEFAULT ''")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `prediction_snapshots` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`workId` TEXT NOT NULL, `modelVersion` TEXT NOT NULL, `context` TEXT NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, `predictedRating` REAL, `lowRating` REAL, `highRating` REAL, " +
+                "`matchScore` INTEGER NOT NULL, `satisfaction` INTEGER, `profileSize` INTEGER NOT NULL)",
+        )
+        db.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_prediction_snapshots_workId_modelVersion` " +
+                "ON `prediction_snapshots` (`workId`, `modelVersion`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_prediction_snapshots_createdAt` ON `prediction_snapshots` (`createdAt`)",
+        )
+    }
+
     private val MIGRATION_17_18 = Migration(VERSION_17, VERSION_18) { db ->
         db.execSQL(
             "ALTER TABLE `background_task_state` ADD COLUMN `personalInputFingerprint` TEXT NOT NULL DEFAULT ''",
@@ -491,5 +510,6 @@ object AcgMigrations {
         MIGRATION_18_19,
         MIGRATION_19_20,
         MIGRATION_20_21,
+        MIGRATION_21_22,
     )
 }

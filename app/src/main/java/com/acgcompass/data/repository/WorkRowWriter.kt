@@ -129,7 +129,8 @@ class WorkRowWriter @Inject constructor(
         }
         workDao.upsert(updated)
         workTagWriter.persist(listOf(bundle.work.copy(id = workId)))
-        bundle.subject.toBasicWorkFeature(subjectId = workId, updatedAt = now)?.let { feature ->
+        // 作品资料按 Bangumi 条目号存（口味画像、评分都按条目号查），本地作品编号可能是别的平台的。
+        bundle.subject.toBasicWorkFeature(updatedAt = now)?.let { feature ->
             workFeatureRepository.seedLightweight(listOf(feature))
         }
         val rating = bundle.rating

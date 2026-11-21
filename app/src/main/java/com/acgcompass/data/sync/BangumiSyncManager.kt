@@ -286,7 +286,7 @@ class BangumiSyncManager @Inject constructor(
         now: Long,
     ): List<WorkFeature> = upserts.mapNotNull { entity ->
         dtoByWork[entity.localWorkId]?.subject?.toBasicWorkFeature(
-            subjectId = entity.localWorkId,
+            subjectId = entity.sourceItemId,
             updatedAt = now,
             completeness = WorkFeatureCompleteness.EMBEDDED,
         )

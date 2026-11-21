@@ -22,6 +22,7 @@ import com.acgcompass.domain.repository.TasteProfileRepository
 import com.acgcompass.domain.repository.VisualNovelRepository
 import com.acgcompass.domain.repository.WorkRepository
 import com.acgcompass.domain.taste.AdvancedTasteProfile
+import com.acgcompass.domain.taste.PredictionContext
 import com.acgcompass.domain.taste.TasteAnalysisController
 import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.toFallbackFeature
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -218,6 +220,12 @@ class DetailViewModel @Inject constructor(
                     allowNetwork = bangumiId != null,
                     fallback = work.toFallbackFeature(inputs.ratings ?: ratings.value),
                 )
+                    .onEach { match ->
+                        // 还没评分时看到的预计评分记进预测账本，等以后打了分再对账（同一部只记第一次）。
+                        if (bangumiId != null && inputs.rating == null && match?.prediction != null) {
+                            tasteAnalysis.recordPredictions(PredictionContext.DETAIL, listOf(featureId))
+                        }
+                    }
                     .map { match -> match to profile }
             }.stateIn(
                 scope = viewModelScope,

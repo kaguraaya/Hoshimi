@@ -189,6 +189,8 @@ data class RatingPredictionUi(
     val selfSummary: String,
     val communitySummary: String,
     val factors: List<TasteMatchReasonUi>,
+    /** 预测区间（「大概率在 6.8–8.9 分之间」）；模型不给区间时为 null。 */
+    val intervalText: String? = null,
 )
 
 /** 由领域预测结果生成展示模型（详情页 / 探索卡片 / 今晚看什么共用同一口径的文案）。 */
@@ -224,8 +226,13 @@ fun com.acgcompass.domain.taste.RatingPrediction.toUi(): RatingPredictionUi {
                 positive = it.delta >= 0.0,
             )
         },
+        intervalText = intervalLabel(),
     )
 }
+
+/** 预测区间的一行说明；模型不给区间时为 null。 */
+private fun com.acgcompass.domain.taste.RatingPrediction.intervalLabel(): String? =
+    if (low != null && high != null) "大概率在 ${"%.1f".format(low)}–${"%.1f".format(high)} 分之间" else null
 
 internal const val NOTABLE_DIVERGENCE = 0.25
 internal const val MIN_SHOWN = 0.05
@@ -255,6 +262,8 @@ sealed interface TasteMatchUiModel {
         val prediction: RatingPredictionUi? = null,
         /** 预计评分（已评分为你的评分）高于你看过的百分之多少；没有评分模型时为 null。 */
         val rankPercent: Int? = null,
+        /** 预测区间很宽、这次判断把握不大（补番优先级不会因此判「高」）。 */
+        val uncertain: Boolean = false,
     ) : TasteMatchUiModel
 
     /** 尚未生成口味画像，或样本/标签不足以计算匹配度（[message] 说明具体原因，不伪造）。 */

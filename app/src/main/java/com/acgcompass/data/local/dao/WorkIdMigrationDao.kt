@@ -67,6 +67,30 @@ abstract class WorkIdMigrationDao {
     @Query("DELETE FROM detail_cache WHERE workId = :workId")
     protected abstract suspend fun deleteDetailCache(workId: String)
 
+    @Query("DELETE FROM work_features WHERE subjectId = :subjectId")
+    abstract suspend fun deleteFeature(subjectId: String)
+
+    /**
+     * 作品资料表里用「来源:编号」做键的行：内容其实是关联的 Bangumi 条目，却永远不会按这个键刷新，
+     * 还会在口味排行里和 Bangumi 编号那一行重复出现。
+     */
+    @Query(
+        "DELETE FROM work_features WHERE subjectId LIKE 'ANILIST:%' OR subjectId LIKE 'TENRAI:%' " +
+            "OR subjectId LIKE 'JIKAN:%' OR subjectId LIKE 'MAL:%'",
+    )
+    abstract suspend fun deleteNamespacedFeatures(): Int
+
+    /** 已经改成「来源:编号」的其它平台作品，连同标题（用来认出撞号的旧资料行）。 */
+    @Query(
+        "SELECT id, canonicalTitle, titleJa, titleCn, aliases FROM works " +
+            "WHERE id LIKE 'ANILIST:%' OR id LIKE 'TENRAI:%' OR id LIKE 'JIKAN:%' OR id LIKE 'MAL:%'",
+    )
+    abstract suspend fun namespacedWorks(): List<NamespacedWorkTitles>
+
+    /** 作品资料的标题变体（JSON 数组原文）；没有这一行时为 null。 */
+    @Query("SELECT titles FROM work_features WHERE subjectId = :subjectId")
+    abstract suspend fun featureTitlesJson(subjectId: String): String?
+
     /** 把一部作品从 [oldId] 改到 [newId]；新编号已存在时保留新编号那一行，旧行的附属数据能并就并，并不了就删。 */
     @Transaction
     open suspend fun migrate(oldId: String, newId: String, source: String) {
@@ -83,8 +107,19 @@ abstract class WorkIdMigrationDao {
         deleteCacheEntries(oldId)
         // 详情缓存（评论、角色等）可能是按撞号的 Bangumi 条目拉的，直接丢掉，打开时重新拉。
         deleteDetailCache(oldId)
+        // 旧编号下的作品资料是这部作品关联的 Bangumi 条目，留着会和同号的另一部 Bangumi 条目串在一起。
+        deleteFeature(oldId)
     }
 }
 
 /** 旧作品行的编号和来源。 */
 data class LegacyWorkId(val id: String, val primarySource: String)
+
+/** 改过编号的其它平台作品和它的标题。 */
+data class NamespacedWorkTitles(
+    val id: String,
+    val canonicalTitle: String,
+    val titleJa: String?,
+    val titleCn: String?,
+    val aliases: List<String>,
+)

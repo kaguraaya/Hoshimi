@@ -196,6 +196,15 @@ object BackupMerger {
             { it.removedAt },
         )
 
+        // 账本每部作品每个版本只要最早那条：时间越早越优先。
+        val predictionSnapshots = acc.mergeTable(
+            "prediction_snapshots",
+            local.predictionSnapshots,
+            incoming.predictionSnapshots,
+            { "${it.workId}|${it.modelVersion}" },
+            { -it.createdAt },
+        )
+
         val merged = local.copy(
             // 头部以本地为准；合并结果绝不携带凭据。
             includesCredentials = false,
@@ -217,6 +226,7 @@ object BackupMerger {
             workFeatures = workFeatures,
             tagDimensions = tagDimensions,
             trashItems = trashItems,
+            predictionSnapshots = predictionSnapshots,
             // Schema 1 did not carry a complete settings snapshot; preserve local values for it.
             settings = if (incoming.schemaVersion >= 2) incoming.settings else local.settings,
             credentials = null,

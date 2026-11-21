@@ -14,7 +14,7 @@ class TasteRankingFilterTest {
         year: Int? = 2020,
         finished: Boolean? = true,
         ownership: RankOwnership? = null,
-    ) = TasteRankItem(id, "作品$id", null, year, format, finished, 80, 8.0, null, ownership)
+    ) = TasteRankItem(id, "作品${id}号", null, year, format, finished, 80, 8.0, null, ownership)
 
     private val items = listOf(
         item("1"),

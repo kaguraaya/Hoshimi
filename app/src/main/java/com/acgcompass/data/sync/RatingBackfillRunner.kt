@@ -1,9 +1,12 @@
 package com.acgcompass.data.sync
 
 import com.acgcompass.data.local.dao.RatingBackfillDao
+import com.acgcompass.data.tasks.TaskRunRecorder
 import com.acgcompass.domain.model.RatingBackfillOutcome
 import com.acgcompass.domain.model.RatingBackfillReport
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -11,7 +14,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  * - 每部作品开始前先占位（[RatingBackfillPolicy.lease]），被系统停掉时下次不会又从这一部开始；
  * - 每部最多等 [itemTimeoutMs]：某个平台在限速冷却时请求会一直排队，到点就算这部暂时没查成，接着查下一部；
  * - 整批最多跑 [budgetMs]，到点停下，剩下的下次继续；
- * - 记下每部没拿到结果的平台，汇总进这批的说明。
+ * - 记下每部没拿到结果的平台和原因，汇总进这批的说明；
+ * - 请求内部冒出来的取消（这批任务本身没被停）只算这一部没查成，不当成整批被系统停掉。
  */
 internal class RatingBackfillRunner(
     private val dao: RatingBackfillDao,
@@ -37,6 +41,7 @@ internal class RatingBackfillRunner(
         var transient = 0
         var timedOut = 0
         val failedBySource = LinkedHashMap<String, Int>()
+        val reasons = LinkedHashMap<String, Int>()
         for (id in targets) {
             if (elapsedMs() > deadline) break
             dao.upsert(RatingBackfillPolicy.lease(id, dao.get(id), nowMs()))
@@ -45,13 +50,20 @@ internal class RatingBackfillRunner(
             val report = try {
                 withTimeoutOrNull(itemTimeoutMs) { backfill(id) }
             } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                RatingBackfillReport(RatingBackfillOutcome.FAILED)
+                // 这批任务被停了就照常抛出；还在运行说明取消来自请求内部，只算这一部没查成。
+                currentCoroutineContext().ensureActive()
+                RatingBackfillReport(
+                    RatingBackfillOutcome.TRANSIENT_FAILURE,
+                    reason = "请求被中途取消（${error.javaClass.simpleName}）",
+                )
+            } catch (error: Exception) {
+                RatingBackfillReport(RatingBackfillOutcome.FAILED, reason = TaskRunRecorder.describe(error))
             }
             val outcome = report?.outcome ?: RatingBackfillOutcome.TRANSIENT_FAILURE
             if (report == null) timedOut++
             report?.failedSources?.forEach { failedBySource[it] = (failedBySource[it] ?: 0) + 1 }
+            report?.reason?.takeIf { outcome != RatingBackfillOutcome.CHECKED }
+                ?.let { reasons[it] = (reasons[it] ?: 0) + 1 }
             if (outcome == RatingBackfillOutcome.CHECKED) checked++ else transient++
             dao.upsert(RatingBackfillPolicy.next(id, dao.get(id), outcome, nowMs()))
             progress.done++
@@ -64,6 +76,7 @@ internal class RatingBackfillRunner(
             deferred = targets.size - checked - transient,
             timedOut = timedOut,
             failedSources = failedBySource,
+            reasons = reasons,
         )
     }
 

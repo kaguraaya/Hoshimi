@@ -17,6 +17,8 @@ import com.acgcompass.data.remote.mal.MalRemoteDataSource
 import com.acgcompass.data.remote.tenrai.TenraiRemoteDataSource
 import com.acgcompass.data.remote.vndb.VndbRemoteDataSource
 import com.acgcompass.data.sync.isTransient
+import com.acgcompass.data.sync.sourceDisplayName
+import com.acgcompass.data.tasks.TaskRunRecorder
 import com.acgcompass.domain.detail.DetailCacheTtl
 import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.model.RatingAggregate
@@ -162,9 +164,16 @@ class WorkRatingRefresher @Inject constructor(
             counter.count > 0 -> RatingBackfillOutcome.TRANSIENT_FAILURE
             else -> RatingBackfillOutcome.CHECKED
         }
+        val reason = when {
+            result is AppResult.Failure -> "条目：${TaskRunRecorder.describe(result.error)}"
+            outcome == RatingBackfillOutcome.TRANSIENT_FAILURE -> counter.failedSources.entries.firstOrNull()
+                ?.let { (source, error) -> "${sourceDisplayName(source.name)}：${TaskRunRecorder.describe(error)}" }
+            else -> null
+        }
         return com.acgcompass.domain.model.RatingBackfillReport(
             outcome = outcome,
             failedSources = counter.failedSources.keys.mapTo(LinkedHashSet()) { it.name },
+            reason = reason,
         )
     }
 

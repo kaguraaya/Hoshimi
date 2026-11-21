@@ -10,12 +10,15 @@ import com.acgcompass.domain.taste.TasteRankItem
 import com.acgcompass.domain.taste.TasteRanking
 import com.acgcompass.domain.taste.TasteRankingRepository
 import com.acgcompass.domain.taste.WorkFormat
+import com.acgcompass.domain.taste.foldFranchises
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -66,9 +69,9 @@ data class TasteRankingUiState(
     /** 一次性提示；显示后调用 onMessageShown。 */
     val message: String? = null,
 ) {
-    /** 按筛选条件留下的前 [MAX_VISIBLE] 部。 */
+    /** 按筛选条件留下的前 [MAX_VISIBLE] 部；同一系列只留排得最靠前的一部。 */
     val visible: List<TasteRankItem>
-        get() = ranking?.items.orEmpty().filter(filter::accepts).take(MAX_VISIBLE)
+        get() = ranking?.items.orEmpty().filter(filter::accepts).foldFranchises().take(MAX_VISIBLE)
 
     companion object {
         const val MAX_VISIBLE = 100
@@ -101,6 +104,13 @@ class TasteRankingViewModel @Inject constructor(
             }
             load(force = false)
             refreshPoolStatus()
+        }
+        viewModelScope.launch {
+            // 画像重建完、换了分支：页面开着就重算；连续变化时只算最后一次。
+            repository.profileChanges.debounce(PROFILE_DEBOUNCE_MS).collectLatest {
+                _state.update { it.copy(updating = true) }
+                load(force = false)
+            }
         }
         viewModelScope.launch {
             settings.tasteRankHintDismissed.collect { dismissed ->
@@ -206,5 +216,9 @@ class TasteRankingViewModel @Inject constructor(
                 ranking = ranking ?: it.ranking,
             )
         }
+    }
+
+    private companion object {
+        const val PROFILE_DEBOUNCE_MS = 500L
     }
 }

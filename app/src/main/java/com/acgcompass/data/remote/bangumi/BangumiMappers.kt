@@ -51,7 +51,7 @@ fun BangumiSubjectDto.toBasicWorkFeature(
     updatedAt: Long = System.currentTimeMillis(),
     completeness: WorkFeatureCompleteness = WorkFeatureCompleteness.BASIC,
 ): WorkFeature? {
-    if (subjectId.isBlank()) return null
+    if (subjectId.isBlank() || subjectId == "0") return null
     return WorkFeature(
         subjectId = subjectId,
         tagCounts = tags.asSequence()
@@ -72,8 +72,18 @@ fun BangumiSubjectDto.toBasicWorkFeature(
         updatedAt = updatedAt,
         coverUrl = images?.large ?: images?.common,
         airDate = date?.takeIf { it.isNotBlank() },
+        ratingHistogram = rating?.histogram().orEmpty(),
     )
 }
+
+/** 1–10 分各有多少人打；接口没给或全为 0 时返回空表。 */
+fun BangumiRatingDto.histogram(): List<Int> {
+    val counts = count ?: return emptyList()
+    val bins = (1..MAX_RATING).map { (counts[it.toString()] ?: 0).coerceAtLeast(0) }
+    return if (bins.any { it > 0 }) bins else emptyList()
+}
+
+private const val MAX_RATING = 10
 
 /** 从 Bangumi 日期串（如 `2023-04-07`）解析年份；无法解析返回 `null`（不臆造）。 */
 internal fun parseBangumiYear(date: String?): Int? {

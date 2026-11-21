@@ -19,7 +19,7 @@ object ExploreRanker {
     /**
      * 组批输入。
      *
-     * @property matchScore 口味匹配度（5–95）。
+     * @property utilityBase 效用的基础分（0–100）：预计评分在你自己评分里的位置（个人分位），建不了评分模型时是满意度旧口径。
      * @property familiarity 画像熟悉度 ∈ [0,1]（[com.acgcompass.domain.taste.TasteMatchResult.familiarity]）。
      * @property community10 社区评分（0–10）；未知为 `null`。
      * @property votes 社区评分人数。
@@ -27,7 +27,7 @@ object ExploreRanker {
      */
     data class Candidate(
         val id: String,
-        val matchScore: Int,
+        val utilityBase: Int,
         val familiarity: Double = 1.0,
         val community10: Double? = null,
         val votes: Int = 0,
@@ -35,8 +35,12 @@ object ExploreRanker {
         val tags: Set<String> = emptySet(),
     )
 
-    /** 一次左右滑反馈：[liked] = 加入待补池，否则为「暂不」。 */
-    data class Feedback(val tags: Set<String>, val liked: Boolean)
+    /**
+     * 一条兴趣反馈：题材指纹、是加分还是减分、权重。
+     * 默认权重：加入待补池按一次计，「暂不」按半次计（划走可能只是今天不想看，不等于讨厌这个题材）。
+     * 收藏状态与时间衰减见 [InterestSignals]。
+     */
+    data class Feedback(val tags: Set<String>, val liked: Boolean, val weight: Double = if (liked) 1.0 else SKIP_WEIGHT)
 
     data class Ranked(val candidate: Candidate, val utility: Double, val discovery: Boolean)
 
@@ -47,7 +51,7 @@ object ExploreRanker {
     private const val PRIOR_STRENGTH = 3.0
 
     /** 一次「暂不」相当于多少次明确表态（原因未知的拒绝不能当成稳定的负面偏好）。 */
-    private const val SKIP_WEIGHT = 0.5
+    internal const val SKIP_WEIGHT = 0.5
 
     /** 学习反馈所需的最少滑动次数（太少时不修正，避免一两次误触带偏整批）。 */
     private const val MIN_FEEDBACK = 4
@@ -97,11 +101,9 @@ object ExploreRanker {
     }
 
     fun feedbackModel(feedback: List<Feedback>): FeedbackModel {
-        if (feedback.size < MIN_FEEDBACK) return FeedbackModel(emptyMap())
-        // 「暂不」只按半次计：划走可能只是今天不想看、或对这一部没兴趣，不等于讨厌这个题材；
-        // 「加入待补池」是明确表态，按一次计。
-        val weights = feedback.map { if (it.liked) 1.0 else SKIP_WEIGHT }
+        val weights = feedback.map { it.weight.coerceAtLeast(0.0) }
         val totalWeight = weights.sum()
+        if (feedback.size < MIN_FEEDBACK || totalWeight <= EPSILON) return FeedbackModel(emptyMap())
         val baseRate = feedback.indices.sumOf { if (feedback[it].liked) weights[it] else 0.0 } / totalWeight
         val likes = HashMap<String, Double>()
         val total = HashMap<String, Double>()
@@ -117,13 +119,13 @@ object ExploreRanker {
         return FeedbackModel(adjust)
     }
 
-    /** 候选效用（0–1 量纲）：匹配度 + 反馈修正。 */
-    fun utility(c: Candidate, model: FeedbackModel): Double = c.matchScore / MATCH_SCALE + model.adjust(c.tags)
+    /** 候选效用（0–1 量纲）：个人分位 + 兴趣修正。 */
+    fun utility(c: Candidate, model: FeedbackModel): Double = c.utilityBase / MATCH_SCALE + model.adjust(c.tags)
 
     private fun isDiscovery(c: Candidate): Boolean = (c.community10 ?: 0.0) >= DISCOVERY_MIN_COMMUNITY &&
         c.votes >= DISCOVERY_MIN_VOTES &&
         c.familiarity <= DISCOVERY_MAX_FAMILIARITY &&
-        c.matchScore >= DISCOVERY_MIN_MATCH
+        c.utilityBase >= DISCOVERY_MIN_MATCH
 
     /** 组批过程中的已选集合：负责「不重复」与「同系列至多一张」两条约束。 */
     private class Selection {

@@ -22,6 +22,13 @@ class BangumiMappersTest : StringSpec({
         mapBangumiMediaType(999) shouldBe MediaType.OTHER
     }
 
+    "rating histogram reads 1–10 buckets and treats missing or all-zero counts as unknown" {
+        BangumiRatingDto(total = 6, count = mapOf("10" to 1, "8" to 3, "1" to 2), score = 7f).histogram() shouldBe
+            listOf(2, 0, 0, 0, 0, 0, 0, 3, 0, 1)
+        BangumiRatingDto(total = 0, count = null).histogram() shouldBe emptyList()
+        BangumiRatingDto(total = 0, count = mapOf("5" to 0)).histogram() shouldBe emptyList()
+    }
+
     "parseBangumiYear extracts year prefix and rejects garbage" {
         parseBangumiYear("2023-04-07") shouldBe 2023
         parseBangumiYear("1998") shouldBe 1998

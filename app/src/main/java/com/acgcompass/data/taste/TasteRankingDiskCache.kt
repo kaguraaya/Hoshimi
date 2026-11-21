@@ -21,20 +21,19 @@ class TasteRankingDiskCache @Inject constructor(
     private val file: File get() = File(context.filesDir, FILE_NAME)
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun read(): TasteRanking? = runCatchingCancellable {
-        file.takeIf { it.exists() }?.readText()?.let {
-            json.decodeFromString(
-                StoredRanking.serializer(),
-                it,
-            ).toDomain()
-        }
+    /** 读上次的结果；当时用的模型版本和 [modelVersion] 不同时不返回（数字已经不是同一个算法算的）。 */
+    fun read(modelVersion: String): TasteRanking? = runCatchingCancellable {
+        file.takeIf { it.exists() }?.readText()
+            ?.let { json.decodeFromString(StoredRanking.serializer(), it) }
+            ?.takeIf { it.modelVersion == modelVersion }
+            ?.toDomain()
     }.getOrNull()
 
     /** 先写临时文件再改名，写到一半被打断也不会留下坏文件。 */
-    fun write(ranking: TasteRanking) {
+    fun write(ranking: TasteRanking, modelVersion: String) {
         runCatchingCancellable {
             val temp = File(context.filesDir, "$FILE_NAME.tmp")
-            temp.writeText(json.encodeToString(StoredRanking.serializer(), StoredRanking.of(ranking)))
+            temp.writeText(json.encodeToString(StoredRanking.serializer(), StoredRanking.of(ranking, modelVersion)))
             temp.renameTo(file)
         }
     }
@@ -50,11 +49,13 @@ private data class StoredRanking(
     val poolSize: Int,
     val computedAt: Long,
     val unratedCount: Int,
+    val modelVersion: String = "",
 ) {
     fun toDomain() = TasteRanking(items.map { it.toDomain() }, poolSize, computedAt, unratedCount)
 
     companion object {
-        fun of(r: TasteRanking) = StoredRanking(r.items.map(StoredItem::of), r.poolSize, r.computedAt, r.unratedCount)
+        fun of(r: TasteRanking, modelVersion: String) =
+            StoredRanking(r.items.map(StoredItem::of), r.poolSize, r.computedAt, r.unratedCount, modelVersion)
     }
 }
 

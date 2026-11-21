@@ -107,6 +107,7 @@ class BackupImportFaultTest {
         workFeatureDao = db.workFeatureDao(),
         tagDimensionDao = db.tagDimensionDao(),
         trashDao = trashDao,
+        predictionSnapshotDao = db.predictionSnapshotDao(),
         database = db,
         settingsDataStore = SettingsDataStore(context),
         credentialStore = NoCredentials,

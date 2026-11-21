@@ -120,12 +120,14 @@ internal fun computeBacklogPriority(
     val riskTags = tags.filter { it.category == TagCategory.RISK }.map(Tag::name)
     val risk = riskTags.takeIf { it.isNotEmpty() }?.let { "注意情绪风险（${it.take(2).joinToString("、")}）" }
     if (risk != null) score = (score - RISK_PENALTY).coerceIn(0f, 1f)
+    val uncertain = (tasteMatch as? TasteMatchUiModel.Available)?.uncertain == true
     val level = when {
-        score >= HIGH_PRIORITY -> "高"
+        score >= HIGH_PRIORITY && !uncertain -> "高"
         score >= MID_PRIORITY -> "中"
         else -> "低"
     }
-    return level to priorityReason(level, factors, risk)
+    val note = "预计评分把握不大".takeIf { uncertain && score >= HIGH_PRIORITY }
+    return level to priorityReason(level, factors, listOfNotNull(risk, note).joinToString("，").ifEmpty { null })
 }
 
 /** 一项优先级因素：[value] ∈ [0,1]，高于 0.5 往上拉、低于 0.5 往下拉。 */
@@ -140,16 +142,25 @@ internal fun priorityFactors(
     completionCost: CompletionCostUiModel,
 ): List<PriorityFactor> {
     val factors = mutableListOf<PriorityFactor>()
-    if (tasteMatch is TasteMatchUiModel.Available) {
-        // 口味：主分数 50% 以下视为不加分，90% 视为满分。
-        val taste = ((tasteMatch.fraction - TASTE_FLOOR) / TASTE_SPAN).coerceIn(0f, 1f)
-        factors += PriorityFactor(taste, W_TASTE, "口味匹配较高", "口味匹配一般")
-        tasteMatch.rankPercent?.let { rank ->
-            factors += PriorityFactor(rank / 100f, W_RANK, "预计评分在你看过的作品里偏高", "预计评分在你看过的作品里偏低")
+    val rank = (tasteMatch as? TasteMatchUiModel.Available)?.rankPercent
+    if (rank != null) {
+        // 有评分模型时口味只算一次：预计评分在你看过的作品里的位置（匹配度和它来自同一个预测，不重复计入）。
+        // 社区评分已经包含在预计评分里，这里不单独加分。
+        factors += PriorityFactor(
+            rank / 100f,
+            W_TASTE + W_RANK,
+            "预计评分在你看过的作品里偏高",
+            "预计评分在你看过的作品里偏低",
+        )
+    } else {
+        if (tasteMatch is TasteMatchUiModel.Available) {
+            // 没有评分模型：用画像匹配分，50% 以下视为不加分，90% 视为满分；社区评价补位。
+            val taste = ((tasteMatch.fraction - TASTE_FLOOR) / TASTE_SPAN).coerceIn(0f, 1f)
+            factors += PriorityFactor(taste, W_TASTE, "口味匹配较高", "口味匹配一般")
         }
-    }
-    if (consensus is ConsensusUiModel.Available) {
-        factors += PriorityFactor(consensus.priority.fraction, W_COMMUNITY, "社区评价较高", "社区评价一般")
+        if (consensus is ConsensusUiModel.Available) {
+            factors += PriorityFactor(consensus.priority.fraction, W_COMMUNITY, "社区评价较高", "社区评价一般")
+        }
     }
     if (completionCost.available) {
         val costScore = when (completionCost.bucketLabel) {
@@ -258,6 +269,9 @@ internal fun SpoilerRadarResult?.toRadarSummary(): String {
 internal const val REVIEW_PROS_POINTER = "评论里的好评点见下方「评论摘要」"
 internal const val REVIEW_CONS_POINTER = "争议点和需留意的地方见下方「评论摘要」"
 
+/** 解释里列出的主要依据条数。 */
+private const val MAIN_BASIS_COUNT = 2
+
 /** 文件级单例：个性化口味评分器（无状态、纯函数）。详情页与「今晚看什么」推荐共用同一打分口径。 */
 internal val personalTasteScorer = PersonalTasteScorer()
 
@@ -269,30 +283,14 @@ internal fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
     val fraction = (score / 100f).coerceIn(0f, 1f)
     // 已评分作品没有预计评分：主分数就是你打的分换算来的，措辞按主分数走（传及格线即不触发「不合口味」）。
     val predicted = prediction?.rating ?: TasteVerdict.PASS_LINE.takeIf { isRated && fromRatingModel }
-    val qualitative = TasteVerdict.of(score, predicted)
+    val qualitative = TasteVerdict.of(score, predicted, uncertain = !isRated && prediction?.isUncertain == true)
     val lowConf = confidence < 0.4
     // 逐条呈现分维度贡献（含声优 / staff / 来源等，不再只压成一行），正/负向分色；取贡献绝对值最大的前几项。
     val reasonUis = reasons
         .sortedByDescending { kotlin.math.abs(it.contribution) }
         .take(4)
         .map { TasteMatchReasonUi(text = it.label, positive = it.contribution >= 0.0) }
-    // 主分数以相似作品类比为主；只给一个百分数，题材倾向用一句话说明。
-    val reasonCore = if (predicted != null) {
-        // 把百分数的含义说出来：以相似作品类比为主，再参考评分和题材相似度。
-        val basis = if (isRated) "你的评分" else "预计评分"
-        val analogyText = analogy?.let {
-            "你给题材相近的 ${it.count} 部作品平均打 ${"%.1f".format(it.meanRating)} 分；"
-        }.orEmpty()
-        analogyText + "主要看相近作品你打了几分，也参考$basis（高于你看过的 $satisfaction% 作品）和题材相似度；" +
-            "共参考你评过分的 $modelSamples 部作品。" +
-            TasteVerdict.familiarityNote(tasteSimilarity) + "（下方是题材依据）"
-    } else {
-        when {
-            reasonUis.any { it.positive } -> "综合你的长期口味给出（下方为主要依据）"
-            reasonUis.isNotEmpty() -> "主要是这些维度拉低了匹配（下方）"
-            else -> "与你的口味画像重合较少，仅供参考"
-        }
-    }
+    val reasonCore = matchReasonCore(predicted, reasonUis)
     val ratedNote = if (isRated) "；你给这部评过分，已据此校准" else ""
     // 置信度独立成文案（不再塞进理由长句）。
     val confidenceText = when {
@@ -310,7 +308,53 @@ internal fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         // 已评分作品不展示预测（你已经给出了答案）。
         prediction = prediction?.takeIf { !isRated }?.toUi(),
         rankPercent = satisfaction.takeIf { fromRatingModel },
+        uncertain = !isRated && prediction?.isUncertain == true,
     )
+}
+
+/** 圈子分达到这个值就说「这部是你常看的那类」。 */
+private const val CIRCLE_CORE = 1.0
+
+/** 圈子分的一句话：是不是你常看的那类作品。 */
+private val TasteMatchResult.circleText: String
+    get() = when {
+        circleZ == null -> ""
+        circleZ >= CIRCLE_CORE -> "（这部是）"
+        circleZ >= 0.0 -> "（这部和你常看的有些重合）"
+        else -> "（这部不太是）"
+    }
+
+/**
+ * 匹配度的说明文字：按人权重的模型说预计评分、区间、大众基线和主要依据；旧公式说类比与题材；没有评分模型时说画像。
+ */
+private fun TasteMatchResult.matchReasonCore(predicted: Double?, reasonUis: List<TasteMatchReasonUi>): String {
+    val gated = prediction?.takeIf { it.low != null && it.high != null && !isRated }
+    val tail = "共参考你评过分的 $modelSamples 部作品。" + TasteVerdict.familiarityNote(tasteSimilarity) + "（下方是题材依据）"
+    return when {
+        gated != null -> {
+            val analogyText = analogy?.let {
+                "你给题材相近的 ${it.count} 部作品平均打 ${"%.1f".format(it.meanRating)} 分。"
+            }.orEmpty()
+            val mainBasis = gated.factors.take(MAIN_BASIS_COUNT)
+                .joinToString("、") { "${it.label} ${"%+.1f".format(it.delta)}" }
+            val basisText =
+                if (mainBasis.isNotEmpty()) "大众基线 ${"%.1f".format(gated.baseline)} 分，主要依据：$mainBasis。" else ""
+            "匹配度看是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像，再加上口碑。" +
+                analogyText + "口碑估计你会打 ${"%.1f".format(gated.rating)} 分（大概率在 ${"%.1f".format(gated.low)}–" +
+                "${"%.1f".format(gated.high)} 分之间）。" + basisText + tail
+        }
+        predicted != null -> {
+            // 把百分数的含义说出来：以相似作品类比为主，再参考评分和题材相似度。
+            val basis = if (isRated) "你的评分" else "预计评分"
+            val analogyText = analogy?.let {
+                "你给题材相近的 ${it.count} 部作品平均打 ${"%.1f".format(it.meanRating)} 分；"
+            }.orEmpty()
+            analogyText + "主要看相近作品你打了几分，也参考$basis（高于你看过的 $satisfaction% 作品）和题材相似度；" + tail
+        }
+        reasonUis.any { it.positive } -> "综合你的长期口味给出（下方为主要依据）"
+        reasonUis.isNotEmpty() -> "主要是这些维度拉低了匹配（下方）"
+        else -> "与你的口味画像重合较少，仅供参考"
+    }
 }
 
 /**

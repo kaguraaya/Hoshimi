@@ -27,6 +27,11 @@ class TaskRunRecorder @Inject constructor(
             it.copy(running = false, lastSuccessAt = now, lastSummary = summary ?: it.lastSummary, updatedAt = now)
         }
 
+    /** 被系统暂停、这次还没做完任何一项：只收起「运行中」，不算成功也不算失败（上一次的结果照常显示）。 */
+    suspend fun paused(kind: BackgroundTaskKind, now: Long = System.currentTimeMillis()) = write(kind) {
+        it.copy(running = false, updatedAt = now)
+    }
+
     suspend fun failed(
         kind: BackgroundTaskKind,
         reason: String,

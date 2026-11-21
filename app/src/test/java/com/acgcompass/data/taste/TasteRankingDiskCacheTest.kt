@@ -19,7 +19,7 @@ class TasteRankingDiskCacheTest {
 
     @Test
     fun writtenRankingReadsBackUnchanged() {
-        assertNull(cache.read())
+        assertNull(cache.read("gate2"))
         val ranking = TasteRanking(
             items = listOf(
                 TasteRankItem(
@@ -32,8 +32,10 @@ class TasteRankingDiskCacheTest {
             unratedCount = 1100,
         )
 
-        cache.write(ranking)
+        cache.write(ranking, "gate2")
 
-        assertEquals(ranking, cache.read())
+        assertEquals(ranking, cache.read("gate2"))
+        // 模型版本不同时不返回旧结果。
+        assertNull(cache.read("legacy1"))
     }
 }

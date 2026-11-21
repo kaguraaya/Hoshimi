@@ -6,6 +6,7 @@ import com.acgcompass.data.local.entity.BacklogItemEntity
 import com.acgcompass.data.local.entity.ChangeLogEntity
 import com.acgcompass.data.local.entity.ImportBatchEntity
 import com.acgcompass.data.local.entity.ImportItemEntity
+import com.acgcompass.data.local.entity.PredictionSnapshotEntity
 import com.acgcompass.data.local.entity.RatingEntity
 import com.acgcompass.data.local.entity.RecommendationCountEntity
 import com.acgcompass.data.local.entity.SnapshotEntity
@@ -369,13 +370,41 @@ fun BackupUserCollection.toEntity(): UserCollectionEntity = UserCollectionEntity
 fun WorkFeatureEntity.toBackup(): BackupWorkFeature = BackupWorkFeature(
     subjectId, tagCountsJson, staff, characters, cv, bangumiScore, bangumiVotes, eps,
     durationMin, platform, mediaType, titles, baseDataUpdatedAt, extendedDataUpdatedAt, completeness, updatedAt,
-    coverUrl, airDate,
+    coverUrl, airDate, ratingHistogram,
 )
 
 fun BackupWorkFeature.toEntity(): WorkFeatureEntity = WorkFeatureEntity(
     subjectId, tagCountsJson, staff, characters, cv, bangumiScore, bangumiVotes, eps,
     durationMin, platform, mediaType, titles, baseDataUpdatedAt, extendedDataUpdatedAt, completeness, updatedAt,
-    coverUrl, airDate,
+    coverUrl, airDate, ratingHistogram,
+)
+
+// --- Prediction ledger -----------------------------------------------------
+
+fun PredictionSnapshotEntity.toBackup(): BackupPredictionSnapshot = BackupPredictionSnapshot(
+    workId = workId,
+    modelVersion = modelVersion,
+    context = context,
+    createdAt = createdAt,
+    predictedRating = predictedRating,
+    lowRating = lowRating,
+    highRating = highRating,
+    matchScore = matchScore,
+    satisfaction = satisfaction,
+    profileSize = profileSize,
+)
+
+fun BackupPredictionSnapshot.toEntity(): PredictionSnapshotEntity = PredictionSnapshotEntity(
+    workId = workId,
+    modelVersion = modelVersion,
+    context = context,
+    createdAt = createdAt,
+    predictedRating = predictedRating,
+    lowRating = lowRating,
+    highRating = highRating,
+    matchScore = matchScore,
+    satisfaction = satisfaction,
+    profileSize = profileSize,
 )
 
 // --- Trash -----------------------------------------------------------------

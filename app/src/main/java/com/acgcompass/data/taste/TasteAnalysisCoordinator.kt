@@ -8,6 +8,7 @@ import com.acgcompass.data.local.entity.BackgroundTaskStateEntity
 import com.acgcompass.data.sync.BangumiSyncManager
 import com.acgcompass.data.sync.TasteProfileAutoUpdater
 import com.acgcompass.domain.taste.AdvancedTasteProfile
+import com.acgcompass.domain.taste.PredictionContext
 import com.acgcompass.domain.taste.TagDimensionSummary
 import com.acgcompass.domain.taste.TasteAnalysisController
 import com.acgcompass.domain.taste.TasteImportResult
@@ -36,6 +37,7 @@ class TasteAnalysisCoordinator @Inject constructor(
     private val aiTagClassifier: AiTagClassifier,
     private val tasteProfileAutoUpdater: TasteProfileAutoUpdater,
     private val taskStateDao: BackgroundTaskStateDao,
+    private val predictionLedger: PredictionLedgerRecorder,
     @ApplicationScope scope: CoroutineScope,
 ) : TasteAnalysisController {
     override val refreshProgress: StateFlow<TasteRefreshProgress?> = tasteEngine.observeRefreshProgress()
@@ -86,6 +88,9 @@ class TasteAnalysisCoordinator @Inject constructor(
     override suspend fun rebuildFromCache() {
         tasteEngine.rebuildFromCache()
     }
+
+    override suspend fun recordPredictions(context: PredictionContext, subjectIds: Collection<String>) =
+        predictionLedger.record(context, subjectIds)
 
     override suspend fun score(subjectId: String, userRating: Int?, allowNetwork: Boolean): TasteMatchResult? =
         tasteEngine.score(subjectId, userRating, allowNetwork)

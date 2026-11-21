@@ -80,8 +80,8 @@ android {
         applicationId = "com.kaguraaya.hoshimi"
         minSdk = 26
         targetSdk = 34
-        versionCode = 92
-        versionName = "0.46.0"
+        versionCode = 93
+        versionName = "0.47.0"
 
         // 可选：用不同的包名 / 版本后缀出包（例如手头没有正式签名、想与已安装的正式版并存时）：
         //   ./gradlew assembleRelease -Phoshimi.applicationIdSuffix=.preview -Phoshimi.versionNameSuffix=-preview
@@ -170,6 +170,10 @@ android {
             // Robolectric 运行时要下载 android-all；可用 -Probolectric.repo=<镜像> 换源（受限网络 / CI）。
             providers.gradleProperty("robolectric.repo").orNull?.let { repo ->
                 it.systemProperty("robolectric.dependency.repo.url", repo)
+            }
+            // 口味算法离线评测的筛选项：-Peval.splits=temporal、-Peval.variants=legacy,gateL（不传则全跑）。
+            listOf("eval.splits", "eval.variants").forEach { key ->
+                providers.gradleProperty(key).orNull?.let { value -> it.systemProperty(key, value) }
             }
         }
     }
