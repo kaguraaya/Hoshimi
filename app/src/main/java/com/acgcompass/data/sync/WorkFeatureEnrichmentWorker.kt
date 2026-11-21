@@ -5,6 +5,8 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.acgcompass.core.common.runCatchingCancellable
+import com.acgcompass.core.network.NetworkSource
+import com.acgcompass.core.network.SourceQuota
 import com.acgcompass.data.local.dao.BacklogDao
 import com.acgcompass.data.local.dao.UserCollectionDao
 import com.acgcompass.data.local.dao.WorkFeatureDao
@@ -26,6 +28,7 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
     private val workFeatureRepository: WorkFeatureRepository,
     private val scheduler: WorkFeatureEnrichmentScheduler,
     private val taskRecorder: TaskRunRecorder,
+    private val sourceQuota: SourceQuota,
 ) : CoroutineWorker(appContext, params) {
     /**
      * 每次一小批，顺序是：
@@ -40,10 +43,7 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
         val batch = enrichBatch()
         if (batch.stalled) {
             // 有要补的作品却一部都没补上：多半是网络或限流，记为失败并交给 WorkManager 退避重试几次。
-            taskRecorder.failed(
-                BackgroundTaskKind.FEATURE_ENRICHMENT,
-                "这批 ${batch.attempted} 部一部都没补上，多半是网络不通或被限速，稍后会自动再试",
-            )
+            taskRecorder.failed(BackgroundTaskKind.FEATURE_ENRICHMENT, stalledReason(batch.attempted))
             if (runAttemptCount < MAX_STALLED_RETRIES) Result.retry() else Result.success()
         } else {
             taskRecorder.succeeded(BackgroundTaskKind.FEATURE_ENRICHMENT, batch.summary())
@@ -90,6 +90,17 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
         return EnrichmentBatch(attempted = personal.size + missing.size + rest.size, progressed, remaining)
     }
 
+    /** 一部都没补上时的原因：Bangumi 正在限流冷却就直接说冷却多久，否则多半是网络或这几部暂时打不开。 */
+    private fun stalledReason(attempted: Int): String {
+        val cooldown = sourceQuota.backgroundCooldownMillis(NetworkSource.BANGUMI)
+        return if (cooldown > 0) {
+            val minutes = (cooldown + MINUTE_MS - 1) / MINUTE_MS
+            "这批 $attempted 部没补上：Bangumi 正在限流冷却（约 $minutes 分钟），冷却后会自动再试"
+        } else {
+            "这批 $attempted 部一部都没补上：Bangumi 没有在限流，多半是网络不通，或这几部暂时打不开，稍后会自动再试"
+        }
+    }
+
     /** 把这批补成完整资料，返回是否至少补完一部。 */
     private suspend fun upgrade(ids: List<String>): Boolean {
         workFeatureRepository.getFeatures(ids, networkBudget = ids.size)
@@ -103,6 +114,7 @@ class WorkFeatureEnrichmentWorker @AssistedInject constructor(
         private const val MAX_STALLED_RETRIES = 3
         private const val BATCH_SIZE = 20
         private const val POOL_BATCH_SIZE = 40
+        private const val MINUTE_MS = 60_000L
     }
 }
 
