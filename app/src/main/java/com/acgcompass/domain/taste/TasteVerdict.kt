@@ -3,17 +3,18 @@ package com.acgcompass.domain.taste
 /**
  * 把分数翻译成一句话。详情页、探索队列、推荐共用同一套措辞，避免各说各话。
  *
- * 主结论跟着口味匹配度走（[ComputeTasteMatchUseCase.headlineScore]：以相似作品类比为主），
- * 但预计分低于及格线时一律按「不太合口味」说。
+ * 主结论说的是口味匹配度（[TasteFit]：对你的口味有多契合）。预计评分是另一个输出，两者可以不一致：
+ * 预计分低于及格线时，结论后面补一句「预计分不高」，而不是把口味结论改掉。
+ * 阈值对应匹配度的刻度：72 ≈ 接近你看过的作品的平均水平，85 ≈ 接近你看过的前 10%，55 ≈ 作品库里中等偏上。
  * 题材相似度（[familiarityNote]）只作为补充说明，用文字不用数字。
  */
 object TasteVerdict {
-    /** 及格线：预计分低于它，无论排在你历史里的什么位置，都按「不太合口味」说。 */
+    /** 及格线：预计分低于它时，结论后面注明「预计分不高」。 */
     const val PASS_LINE = 6.0
 
-    const val LIKELY_LOVE = 84
+    const val LIKELY_LOVE = 85
     const val LIKELY_GOOD = 72
-    const val AVERAGE = 60
+    const val AVERAGE = 55
 
     private const val LEGACY_HIGH = 80
     private const val LEGACY_GOOD = 65
@@ -41,13 +42,13 @@ object TasteVerdict {
                 else -> "题材上不太对口"
             }
         }
-        return when {
-            predictedRating < PASS_LINE -> "可能不太合你口味"
-            likeability >= LIKELY_LOVE -> "很可能喜欢"
-            likeability >= LIKELY_GOOD -> "应该不错"
-            likeability >= AVERAGE -> "中规中矩"
-            else -> "对你来说可能偏一般"
+        val taste = when {
+            likeability >= LIKELY_LOVE -> "非常对你口味"
+            likeability >= LIKELY_GOOD -> "对你口味"
+            likeability >= AVERAGE -> "口味上一般"
+            else -> "不太是你的口味"
         }
+        return if (predictedRating < PASS_LINE) "$taste，但预计分不高" else taste
     }
 
     /** 题材相似度的文字说明（[similarity] 是 12 维画像的匹配分）。 */

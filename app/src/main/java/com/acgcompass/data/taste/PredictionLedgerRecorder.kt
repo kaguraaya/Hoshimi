@@ -6,6 +6,7 @@ import com.acgcompass.data.local.dao.ReconciledPredictionRow
 import com.acgcompass.data.local.entity.PredictionSnapshotEntity
 import com.acgcompass.domain.taste.LedgerEntry
 import com.acgcompass.domain.taste.PredictionContext
+import com.acgcompass.domain.taste.TasteModelVersion
 import java.time.OffsetDateTime
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -28,7 +29,7 @@ class PredictionLedgerRecorder @Inject constructor(
         now: Long = System.currentTimeMillis(),
     ) {
         runCatchingCancellable {
-            val main = tasteEngine.currentProfile?.divergence?.modelVersion ?: return@runCatchingCancellable
+            val main = tasteEngine.currentProfile?.let { TasteModelVersion.ledger(it) } ?: return@runCatchingCancellable
             val ids = subjectIds.filter { it.isNotBlank() }.distinct()
             if (ids.isEmpty()) return@runCatchingCancellable
             val already = dao.recordedAmong(main, ids).toSet()

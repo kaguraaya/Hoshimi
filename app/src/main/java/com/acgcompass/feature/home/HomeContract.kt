@@ -207,7 +207,7 @@ internal fun seasonalRatingText(score: Float, votes: Int): String {
 }
 
 /**
- * 本季新番要显示的几部：不按评分或人数排，而是从「热度前一半」和「口味匹配度 ≥ 72%」的作品里随机挑 [count] 部，
+ * 本季新番要显示的几部：不按评分或人数排，而是从「热度前一半」和「口味匹配度 ≥ 70%」的作品里随机挑 [count] 部，
  * 下拉换一批。[matches] 是作品 id → 口味匹配度（没有资料算不出时缺省）。
  *
  * 评分人数不到 [MIN_VOTES] 或评分低于 [MIN_SCORE] 的不放（够数时）；[exclude] 是最近显示过的，先挑没显示过的，
@@ -232,7 +232,9 @@ internal fun pickSeasonal(
 }
 
 private const val TEN_THOUSAND = 10_000
-private const val LIKELY_MATCH = 72
+
+/** 匹配度 70 ≈ 接近你看过的作品的平均对口程度（见 TasteFit 的刻度）。 */
+private const val LIKELY_MATCH = 70
 private const val MIN_POPULAR = 12
 private const val MIN_VOTES = 50
 private const val MIN_SCORE = 6f

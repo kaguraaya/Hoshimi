@@ -63,6 +63,8 @@ data class TasteMatchResult(
     val headlineZ: Double? = null,
     /** 圈子分（[TasteCircle.z]）：是不是你常看的那类；没有圈子模型时为 null。 */
     val circleZ: Double? = null,
+    /** 已评分作品的回测值（建画像时不知道这部作品）；未评分、或回测还没算完时为 null。 */
+    val backtest: BacktestView? = null,
 ) {
     /** 正向理由（真正「命中你口味」的维度）；负向贡献项不应被展示成「命中」。 */
     val positiveReasons: List<TasteReason> get() = reasons.filter { it.contribution > 0.0 }
@@ -354,24 +356,22 @@ private fun predictWithAnalogy(
 /** 旧公式里你打分的标准差下限，避免打分很集中的人换算出过大的标准分。 */
 private const val HEADLINE_MIN_STD = 0.6
 
-/** 有评分模型时按所选分支的公式出主分数；否则保持画像匹配分。 */
+/** 有评分模型时按所选分支出口味匹配度（[TasteFit]，已评分作品也一样算）；否则保持画像匹配分。 */
 private fun TasteMatchResult.withHeadline(profile: AdvancedTasteProfile, basisRating: Double?): TasteMatchResult {
     val model = profile.divergence
     if (model == null || basisRating == null || !fromRatingModel) return this
     val fit = profile.tasteFit
-    val fitComponents = if (fit != null && !isRated) TasteFit.components(this) else null
-    return when {
-        // 口味匹配度：圈子 + 类比 + 题材相似 + 口碑（[TasteFit]），分支决定口碑占多少、刻度多松。
-        fit != null && fitComponents != null -> {
-            val z = TasteFit.z(fitComponents, fit, profile.matchBranch)
-            copy(score = TasteFit.score(z, profile.matchBranch), modelSamples = model.examples.size, headlineZ = z)
-        }
-        // 已评分作品：直接是你打的分 ×10。
-        fit != null -> copy(score = TasteFit.ratedScore(basisRating), modelSamples = model.examples.size)
-        else -> {
-            val std = model.ratingStd.coerceAtLeast(HEADLINE_MIN_STD)
-            val z = profile.headlineFormula.z((basisRating - model.meanRating) / std, analogy?.z, tasteSimilarity)
-            copy(score = profile.headlineFormula.score(z), modelSamples = model.examples.size, headlineZ = z)
-        }
+    val fitComponents = if (fit != null) TasteFit.components(this) else null
+    return if (fit != null && fitComponents != null) {
+        val raw = TasteFit.raw(fitComponents, fit, profile.matchBranch)
+        copy(
+            score = TasteFit.score(fitComponents, fit, profile.matchBranch),
+            modelSamples = model.examples.size,
+            headlineZ = raw,
+        )
+    } else {
+        val std = model.ratingStd.coerceAtLeast(HEADLINE_MIN_STD)
+        val z = profile.headlineFormula.z((basisRating - model.meanRating) / std, analogy?.z, tasteSimilarity)
+        copy(score = profile.headlineFormula.score(z), modelSamples = model.examples.size, headlineZ = z)
     }
 }

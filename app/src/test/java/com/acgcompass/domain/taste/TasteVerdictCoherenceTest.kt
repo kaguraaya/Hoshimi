@@ -79,18 +79,19 @@ class TasteVerdictCoherenceTest : StringSpec({
         comedy.score shouldBeGreaterThan other.score
     }
 
-    "a work predicted at or above the user's average is never called a poor match" {
+    "a work predicted at or above the pass line never carries the low-rating note" {
         val likely = compute(feature("d", listOf("搞笑", "校园"), 7.6f), profile)
         val predicted = likely.prediction!!.rating
-        (predicted >= model.meanRating - 0.3) shouldBe true
-        val verdict = TasteVerdict.of(likely.score, predicted)
-        (verdict == "可能不太合你口味" || verdict == "对你来说可能偏一般") shouldBe false
+        (predicted >= TasteVerdict.PASS_LINE) shouldBe true
+        TasteVerdict.of(likely.score, predicted).contains("预计分不高") shouldBe false
     }
 
-    "below the pass line the verdict says so regardless of percentile" {
-        TasteVerdict.of(60, 5.4) shouldBe "可能不太合你口味"
-        TasteVerdict.of(84, 8.2) shouldBe "很可能喜欢"
-        TasteVerdict.of(74, 7.5) shouldBe "应该不错"
+    "the verdict speaks about taste and notes a low predicted rating separately" {
+        TasteVerdict.of(60, 5.4) shouldBe "口味上一般，但预计分不高"
+        TasteVerdict.of(88, 5.4) shouldBe "非常对你口味，但预计分不高"
+        TasteVerdict.of(86, 8.2) shouldBe "非常对你口味"
+        TasteVerdict.of(74, 7.5) shouldBe "对你口味"
+        TasteVerdict.of(40, 7.5) shouldBe "不太是你的口味"
         // 评分太少、没有预计评分时，沿用画像匹配分的措辞，且不说「不太喜欢」。
         TasteVerdict.of(30, null) shouldBe "题材上不太对口"
     }

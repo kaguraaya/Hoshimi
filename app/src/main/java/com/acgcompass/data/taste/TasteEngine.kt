@@ -23,6 +23,7 @@ import com.acgcompass.domain.taste.TasteAlgorithmConfigSource
 import com.acgcompass.domain.taste.TasteCategory
 import com.acgcompass.domain.taste.TasteMatchBranch
 import com.acgcompass.domain.taste.TasteMatchResult
+import com.acgcompass.domain.taste.TasteModelVersion
 import com.acgcompass.domain.taste.TasteRefreshProgress
 import com.acgcompass.domain.taste.TasteSample
 import com.acgcompass.domain.taste.WorkFeature
@@ -35,6 +36,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -76,6 +78,7 @@ class TasteEngine @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val algorithmConfig: TasteAlgorithmConfigSource,
     private val dispatchers: DispatcherProvider,
+    @com.acgcompass.core.common.ApplicationScope private val appScope: kotlinx.coroutines.CoroutineScope,
 ) {
     private val logger = RedactingLogger()
 
@@ -93,6 +96,30 @@ class TasteEngine @Inject constructor(
 
     /** 当前口味画像流（`null` = 尚未构建）。详情页 / 推荐页可观察以驱动刷新。 */
     fun observeProfile(): StateFlow<AdvancedTasteProfile?> = profileState.asStateFlow()
+
+    private val backtestState = MutableStateFlow<com.acgcompass.domain.taste.TasteBacktest?>(null)
+    private var backtestJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * 已评分作品的回测（[com.acgcompass.domain.taste.TasteBacktest]）：每次重建画像后在后台按 5 折重算，
+     * 期间为 null。详情页、为你排行的「回测匹配度 / 回测预计评分」和口味画像页的关联度都读它。
+     */
+    fun observeBacktest(): StateFlow<com.acgcompass.domain.taste.TasteBacktest?> = backtestState.asStateFlow()
+
+    /** 重建画像后启动回测；上一次还没算完就取消。回测只读输入，不改画像，不影响各页面出分。 */
+    private fun startBacktest(inputs: com.acgcompass.domain.taste.TasteBuildInputs) {
+        backtestJob?.cancel()
+        backtestState.value = null
+        backtestJob = appScope.launch(dispatchers.default) {
+            val job = coroutineContext[kotlinx.coroutines.Job]
+            val result = runCatchingCancellable {
+                com.acgcompass.domain.taste.TasteBacktest.run(inputs, buildProfile, computeMatch) {
+                    job?.ensureActive()
+                }
+            }.getOrNull()
+            if (result != null) backtestState.value = result
+        }
+    }
 
     private val refreshProgressState = MutableStateFlow<TasteRefreshProgress?>(null)
 
@@ -183,12 +210,13 @@ class TasteEngine @Inject constructor(
             if (networkBudget > 0) {
                 refreshProgressState.value = TasteRefreshProgress(TasteRefreshProgress.Phase.BUILDING)
             }
-            val profile = buildWithImplicitSignals(samples, now, calibrationPool, ratedIds)
+            val (profile, inputs) = buildWithImplicitSignals(samples, now, calibrationPool, ratedIds)
             // 显式评分锚定必须覆盖「全部已评分作品」——含特征未取到、未进 50 样本者，否则这些作品
             // 在详情页拿不到显式评分锚（rating 查不到）→ 仍会塌到个位数。用完整评分表覆盖 ratedSubjectScores。
             val allRatedScores = rated.mapNotNull { c -> c.rating?.let { c.sourceItemId to it } }.toMap()
             val finalProfile = withMatchBranch(profile.withRatedScores(allRatedScores))
             profileState.value = finalProfile
+            startBacktest(inputs)
             if (networkBudget > 0) refreshProgressState.value = null
             finalProfile
         }
@@ -199,19 +227,28 @@ class TasteEngine @Inject constructor(
         now: Long,
         calibrationPool: List<WorkFeature>,
         ratedIds: Set<String>,
-    ): AdvancedTasteProfile {
+    ): Pair<AdvancedTasteProfile, com.acgcompass.domain.taste.TasteBuildInputs> {
         val options = DivergenceOptions.DEFAULT
-        return buildProfile(
-            samples,
-            now,
-            calibrationPool,
-            loadTagOverrides(),
+        val inputs = com.acgcompass.domain.taste.TasteBuildInputs(
+            samples = samples,
+            now = now,
+            calibrationPool = calibrationPool,
+            tagOverrides = loadTagOverrides(),
             implicitSignals = runCatchingCancellable { loadImplicitSignals(ratedIds, now) }.getOrDefault(emptyList()),
-            divergenceOptions = options,
+            options = options,
+        )
+        val profile = buildProfile(
+            inputs.samples,
+            inputs.now,
+            inputs.calibrationPool,
+            inputs.tagOverrides,
+            implicitSignals = inputs.implicitSignals,
+            divergenceOptions = inputs.options,
             // 另一版模型只用来往预测账本里记对照，不参与展示。
             shadowOptions = DivergenceOptions.DEFAULT.takeIf { options == DivergenceOptions.LEGACY }
                 ?: DivergenceOptions.LEGACY,
         )
+        return profile to inputs
     }
 
     /**
@@ -326,6 +363,8 @@ class TasteEngine @Inject constructor(
         val startedAt = android.os.SystemClock.elapsedRealtime()
         var basicLogged = false
         var extendedLogged = false
+        val latest = java.util.concurrent.atomic.AtomicReference<TasteMatchResult?>(null)
+        sendBacktestUpdates(subjectId, rated = userRating != null, latest)
         launch {
             workFeatureRepository.observeFeature(subjectId)
                 .filterNotNull()
@@ -334,7 +373,9 @@ class TasteEngine @Inject constructor(
                     if (profile == null || !profile.isUsable) {
                         send(null)
                     } else {
-                        send(computeMatch(feature, profile, userRating, loadTagOverrides()))
+                        val match = computeMatch(feature, profile, userRating, loadTagOverrides())
+                        latest.set(match)
+                        send(withBacktest(match, subjectId, profile.matchBranch))
                     }
                     val elapsed = android.os.SystemClock.elapsedRealtime() - startedAt
                     if (!basicLogged) {
@@ -361,6 +402,24 @@ class TasteEngine @Inject constructor(
             launch { runCatchingCancellable { workFeatureRepository.refresh(subjectId) } }
         }
     }.distinctUntilChanged()
+
+    /** 已评分作品：回测算完后把「回测匹配度 / 回测预计评分」补到最近一次结果上。 */
+    private fun kotlinx.coroutines.channels.ProducerScope<TasteMatchResult?>.sendBacktestUpdates(
+        subjectId: String,
+        rated: Boolean,
+        latest: java.util.concurrent.atomic.AtomicReference<TasteMatchResult?>,
+    ) {
+        if (!rated) return
+        launch {
+            backtestState.collect {
+                val branch = profileState.value?.matchBranch ?: return@collect
+                latest.get()?.let { match -> send(withBacktest(match, subjectId, branch)) }
+            }
+        }
+    }
+
+    private fun withBacktest(match: TasteMatchResult, subjectId: String, branch: TasteMatchBranch): TasteMatchResult =
+        match.copy(backtest = backtestState.value?.view(subjectId, branch))
 
     /**
      * 本地没有特征时先用作品自己的标签出分，不等联网（限流排队时可能要等十几秒）；
@@ -556,14 +615,14 @@ class TasteEngine @Inject constructor(
                 listOfNotNull(
                     LedgerPrediction(
                         feature.subjectId,
-                        main.modelVersion,
+                        TasteModelVersion.ledger(profile, main) ?: main.modelVersion,
                         computeMatch(feature, profile, null, overrides, withNeighbors = false, withReasons = false),
                         profile.sampleCount,
                     ),
                     shadow?.let {
                         LedgerPrediction(
                             feature.subjectId,
-                            it.divergence!!.modelVersion,
+                            TasteModelVersion.ledger(profile, it.divergence) ?: it.divergence!!.modelVersion,
                             computeMatch(feature, it, null, overrides, withNeighbors = false, withReasons = false),
                             profile.sampleCount,
                         )

@@ -90,7 +90,8 @@ class TasteRankingRepositoryImpl @Inject constructor(
             val backlog = backlogDao.getAll().map { it.workId }.toSet()
             val today = LocalDate.now()
             TasteRanking(
-                items = local.entries.map { toItem(it, collected, backlog, today) },
+                // 已评分作品显示回测值后按显示的分数重新排一次：列表从高到低和页面上的数字一致。
+                items = local.entries.map { toItem(it, collected, backlog, today) }.sortedByDescending { it.score },
                 poolSize = local.poolSize,
                 computedAt = System.currentTimeMillis(),
                 unratedCount = local.unratedCount,
@@ -106,11 +107,11 @@ class TasteRankingRepositoryImpl @Inject constructor(
     override suspend fun lastResult(): TasteRanking? =
         cached ?: withContext(dispatchers.io) { diskCache.read(modelVersion()) }
 
-    /** 当前画像的模型版本加匹配度分支：换了任何一个，上次的结果都不再先显示。画像还没建好时按默认配置。 */
+    /** 当前画像的评分模型、匹配度刻度和分支：换了任何一个，上次的结果都不再先显示。画像还没建好时按默认配置。 */
     private fun modelVersion(): String {
         val profile = engine.observeProfile().value
-        val model = profile?.divergence?.modelVersion ?: TasteModelVersion.of(DivergenceOptions.DEFAULT)
-        return "$model-${profile?.matchBranch?.key ?: TasteMatchBranch.STANDARD.key}"
+        return profile?.let { TasteModelVersion.ledger(it) }
+            ?: "${TasteModelVersion.of(DivergenceOptions.DEFAULT)}|formula-${TasteMatchBranch.STANDARD.key}"
     }
 
     private suspend fun toItem(
@@ -123,6 +124,7 @@ class TasteRankingRepositoryImpl @Inject constructor(
         val work = workDao.getById(f.subjectId)
         val airDate = (work?.airDate ?: f.airDate)?.let { runCatchingCancellable { LocalDate.parse(it) }.getOrNull() }
         val reason = ranked.match.positiveReasons.maxByOrNull { it.contribution }?.label
+        val (score, predicted) = displayed(ranked)
         return TasteRankItem(
             subjectId = f.subjectId,
             title = work?.titleCn ?: work?.canonicalTitle ?: f.titleVariants.firstOrNull() ?: "条目 ${f.subjectId}",
@@ -130,8 +132,8 @@ class TasteRankingRepositoryImpl @Inject constructor(
             year = work?.year ?: airDate?.year,
             format = WorkFormat.of(f.platform),
             finished = finished(work?.status, airDate, f.eps, today),
-            score = ranked.match.score,
-            predictedRating = ranked.match.prediction?.rating,
+            score = score,
+            predictedRating = predicted,
             reason = reason?.let { "命中「$it」" },
             ownership = when {
                 ranked.myRating != null -> RankOwnership.RATED
@@ -141,6 +143,13 @@ class TasteRankingRepositoryImpl @Inject constructor(
             },
             myRating = ranked.myRating,
         )
+    }
+
+    /** 显示的匹配度和预计评分：已评分作品用回测值（建画像时不知道这部作品），回测还没算完时先用当前画像下的分。 */
+    private fun displayed(ranked: LocalRankedWork): Pair<Int, Double?> {
+        val branch = engine.observeProfile().value?.matchBranch ?: TasteMatchBranch.STANDARD
+        val backtest = ranked.myRating?.let { engine.observeBacktest().value?.view(ranked.feature.subjectId, branch) }
+        return (backtest?.match ?: ranked.match.score) to (backtest?.predicted ?: ranked.match.prediction?.rating)
     }
 
     /** 优先用作品状态；没有状态时按开播日期 + 集数 × 一周估算。 */
