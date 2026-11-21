@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -133,19 +134,11 @@ fun ExploreQueueScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showSwipeHelp by remember { mutableStateOf(false) }
+    if (showSwipeHelp) SwipeHelpDialog(onDismiss = { showSwipeHelp = false })
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                expandedHeight = AcgTopBarHeight,
-                title = { Text("探索队列", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-            )
-        },
+        topBar = { ExploreTopBar(onBack = onBack, onHelp = { showSwipeHelp = true }) },
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -589,6 +582,43 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
         )
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExploreTopBar(onBack: () -> Unit, onHelp: () -> Unit) {
+    TopAppBar(
+        expandedHeight = AcgTopBarHeight,
+        title = { Text("探索队列", fontWeight = FontWeight.Bold) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+            }
+        },
+        actions = {
+            IconButton(onClick = onHelp) {
+                Icon(Icons.Outlined.Info, contentDescription = "左右滑说明")
+            }
+        },
+    )
+}
+
+/** 左右滑会怎样影响口味：马上生效的只有这一批卡片的顺序，画像要等下次自然重建。 */
+@Composable
+private fun SwipeHelpDialog(onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("知道了") } },
+        title = { Text("左右滑会怎样影响口味") },
+        text = { Text(SWIPE_HELP, style = MaterialTheme.typography.bodyMedium) },
+    )
+}
+
+private const val SWIPE_HELP =
+    "右滑：加入待补池。左滑：这次先不推，较长时间内不再推荐这部。\n\n" +
+        "马上生效：这一批后面的卡片会按你的左右滑重新排——同类标签右滑多就多推，左滑多就少推。\n\n" +
+        "不会马上生效：滑动不会重建口味画像，也不改口味匹配度和预计评分。等下次因为评分、收藏变化重建画像时，" +
+        "待补池里的作品会算作「你想看的」，用来判断你常看哪类作品；左滑只是很弱的信号。\n\n" +
+        "滑动只说明想不想看，不代表看完会打几分；你的评分永远比滑动重要。"
 
 /** 卡片背面展示作品简介、详情入口与翻回提示。 */
 @Composable
