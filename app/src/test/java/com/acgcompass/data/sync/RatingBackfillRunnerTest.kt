@@ -76,6 +76,30 @@ class RatingBackfillRunnerTest {
     }
 
     @Test
+    fun aCancellationRaisedInsideARequestOnlyFailsThatItem() = runBlocking {
+        val batch = runner { id ->
+            if (id == "odd") throw java.util.concurrent.CancellationException("shared request cancelled")
+            RatingBackfillReport(RatingBackfillOutcome.CHECKED)
+        }.run(listOf("odd", "a", "b"), RatingBackfillRunner.Progress())
+
+        assertEquals(2, batch.checked)
+        assertEquals(1, batch.failed)
+        assertEquals(RatingBackfillOutcome.TRANSIENT_FAILURE.name, requireNotNull(dao.get("odd")).lastOutcome)
+        assertTrue(batch.summary().contains("请求被中途取消"))
+    }
+
+    @Test
+    fun failureReasonsAreSummarisedMostCommonFirst() = runBlocking {
+        val batch = runner { id ->
+            val reason = if (id == "c") "条目：网络连不上或超时" else "AniList：请求太频繁被限速，稍后会自动再试"
+            RatingBackfillReport(RatingBackfillOutcome.TRANSIENT_FAILURE, reason = reason)
+        }.run(listOf("a", "b", "c"), RatingBackfillRunner.Progress())
+
+        val summary = batch.summary()
+        assertTrue(summary, summary.contains("原因：AniList：请求太频繁被限速，稍后会自动再试 2 部、条目：网络连不上或超时 1 部"))
+    }
+
+    @Test
     fun failedPlatformsAreCountedPerItem() = runBlocking {
         val batch = runner { id ->
             when (id) {

@@ -9,6 +9,7 @@ import com.acgcompass.data.local.entity.RatingEntity
 import com.acgcompass.data.local.entity.SourceLinkEntity
 import com.acgcompass.data.local.entity.UserCollectionEntity
 import com.acgcompass.data.local.entity.WorkEntity
+import com.acgcompass.data.local.entity.WorkFeatureEntity
 import com.acgcompass.data.local.migration.WorkIdMigration
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -68,6 +69,35 @@ class WorkIdMigrationTest {
         // 再跑一次没有可改的。
         assertEquals(0, migration.run())
     }
+
+    @Test
+    fun staleFeatureRowsUnderOldOrNamespacedKeysAreRemoved() = runBlocking {
+        // 旧 MAL 编号 4181 下存的是 CLANNAD 的资料，而 Bangumi 4181 是另一部作品。
+        db.workDao().upsert(work("MAL:4181", "MAL", title = "CLANNAD ～AFTER STORY～"))
+        db.workFeatureDao().upsertAll(
+            listOf(
+                feature("4181", "CLANNAD ～AFTER STORY～"),
+                feature("MAL:4181", "CLANNAD ～AFTER STORY～"),
+                feature("ANILIST:77", "别的作品"),
+                // 标题对不上：这就是 Bangumi 那个条目自己的资料，保留。
+                feature("4182", "战锤40K：战争黎明 II"),
+            ),
+        )
+        db.workDao().upsert(work("MAL:4182", "MAL", title = "完全不同的作品"))
+
+        migration.run()
+
+        assertNull(db.workFeatureDao().getById("4181"))
+        assertNull(db.workFeatureDao().getById("MAL:4181"))
+        assertNull(db.workFeatureDao().getById("ANILIST:77"))
+        assertNotNull(db.workFeatureDao().getById("4182"))
+    }
+
+    private fun feature(id: String, title: String) = WorkFeatureEntity(
+        subjectId = id, tagCountsJson = "[]", staff = emptyList(), characters = emptyList(), cv = emptyList(),
+        bangumiScore = 8f, bangumiVotes = 100, eps = 12, durationMin = 24, platform = "TV", mediaType = "ANIME",
+        titles = listOf(title), updatedAt = 1L,
+    )
 
     private fun work(id: String, source: String, title: String = "作品$id") = WorkEntity(
         id = id, canonicalTitle = title, titleJa = null, titleRomaji = null, titleEn = null, aliases = emptyList(),

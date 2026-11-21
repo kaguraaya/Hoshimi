@@ -172,7 +172,9 @@ class RateLimiter(
     @Synchronized
     fun backgroundCooldownMillis(): Long {
         val until = maxOf(backgroundPausedUntilMillis, pausedUntilMillis)
-        return (until - clock()).coerceAtLeast(0L)
+        val now = clock()
+        // 从没暂停过时 until 是 Long.MIN_VALUE，直接相减会溢出成巨大的正数，所以先比较再减。
+        return if (until <= now) 0L else until - now
     }
 
     @Synchronized

@@ -12,12 +12,10 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.NetworkSource
 import com.acgcompass.core.network.SourceQuota
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.dao.RatingBackfillDao
-import com.acgcompass.data.local.dao.WorkDao
 import com.acgcompass.data.tasks.TaskRunRecorder
 import com.acgcompass.domain.model.BackgroundTaskKind
 import com.acgcompass.domain.repository.WorkRepository
@@ -50,7 +48,6 @@ class RatingBackfillWorker @AssistedInject constructor(
     private val settings: SettingsDataStore,
     private val workRepository: WorkRepository,
     private val backfillDao: RatingBackfillDao,
-    private val workDao: WorkDao,
     private val sourceQuota: SourceQuota,
     private val recorder: TaskRunRecorder,
 ) : CoroutineWorker(appContext, params) {
@@ -79,11 +76,18 @@ class RatingBackfillWorker @AssistedInject constructor(
                 Result.success()
             } catch (error: CancellationException) {
                 // 被系统停掉：已处理的作品结果都已写进表里；把停止原因和停在哪一部也记下来，
-                // 不然页面上一直停在上一次的结果，也看不出为什么停。
+                // 不然页面上一直停在上一次的结果，也看不出为什么停。任务没被停时取消来自内部，如实写出来。
                 withContext(NonCancellable) {
-                    recorder.failed(BackgroundTaskKind.RATING_BACKFILL, stoppedReason(progress))
+                    when {
+                        // 系统暂停了后台任务（常见于省电策略），已经查完的都已存好，下次接着做：不算失败。
+                        isStopped && progress.done > 0 ->
+                            recorder.succeeded(BackgroundTaskKind.RATING_BACKFILL, pausedSummary(progress))
+                        isStopped -> recorder.paused(BackgroundTaskKind.RATING_BACKFILL)
+                        else -> recorder.failed(BackgroundTaskKind.RATING_BACKFILL, interruptedReason(progress, error))
+                    }
                 }
-                throw error
+                if (isStopped) throw error
+                Result.success()
             } catch (error: Exception) {
                 recorder.failed(BackgroundTaskKind.RATING_BACKFILL, TaskRunRecorder.describe(error))
                 Result.success()
@@ -122,15 +126,11 @@ class RatingBackfillWorker @AssistedInject constructor(
         return "$names 正在限流冷却（约 $minutes 分钟），这次先不查，冷却后再试"
     }
 
-    private suspend fun stoppedReason(progress: RatingBackfillRunner.Progress): String {
-        val reason = describeStopReason(stopReason)
-        val current = progress.currentId?.let { id ->
-            val title = runCatchingCancellable { workDao.getById(id)?.canonicalTitle }.getOrNull() ?: id
-            val seconds = (System.nanoTime() / NANOS_PER_MILLI - progress.currentStartedAtMs) / SECOND_MS
-            "；停下时正在查《$title》，已等 $seconds 秒"
-        }.orEmpty()
-        return "被系统中止（$reason），已处理 ${progress.done} 部$current，剩下的下次继续"
-    }
+    private fun pausedSummary(progress: RatingBackfillRunner.Progress): String =
+        "查完 ${progress.done} 部后被系统暂停（${describeStopReason(stopReason)}），剩下的会自动接着查"
+
+    private fun interruptedReason(progress: RatingBackfillRunner.Progress, error: CancellationException): String =
+        "运行中被内部取消（${error.javaClass.simpleName}），已处理 ${progress.done} 部，剩下的下次继续"
 
     /** 旧版本把「最近查过」存在设置里：第一次运行时搬进数据库表，然后清掉。 */
     private suspend fun migrateLegacyAttempts() {
@@ -143,16 +143,14 @@ class RatingBackfillWorker @AssistedInject constructor(
     companion object {
         const val UNIQUE_WORK_NAME = "rating_backfill"
         const val UNIQUE_NOW_NAME = "rating_backfill_now"
-        private const val BATCH = 20
+        private const val BATCH = 12
 
-        /** 一批最多跑 8 分钟，留出余量在系统 10 分钟的时限前正常收尾。 */
-        private val TIME_BUDGET_MS = TimeUnit.MINUTES.toMillis(8)
+        /** 一批最多跑 5 分钟：批次短一些，被系统省电策略暂停前更容易跑完一批。 */
+        private val TIME_BUDGET_MS = TimeUnit.MINUTES.toMillis(5)
 
         /** 单部作品最多等 90 秒：某个平台限流冷却时，请求会在队列里一直等额度。 */
         private val ITEM_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(90)
         private const val MINUTE_MS = 60_000L
-        private const val SECOND_MS = 1_000L
-        private const val NANOS_PER_MILLI = 1_000_000L
 
         /** 进程内同一时间只跑一个补评分任务（定时任务和立即补一批共用）。 */
         private val RUN_GATE = Mutex()
@@ -170,6 +168,7 @@ internal data class RatingBackfillBatch(
     val deferred: Int = 0,
     val timedOut: Int = 0,
     val failedSources: Map<String, Int> = emptyMap(),
+    val reasons: Map<String, Int> = emptyMap(),
 ) {
     fun summary(): String {
         val base = when {
@@ -185,10 +184,20 @@ internal data class RatingBackfillBatch(
                         .joinToString("、") { (source, n) -> "${sourceDisplayName(source)} $n 部" },
                 )
             }
+            if (reasons.isNotEmpty()) {
+                add(
+                    "原因：" + reasons.entries.sortedByDescending { it.value }.take(MAX_REASONS)
+                        .joinToString("、") { (reason, n) -> "$reason $n 部" },
+                )
+            }
             if (timedOut > 0) add("$timedOut 部等额度超时")
             if (deferred > 0) add("到了单次运行时限，剩下 $deferred 部下次继续")
         }
         return (listOf(base) + details).joinToString("；")
+    }
+
+    private companion object {
+        const val MAX_REASONS = 3
     }
 
     fun failureReason(): String = if (checked == 0) {
