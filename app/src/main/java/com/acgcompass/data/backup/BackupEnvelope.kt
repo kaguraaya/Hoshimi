@@ -47,6 +47,8 @@ data class BackupEnvelope(
     val tagDimensions: List<BackupTagDimension> = emptyList(),
     /** 回收站（含已过保留期、只留作「已移除」标记的收藏记录），恢复后同步不会把移除的收藏加回来。 */
     val trashItems: List<BackupTrashItem> = emptyList(),
+    /** 预测账本：事前预测，换手机后还能和以后的评分对账。 */
+    val predictionSnapshots: List<BackupPredictionSnapshot> = emptyList(),
     val settings: BackupSettings = BackupSettings(),
     /** 默认 `null`：绝不导出凭据明文。仅显式脱敏导出时为非 null。 */
     val credentials: RedactedCredentials? = null,
@@ -263,6 +265,22 @@ data class BackupWorkFeature(
     val updatedAt: Long,
     val coverUrl: String? = null,
     val airDate: String? = null,
+    val ratingHistogram: String = "",
+)
+
+/** 预测账本（prediction_snapshots 表）；恢复时编号由数据库重新分配。 */
+@Serializable
+data class BackupPredictionSnapshot(
+    val workId: String,
+    val modelVersion: String,
+    val context: String,
+    val createdAt: Long,
+    val predictedRating: Double? = null,
+    val lowRating: Double? = null,
+    val highRating: Double? = null,
+    val matchScore: Int = 0,
+    val satisfaction: Int? = null,
+    val profileSize: Int = 0,
 )
 
 /** 回收站记录（trash_items 表）。 */

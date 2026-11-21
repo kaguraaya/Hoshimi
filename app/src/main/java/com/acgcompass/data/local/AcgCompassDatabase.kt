@@ -109,8 +109,9 @@ import com.acgcompass.data.local.entity.WorkTagEntity
         TrashItemEntity::class,
         com.acgcompass.data.local.entity.RatingBackfillStateEntity::class,
         com.acgcompass.data.local.entity.TaskRunEntity::class,
+        com.acgcompass.data.local.entity.PredictionSnapshotEntity::class,
     ],
-    version = 21,
+    version = 22,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -167,6 +168,8 @@ abstract class AcgCompassDatabase : RoomDatabase() {
     abstract fun ratingBackfillDao(): com.acgcompass.data.local.dao.RatingBackfillDao
 
     abstract fun taskRunDao(): com.acgcompass.data.local.dao.TaskRunDao
+
+    abstract fun predictionSnapshotDao(): com.acgcompass.data.local.dao.PredictionSnapshotDao
 
     companion object {
         /** Physical database file name. */

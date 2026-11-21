@@ -59,6 +59,27 @@ class WorkFeatureMergeTest : StringSpec({
         merged.baseDataUpdatedAt shouldBe NOW
     }
 
+    "a new rating histogram replaces the cached one, a missing one keeps it" {
+        val existing = entity(completeness = WorkFeatureCompleteness.BASIC, tagsJson = TAGS_JSON)
+            .copy(ratingHistogram = "1,1,1,1,1,1,1,1,1,1")
+        val hist = listOf(0, 0, 1, 2, 5, 9, 20, 30, 20, 13)
+
+        mergeLightweightFeature(feature().copy(ratingHistogram = hist), existing, TAGS_JSON, NOW)
+            .ratingHistogram shouldBe "0,0,1,2,5,9,20,30,20,13"
+        mergeLightweightFeature(feature(), existing, TAGS_JSON, NOW)
+            .ratingHistogram shouldBe "1,1,1,1,1,1,1,1,1,1"
+    }
+
+    "rating histogram text round-trips and rejects malformed input" {
+        val hist = listOf(0, 0, 1, 2, 5, 9, 20, 30, 20, 13)
+        decodeRatingHistogram(encodeRatingHistogram(hist)) shouldBe hist
+        encodeRatingHistogram(List(10) { 0 }) shouldBe ""
+        encodeRatingHistogram(listOf(1, 2, 3)) shouldBe ""
+        decodeRatingHistogram("") shouldBe emptyList()
+        decodeRatingHistogram("1,2,x,4,5,6,7,8,9,10") shouldBe emptyList()
+        decodeRatingHistogram("1,2,3") shouldBe emptyList()
+    }
+
     "embedded tags fill an empty cache" {
         val merged = mergeLightweightFeature(feature(), null, CHANGED_TAGS_JSON, NOW)
 

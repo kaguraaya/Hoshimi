@@ -173,6 +173,11 @@ object DatabaseModule {
 
     @Provides
     @Singleton
+    fun providePredictionSnapshotDao(db: AcgCompassDatabase): com.acgcompass.data.local.dao.PredictionSnapshotDao =
+        db.predictionSnapshotDao()
+
+    @Provides
+    @Singleton
     fun provideLocalTransactionRunner(db: AcgCompassDatabase): com.acgcompass.data.local.LocalTransactionRunner =
         com.acgcompass.data.local.RoomTransactionRunner(db)
 }

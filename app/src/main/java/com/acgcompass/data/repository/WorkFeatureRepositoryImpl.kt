@@ -8,6 +8,7 @@ import com.acgcompass.data.local.dao.WorkFeatureDao
 import com.acgcompass.data.local.entity.WorkFeatureEntity
 import com.acgcompass.data.remote.bangumi.BangumiRemoteDataSource
 import com.acgcompass.data.remote.bangumi.BangumiSubjectDto
+import com.acgcompass.data.remote.bangumi.histogram
 import com.acgcompass.data.remote.bangumi.mapBangumiMediaType
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.taste.TagCount
@@ -328,6 +329,7 @@ class WorkFeatureRepositoryImpl @Inject constructor(
             updatedAt = now,
             coverUrl = images?.large ?: images?.common,
             airDate = date?.takeIf { it.isNotBlank() },
+            ratingHistogram = encodeRatingHistogram(rating?.histogram().orEmpty()),
         )
     }
 
@@ -362,6 +364,7 @@ class WorkFeatureRepositoryImpl @Inject constructor(
             updatedAt = updatedAt,
             coverUrl = coverUrl,
             airDate = airDate,
+            ratingHistogram = decodeRatingHistogram(ratingHistogram),
         )
     }
 
@@ -433,7 +436,22 @@ internal fun mergeLightweightFeature(
         updatedAt = now,
         coverUrl = feature.coverUrl ?: existing?.coverUrl,
         airDate = feature.airDate ?: existing?.airDate,
+        ratingHistogram = encodeRatingHistogram(
+            feature.ratingHistogram,
+        ).ifEmpty { existing?.ratingHistogram.orEmpty() },
     )
+}
+
+private const val HISTOGRAM_BINS = 10
+
+/** 评分分布存成逗号分隔的 10 个数；不是 10 档或全为 0 时存空串（表示没有）。 */
+internal fun encodeRatingHistogram(bins: List<Int>): String =
+    if (bins.size == HISTOGRAM_BINS && bins.any { it > 0 }) bins.joinToString(",") else ""
+
+internal fun decodeRatingHistogram(text: String): List<Int> {
+    val parts = text.split(',')
+    val bins = parts.mapNotNull { it.trim().toIntOrNull() }
+    return if (parts.size == HISTOGRAM_BINS && bins.size == HISTOGRAM_BINS) bins else emptyList()
 }
 
 private val STABLE_NAMES = setOf(WorkFeatureCompleteness.BASIC.name, WorkFeatureCompleteness.EXTENDED.name)

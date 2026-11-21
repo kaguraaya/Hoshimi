@@ -13,6 +13,7 @@ import com.acgcompass.data.credential.SourceId
 import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.AcgCompassDatabase
 import com.acgcompass.data.local.entity.BacklogItemEntity
+import com.acgcompass.data.local.entity.PredictionSnapshotEntity
 import com.acgcompass.data.local.entity.TrashItemEntity
 import com.acgcompass.data.local.entity.WorkEntity
 import com.acgcompass.data.local.entity.WorkFeatureEntity
@@ -54,6 +55,7 @@ class BackupRoundTripTest {
             subjectId = "100", tagCountsJson = "[]", staff = emptyList(), characters = emptyList(), cv = emptyList(),
             bangumiScore = 7.5f, bangumiVotes = 300, eps = 12, durationMin = 24, platform = "TV", mediaType = "ANIME",
             titles = listOf("作品"), updatedAt = 3L, coverUrl = "https://example.com/b.jpg", airDate = "2024-04-05",
+            ratingHistogram = "1,2,3,4,5,6,7,8,9,10",
         )
         val backlog = BacklogItemEntity(
             workId = "100", priority = "HIGH", moodTags = emptyList(), riskTags = emptyList(), note = null,
@@ -67,6 +69,11 @@ class BackupRoundTripTest {
         source.workFeatureDao().upsert(feature)
         source.backlogDao().upsert(backlog)
         source.trashDao().upsert(trash)
+        val snapshot = PredictionSnapshotEntity(
+            workId = "300", modelVersion = "gate2", context = "DETAIL", createdAt = 6L, predictedRating = 7.4,
+            lowRating = 6.1, highRating = 8.6, matchScore = 71, satisfaction = 64, profileSize = 120,
+        )
+        source.predictionSnapshotDao().insertAll(listOf(snapshot))
 
         val json = (repository(source).exportBackup(includeCredentials = false) as AppResult.Success).data
         val imported = repository(target).importBackup(json)
@@ -76,6 +83,7 @@ class BackupRoundTripTest {
         assertEquals(feature, target.workFeatureDao().getById("100"))
         assertEquals(listOf(backlog), target.backlogDao().getAll())
         assertEquals(trash, target.trashDao().getById("COLLECTION:200"))
+        assertEquals(listOf(snapshot), target.predictionSnapshotDao().getAll().map { it.copy(id = 0L) })
     }
 
     private fun memoryDatabase(): AcgCompassDatabase =
@@ -94,6 +102,7 @@ class BackupRoundTripTest {
         workFeatureDao = db.workFeatureDao(),
         tagDimensionDao = db.tagDimensionDao(),
         trashDao = db.trashDao(),
+        predictionSnapshotDao = db.predictionSnapshotDao(),
         database = db,
         settingsDataStore = SettingsDataStore(context),
         credentialStore = NoCredentials,

@@ -22,6 +22,7 @@ import com.acgcompass.data.datastore.SettingsDataStore
 import com.acgcompass.data.local.AcgCompassDatabase
 import com.acgcompass.data.local.dao.BacklogDao
 import com.acgcompass.data.local.dao.ImportDao
+import com.acgcompass.data.local.dao.PredictionSnapshotDao
 import com.acgcompass.data.local.dao.RatingDao
 import com.acgcompass.data.local.dao.SnapshotDao
 import com.acgcompass.data.local.dao.SourceLinkDao
@@ -78,6 +79,7 @@ class BackupRepositoryImpl @Inject constructor(
     private val workFeatureDao: WorkFeatureDao,
     private val tagDimensionDao: TagDimensionDao,
     private val trashDao: TrashDao,
+    private val predictionSnapshotDao: PredictionSnapshotDao,
     private val database: AcgCompassDatabase,
     private val settingsDataStore: SettingsDataStore,
     private val credentialStore: CredentialStore,
@@ -132,6 +134,7 @@ class BackupRepositoryImpl @Inject constructor(
         workFeatures = workFeatureDao.getAll(limit = Int.MAX_VALUE).map { it.toBackup() },
         tagDimensions = tagDimensionDao.getAll().map { it.toBackup() },
         trashItems = trashDao.getAll().map { it.toBackup() },
+        predictionSnapshots = predictionSnapshotDao.getAll().map { it.toBackup() },
         settings = settings,
         credentials = redacted,
     )
@@ -312,6 +315,7 @@ class BackupRepositoryImpl @Inject constructor(
         workFeatureDao.upsertAll(envelope.workFeatures.map { it.toEntity() })
         tagDimensionDao.upsertAll(envelope.tagDimensions.map { it.toEntity() })
         trashDao.upsertAll(envelope.trashItems.map { it.toEntity() })
+        predictionSnapshotDao.insertAll(envelope.predictionSnapshots.map { it.toEntity() })
     }
 }
 

@@ -46,6 +46,8 @@ data class WorkFeature(
     val coverUrl: String? = null,
     /** 放送 / 发售日期（`YYYY-MM-DD`）。 */
     val airDate: String? = null,
+    /** 社区评分分布：1–10 分各档的人数（Bangumi `rating.count`）；没有时为空。 */
+    val ratingHistogram: List<Int> = emptyList(),
 ) {
     /** subject 内最大标注人数（q_xk = log(1+count)/log(1+maxTagCount) 的分母）。 */
     val maxTagCount: Int get() = tagCounts.maxOfOrNull { it.count } ?: 0
@@ -53,3 +55,15 @@ data class WorkFeature(
     /** 是否有可用于画像/评分的有效特征（至少有标签或评分）。 */
     val hasSignal: Boolean get() = tagCounts.isNotEmpty() || (bangumiScore ?: 0f) > 0f
 }
+
+/** 社区评分的标准差（口碑两极还是一致），由 [WorkFeature.ratingHistogram] 算出；人数太少或没有分布时为 null。 */
+fun WorkFeature.communityStd(): Double? {
+    val total = ratingHistogram.sum()
+    if (ratingHistogram.size != HISTOGRAM_BINS || total < MIN_HISTOGRAM_VOTES) return null
+    val mean = ratingHistogram.withIndex().sumOf { (i, n) -> (i + 1) * n.toDouble() } / total
+    val variance = ratingHistogram.withIndex().sumOf { (i, n) -> n * (i + 1 - mean) * (i + 1 - mean) } / total
+    return kotlin.math.sqrt(variance)
+}
+
+private const val HISTOGRAM_BINS = 10
+private const val MIN_HISTOGRAM_VOTES = 20
