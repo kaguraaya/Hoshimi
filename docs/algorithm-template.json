@@ -40,9 +40,9 @@
         }
     },
     "verdict": {
-        "likelyLove": 84,
+        "likelyLove": 85,
         "likelyGood": 72,
-        "average": 60,
+        "average": 55,
         "passLine": 6.0
     },
     "analogy": {

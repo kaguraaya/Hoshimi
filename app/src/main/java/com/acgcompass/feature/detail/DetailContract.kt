@@ -3,6 +3,7 @@ package com.acgcompass.feature.detail
 import com.acgcompass.domain.model.RatingAggregate
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.visualnovel.VisualNovelDetail
+import kotlin.math.roundToInt
 
 /**
  * 作品详情页（Detail_Screen）的 UI 契约。
@@ -191,6 +192,8 @@ data class RatingPredictionUi(
     val factors: List<TasteMatchReasonUi>,
     /** 预测区间（「大概率在 6.8–8.9 分之间」）；模型不给区间时为 null。 */
     val intervalText: String? = null,
+    /** 「打 9 分以上的可能约 25%」；模型不给时为 null。 */
+    val highChanceText: String? = null,
 )
 
 /** 由领域预测结果生成展示模型（详情页 / 探索卡片 / 今晚看什么共用同一口径的文案）。 */
@@ -227,8 +230,28 @@ fun com.acgcompass.domain.taste.RatingPrediction.toUi(): RatingPredictionUi {
             )
         },
         intervalText = intervalLabel(),
+        highChanceText = highChanceLabel(),
     )
 }
+
+/**
+ * 「打 9 分以上的可能约 xx%」：按 5% 取整；公开数据上最高一档偏乐观，60% 以上统一写「60% 以上」。
+ */
+private fun com.acgcompass.domain.taste.RatingPrediction.highChanceLabel(): String? {
+    val chance = highChance ?: return null
+    val percent = (chance * PERCENT / CHANCE_STEP).roundToInt() * CHANCE_STEP
+    return if (percent >= CHANCE_CAP) {
+        "打 9 分以上的可能在 $CHANCE_CAP% 以上"
+    } else {
+        "打 9 分以上的可能约 ${percent.coerceAtLeast(
+            CHANCE_STEP,
+        )}%"
+    }
+}
+
+private const val PERCENT = 100.0
+private const val CHANCE_STEP = 5
+private const val CHANCE_CAP = 60
 
 /** 预测区间的一行说明；模型不给区间时为 null。 */
 private fun com.acgcompass.domain.taste.RatingPrediction.intervalLabel(): String? =
@@ -264,6 +287,8 @@ sealed interface TasteMatchUiModel {
         val rankPercent: Int? = null,
         /** 预测区间很宽、这次判断把握不大（补番优先级不会因此判「高」）。 */
         val uncertain: Boolean = false,
+        /** 已评分作品的回测说明（回测匹配度、回测预计评分、你的评分）；未评分作品为 null。 */
+        val backtestText: String? = null,
     ) : TasteMatchUiModel
 
     /** 尚未生成口味画像，或样本/标签不足以计算匹配度（[message] 说明具体原因，不伪造）。 */

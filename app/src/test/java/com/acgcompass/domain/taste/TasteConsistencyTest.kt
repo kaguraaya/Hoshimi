@@ -11,7 +11,8 @@ import kotlin.random.Random
  *   详情页用完整打分；两者的预计评分、区间、匹配度、个人分位必须一致；
  * - 兴趣信号（收藏状态、探索滑动）只进十二维画像，不改变预计评分（口味匹配度里的题材画像分会受它影响）；
  * - 画像里的对照模型（预测账本用）和单独用旧配置建的模型给出同样的预测；
- * - 口味匹配度的三个分支给出不同的分，口碑权重越高越贴近社区分；已评分作品直接是你打的分 ×10。
+ * - 口味匹配度的三个分支给出不同的分，口碑权重越高越贴近社区分；已评分作品和未评分作品用同一个公式，
+ *   详情页显示的回测值来自 [TasteBacktest]（建画像时不知道这部作品），不是评分 ×10。
  */
 class TasteConsistencyTest : StringSpec({
     val tags = listOf("日常", "校园", "悬疑", "后宫", "科幻", "运动", "奇幻", "治愈")
@@ -108,11 +109,36 @@ class TasteConsistencyTest : StringSpec({
         (median in 40..65) shouldBe true
     }
 
-    "a rated work shows the rating ×10" {
+    "a rated work is scored by the match formula, and the backtest scores every rated work without it" {
         val profile = build(samples, 100_000L, pool, divergenceOptions = gated)
         val rated = samples.first()
-        compute(rated.feature, profile, rated.rating, withNeighbors = false, withReasons = false).score shouldBe
-            (rated.rating!! * 10).coerceIn(5, 97)
+        val r = compute(rated.feature, profile, rated.rating, withNeighbors = false, withReasons = false)
+        r.score shouldBe TasteFit.score(TasteFit.components(r)!!, profile.tasteFit!!, profile.matchBranch)
+        val backtest = TasteBacktest.run(
+            TasteBuildInputs(samples, 100_000L, pool, emptyMap(), emptyList(), gated),
+        )
+        backtest.entries.size shouldBe samples.size
+        backtest.entries.values.all { e ->
+            TasteMatchBranch.entries.all {
+                e.match(it) != null
+            } && e.predicted != null
+        } shouldBe true
+        backtest.coupling(TasteMatchBranch.STANDARD) shouldNotBe null
+    }
+
+    "the chance of a 9 or 10 rises with the predicted rating and stays a probability" {
+        val profile = build(samples, 100_000L, pool, divergenceOptions = gated)
+        val predictions = candidates.mapNotNull {
+            compute(
+                it,
+                profile,
+                withNeighbors = false,
+                withReasons = false,
+            ).prediction
+        }
+            .sortedBy { it.rating }
+        predictions.all { (it.highChance ?: -1.0) in 0.0..1.0 } shouldBe true
+        (predictions.last().highChance!! > predictions.first().highChance!!) shouldBe true
     }
 
     "the legacy model keeps the old match formula" {

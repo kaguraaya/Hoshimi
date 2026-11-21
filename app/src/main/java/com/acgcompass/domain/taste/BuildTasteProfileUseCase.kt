@@ -64,7 +64,15 @@ class BuildTasteProfileUseCase @Inject constructor() {
         communityVotePrior: Double = PersonalDivergenceModel.COMMUNITY_VOTE_PRIOR,
         divergenceOptions: DivergenceOptions = DivergenceOptions.LEGACY,
         shadowOptions: DivergenceOptions? = null,
+        /** 各阶段耗时（阶段名, 毫秒），用来排查手机上建画像慢在哪一步；不需要时不传。 */
+        onPhase: ((String, Long) -> Unit)? = null,
     ): AdvancedTasteProfile {
+        var phaseStart = System.nanoTime()
+        fun phase(name: String) {
+            val t = System.nanoTime()
+            onPhase?.invoke(name, (t - phaseStart) / NANOS_PER_MS)
+            phaseStart = t
+        }
         val rated = samples.filter { it.rating != null }
         if (rated.isEmpty()) {
             return AdvancedTasteProfile(generatedAt = now)
@@ -184,8 +192,21 @@ class BuildTasteProfileUseCase @Inject constructor() {
             time = timeCovered.toDouble() / n,
         )
 
+        phase("十二维画像")
         // 主模型和对照模型共用一份标签逆文档频率（算一次要扫整个校准池）。
         val tagIdf = PersonalDivergenceModel.tagIdf(rated, calibrationPool, tagOverrides)
+        val divergence = PersonalDivergenceModel.fit(
+            rated,
+            calibrationPool,
+            tagOverrides,
+            communityVotePrior,
+            divergenceOptions,
+            tagIdf,
+        )
+        val shadow = shadowOptions?.takeIf { it != divergenceOptions }?.let {
+            PersonalDivergenceModel.fit(rated, calibrationPool, tagOverrides, communityVotePrior, it, tagIdf)
+        }
+        phase("评分模型")
         val profile = AdvancedTasteProfile(
             categories = categories,
             combos = combos,
@@ -194,17 +215,8 @@ class BuildTasteProfileUseCase @Inject constructor() {
             coverage = coverage,
             sampleCount = n,
             userAvgRating = rated.mapNotNull { it.rating }.average(),
-            divergence = PersonalDivergenceModel.fit(
-                rated,
-                calibrationPool,
-                tagOverrides,
-                communityVotePrior,
-                divergenceOptions,
-                tagIdf,
-            ),
-            shadowDivergence = shadowOptions?.takeIf { it != divergenceOptions }?.let {
-                PersonalDivergenceModel.fit(rated, calibrationPool, tagOverrides, communityVotePrior, it, tagIdf)
-            },
+            divergence = divergence,
+            shadowDivergence = shadow,
             generatedAt = now,
         )
         val circle = if (profile.divergence?.includesAnalogy == true) {
@@ -212,8 +224,12 @@ class BuildTasteProfileUseCase @Inject constructor() {
         } else {
             null
         }
+        phase("圈子分")
         val withCircle = profile.copy(circle = circle)
-        return withCircle.copy(tasteFit = TasteFit.scaleFor(withCircle, calibrationPool, tagOverrides))
+        val ratedFeatures = rated.map { it.feature }
+        val fit = TasteFit.scaleFor(withCircle, calibrationPool, tagOverrides, ratedFeatures)
+        phase("匹配度刻度")
+        return withCircle.copy(tasteFit = fit)
     }
 
     /**
@@ -414,6 +430,8 @@ class BuildTasteProfileUseCase @Inject constructor() {
     }
 
     private companion object {
+        private const val NANOS_PER_MS = 1_000_000L
+
         const val MILLIS_PER_DAY: Double = 24.0 * 3600 * 1000
 
         /** 候选池校准最小样本数：池 ≥ 此值才用其 rawZ 分布定 μ/τ，否则回退训练样本留一 z。 */

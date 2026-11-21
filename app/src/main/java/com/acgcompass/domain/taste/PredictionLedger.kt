@@ -20,6 +20,17 @@ object TasteModelVersion {
         if (options.recencyHalfLifeDays > 0.0) append("-r")
         if (options.controversyAxis) append("-c")
     }
+
+    /** 匹配度部分的版本：刻度方法 + 分支（`fit3` = 锚定刻度、圈子分封顶；没有匹配度模型时是旧公式）。 */
+    fun match(profile: AdvancedTasteProfile): String =
+        (if (profile.tasteFit != null) "fit3-" else "formula-") + profile.matchBranch.key
+
+    /**
+     * 预测账本里的完整版本：评分模型、匹配度刻度、分支分开写（`gate2|fit3-standard`），换了其中任何一个，
+     * 新旧记录都能分开对账。[model] 默认是画像的主评分模型；记对照模型时传对照模型。
+     */
+    fun ledger(profile: AdvancedTasteProfile, model: PersonalDivergenceModel? = profile.divergence): String? =
+        model?.let { "${it.modelVersion}|${match(profile)}" }
 }
 
 /** 一条有了实际评分的事前预测。 */

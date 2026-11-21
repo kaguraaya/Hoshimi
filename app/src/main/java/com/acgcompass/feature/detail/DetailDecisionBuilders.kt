@@ -280,10 +280,12 @@ internal val personalTasteScorer = PersonalTasteScorer()
  * 几个大类标签；低置信（样本少）与已评分时补充说明（绝不伪造）。
  */
 internal fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
-    val fraction = (score / 100f).coerceIn(0f, 1f)
-    // 已评分作品没有预计评分：主分数就是你打的分换算来的，措辞按主分数走（传及格线即不触发「不合口味」）。
-    val predicted = prediction?.rating ?: TasteVerdict.PASS_LINE.takeIf { isRated && fromRatingModel }
-    val qualitative = TasteVerdict.of(score, predicted, uncertain = !isRated && prediction?.isUncertain == true)
+    // 已评分作品优先显示回测匹配度（建画像时不知道这部作品），回测还没算完时先显示当前画像下的分。
+    val shown = backtest?.match?.takeIf { isRated } ?: score
+    val fraction = (shown / 100f).coerceIn(0f, 1f)
+    val predicted = (if (isRated) backtest?.predicted else prediction?.rating)
+        ?: TasteVerdict.PASS_LINE.takeIf { isRated && fromRatingModel }
+    val qualitative = TasteVerdict.of(shown, predicted, uncertain = !isRated && prediction?.isUncertain == true)
     val lowConf = confidence < 0.4
     // 逐条呈现分维度贡献（含声优 / staff / 来源等，不再只压成一行），正/负向分色；取贡献绝对值最大的前几项。
     val reasonUis = reasons
@@ -291,7 +293,6 @@ internal fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         .take(4)
         .map { TasteMatchReasonUi(text = it.label, positive = it.contribution >= 0.0) }
     val reasonCore = matchReasonCore(predicted, reasonUis)
-    val ratedNote = if (isRated) "；你给这部评过分，已据此校准" else ""
     // 置信度独立成文案（不再塞进理由长句）。
     val confidenceText = when {
         confidence < 0.4 -> "置信度偏低（样本较少，仅供参考）"
@@ -299,16 +300,17 @@ internal fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         else -> "置信度较高"
     }
     return TasteMatchUiModel.Available(
-        percentText = "$score%",
+        percentText = "$shown%",
         qualitativeText = if (lowConf) "$qualitative（低置信）" else qualitative,
         fraction = fraction,
-        reason = "$reasonCore$ratedNote",
+        reason = reasonCore,
         reasons = reasonUis,
         confidenceText = confidenceText,
-        // 已评分作品不展示预测（你已经给出了答案）。
+        // 已评分作品不展示预测块（你已经给出了答案），回测值单独一行。
         prediction = prediction?.takeIf { !isRated }?.toUi(),
         rankPercent = satisfaction.takeIf { fromRatingModel },
         uncertain = !isRated && prediction?.isUncertain == true,
+        backtestText = if (isRated && fromRatingModel) backtestLine() else null,
     )
 }
 
@@ -325,7 +327,8 @@ private val TasteMatchResult.circleText: String
     }
 
 /**
- * 匹配度的说明文字：按人权重的模型说预计评分、区间、大众基线和主要依据；旧公式说类比与题材；没有评分模型时说画像。
+ * 匹配度的说明文字：说清匹配度看什么、和预计评分是两回事；按人权重的模型再说预计评分、区间和主要依据；
+ * 旧公式说类比与题材；没有评分模型时说画像。
  */
 private fun TasteMatchResult.matchReasonCore(predicted: Double?, reasonUis: List<TasteMatchReasonUi>): String {
     val gated = prediction?.takeIf { it.low != null && it.high != null && !isRated }
@@ -339,10 +342,12 @@ private fun TasteMatchResult.matchReasonCore(predicted: Double?, reasonUis: List
                 .joinToString("、") { "${it.label} ${"%+.1f".format(it.delta)}" }
             val basisText =
                 if (mainBasis.isNotEmpty()) "大众基线 ${"%.1f".format(gated.baseline)} 分，主要依据：$mainBasis。" else ""
-            "匹配度看是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像，再加上口碑。" +
-                analogyText + "口碑估计你会打 ${"%.1f".format(gated.rating)} 分（大概率在 ${"%.1f".format(gated.low)}–" +
-                "${"%.1f".format(gated.high)} 分之间）。" + basisText + tail
+            "匹配度看的是这部对你口味有多契合：是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像。" +
+                "它和下面的预计评分是两回事——预计评分是你看完大概会打几分。" + analogyText +
+                gapNote(gated.rating, gated.userMean) + basisText + tail
         }
+        isRated && fromRatingModel ->
+            "匹配度看的是这部对你口味有多契合：是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像。$tail"
         predicted != null -> {
             // 把百分数的含义说出来：以相似作品类比为主，再参考评分和题材相似度。
             val basis = if (isRated) "你的评分" else "预计评分"

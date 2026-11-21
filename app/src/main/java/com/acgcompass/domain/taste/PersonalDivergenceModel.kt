@@ -1,6 +1,7 @@
 package com.acgcompass.domain.taste
 
 import com.acgcompass.domain.recommend.RecommendSimilarity
+import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.roundToInt
@@ -44,6 +45,11 @@ data class RatingPrediction(
     /** 预测区间（10 分制）：按人权重的模型才有，名义覆盖率见 [DivergenceOptions.intervalCoverage]。 */
     val low: Double? = null,
     val high: Double? = null,
+    /**
+     * 打 9 分以上的可能性（0–1）：按人权重的模型才有。由预计评分在你自己尺度上的位置、你打 9 分以上的比例和
+     * 区间宽度换算（公开数据上拟合、在另一半用户上检验：整体校准误差约 1.6%，最高一档偏乐观，界面上封顶显示）。
+     */
+    val highChance: Double? = null,
 ) {
     /** 预计评分比社区评分高 / 低多少；没有社区评分时为 `null`。 */
     val vsCommunity: Double? get() = community?.let { rating - it }
@@ -261,7 +267,22 @@ class PersonalDivergenceModel private constructor(
                 .take(MAX_FACTORS),
             low = (rating - half).coerceIn(MIN_RATING, MAX_RATING),
             high = (rating + half).coerceIn(MIN_RATING, MAX_RATING),
+            highChance = highChance(
+                rating,
+                (rating + half).coerceIn(MIN_RATING, MAX_RATING) -
+                    (rating - half).coerceIn(MIN_RATING, MAX_RATING),
+            ),
         )
+    }
+
+    /** 打 9 分以上的可能性：逻辑回归 `σ(b + a·位置 + c·log(你的 9 分以上比例) + d·区间宽度)`。 */
+    private fun highChance(rating: Double, width: Double): Double {
+        val n = sortedRatings.size
+        val high = sortedRatings.count { it >= HIGH_RATING }
+        val position = (rating - meanRating) / ratingStd.coerceAtLeast(HIGH_STD_FLOOR)
+        val baseRate = ln((high + HALF) / (n - high + HALF))
+        val logit = HIGH_INTERCEPT + HIGH_POSITION * position + HIGH_BASE_RATE * baseRate + HIGH_WIDTH * width
+        return 1.0 / (1.0 + exp(-logit))
     }
 
     /** 证据越少区间越宽：没有可用标签、没有社区分、社区评分人数很少时放宽。 */
@@ -375,6 +396,15 @@ class PersonalDivergenceModel private constructor(
 
         private const val DAY_MS = 86_400_000.0
         private const val RECENCY_FLOOR = 0.5
+
+        // 「打 9 分以上的可能性」的系数：Bangumi15M 时间评测集偶数用户拟合，奇数用户检验（AUC 0.84，校准误差 1.6%）。
+        private const val HIGH_RATING = 9.0
+        private const val HIGH_STD_FLOOR = 0.5
+        private const val HALF = 0.5
+        private const val HIGH_INTERCEPT = -0.946
+        private const val HIGH_POSITION = 2.058
+        private const val HIGH_BASE_RATE = 0.863
+        private const val HIGH_WIDTH = -0.071
 
         /**
          * 社区分按评分人数向全站均分收缩：`(人数·社区分 + K·均分)/(人数 + K)`，K = 10。
