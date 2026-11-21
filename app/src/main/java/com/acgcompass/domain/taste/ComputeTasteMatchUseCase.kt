@@ -61,6 +61,8 @@ data class TasteMatchResult(
     val modelSamples: Int = 0,
     /** 换算成百分比之前的原始匹配分（[HeadlineFormula.z]）；没有评分模型时为 null。 */
     val headlineZ: Double? = null,
+    /** 圈子分（[TasteCircle.z]）：是不是你常看的那类；没有圈子模型时为 null。 */
+    val circleZ: Double? = null,
 ) {
     /** 正向理由（真正「命中你口味」的维度）；负向贡献项不应被展示成「命中」。 */
     val positiveReasons: List<TasteReason> get() = reasons.filter { it.contribution > 0.0 }
@@ -93,7 +95,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
      * @param userRating 若用户已给该作品评分则传入（触发已评分偏置）；否则回退到画像内记录的评分。
      * @param tagOverrides AI 升维分类缓存，仅覆盖本地暂归为题材的未知标签；空表使用本地规则。
      */
-    @Suppress("LongParameterList") // 后两个是批量 / 排名场景的开关，都有默认值
+    @Suppress("LongParameterList", "LongMethod") // 后两个是批量 / 排名场景的开关；结果字段逐个列出，拆开反而难核对
     operator fun invoke(
         feature: WorkFeature,
         profile: AdvancedTasteProfile,
@@ -168,6 +170,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             familiarity = familiarity,
             communityScore10 = feature.bangumiScore?.toDouble()?.takeIf { it > 0.0 },
             communityVotes = feature.bangumiVotes,
+            circleZ = profile.circle?.z(feature),
         ).withHeadline(profile, rating?.toDouble() ?: prediction?.rating)
     }
 
@@ -343,16 +346,32 @@ private fun predictWithAnalogy(
 ): Pair<RatingPrediction?, TasteAnalogy?> {
     if (model == null) return null to null
     val analogy = model.analogy(feature)
-    return model.predict(feature).withAnalogy(analogy, model.ratingStd) to analogy
+    // 按人权重的模型已经把类比当成预测的一部分，这里不另外修正。
+    val prediction = model.predict(feature)
+    return (if (model.includesAnalogy) prediction else prediction.withAnalogy(analogy, model.ratingStd)) to analogy
 }
+
+/** 旧公式里你打分的标准差下限，避免打分很集中的人换算出过大的标准分。 */
+private const val HEADLINE_MIN_STD = 0.6
 
 /** 有评分模型时按所选分支的公式出主分数；否则保持画像匹配分。 */
 private fun TasteMatchResult.withHeadline(profile: AdvancedTasteProfile, basisRating: Double?): TasteMatchResult {
     val model = profile.divergence
     if (model == null || basisRating == null || !fromRatingModel) return this
-    val ratingZ = (basisRating - model.meanRating) / model.ratingStd.coerceAtLeast(HEADLINE_MIN_STD)
-    val z = profile.headlineFormula.z(ratingZ, analogy?.z, tasteSimilarity)
-    return copy(score = profile.headlineFormula.score(z), modelSamples = model.examples.size, headlineZ = z)
+    val fit = profile.tasteFit
+    val fitComponents = if (fit != null && !isRated) TasteFit.components(this) else null
+    return when {
+        // 口味匹配度：圈子 + 类比 + 题材相似 + 口碑（[TasteFit]），分支决定口碑占多少、刻度多松。
+        fit != null && fitComponents != null -> {
+            val z = TasteFit.z(fitComponents, fit, profile.matchBranch)
+            copy(score = TasteFit.score(z, profile.matchBranch), modelSamples = model.examples.size, headlineZ = z)
+        }
+        // 已评分作品：直接是你打的分 ×10。
+        fit != null -> copy(score = TasteFit.ratedScore(basisRating), modelSamples = model.examples.size)
+        else -> {
+            val std = model.ratingStd.coerceAtLeast(HEADLINE_MIN_STD)
+            val z = profile.headlineFormula.z((basisRating - model.meanRating) / std, analogy?.z, tasteSimilarity)
+            copy(score = profile.headlineFormula.score(z), modelSamples = model.examples.size, headlineZ = z)
+        }
+    }
 }
-
-private const val HEADLINE_MIN_STD = 0.6

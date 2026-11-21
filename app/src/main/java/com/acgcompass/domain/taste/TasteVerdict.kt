@@ -25,8 +25,14 @@ object TasteVerdict {
     /**
      * @param likeability 主分数（0–100）。有预计评分时见 [ComputeTasteMatchUseCase.headlineScore]；没有时是 12 维画像匹配分。
      * @param predictedRating 预计评分；评分太少建不了模型时为 null。
+     * @param uncertain 预测区间很宽（[RatingPrediction.isUncertain]）：结论后面注明「信息不足」。
      */
-    fun of(likeability: Int, predictedRating: Double?): String {
+    fun of(likeability: Int, predictedRating: Double?, uncertain: Boolean = false): String {
+        val verdict = base(likeability, predictedRating)
+        return if (uncertain && predictedRating != null) "$verdict（信息不足，仅供参考）" else verdict
+    }
+
+    private fun base(likeability: Int, predictedRating: Double?): String {
         if (predictedRating == null) {
             return when {
                 likeability >= LEGACY_HIGH -> "与口味画像高度匹配"

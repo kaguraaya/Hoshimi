@@ -62,6 +62,8 @@ class BuildTasteProfileUseCase @Inject constructor() {
         prefSlope: Double = TasteScoringParams.PREF_SLOPE,
         implicitSignals: List<ImplicitSignal> = emptyList(),
         communityVotePrior: Double = PersonalDivergenceModel.COMMUNITY_VOTE_PRIOR,
+        divergenceOptions: DivergenceOptions = DivergenceOptions.LEGACY,
+        shadowOptions: DivergenceOptions? = null,
     ): AdvancedTasteProfile {
         val rated = samples.filter { it.rating != null }
         if (rated.isEmpty()) {
@@ -182,7 +184,9 @@ class BuildTasteProfileUseCase @Inject constructor() {
             time = timeCovered.toDouble() / n,
         )
 
-        return AdvancedTasteProfile(
+        // 主模型和对照模型共用一份标签逆文档频率（算一次要扫整个校准池）。
+        val tagIdf = PersonalDivergenceModel.tagIdf(rated, calibrationPool, tagOverrides)
+        val profile = AdvancedTasteProfile(
             categories = categories,
             combos = combos,
             ratedSubjectScores = rated.mapNotNull { s -> s.rating?.let { s.subjectId to it } }.toMap(),
@@ -190,9 +194,26 @@ class BuildTasteProfileUseCase @Inject constructor() {
             coverage = coverage,
             sampleCount = n,
             userAvgRating = rated.mapNotNull { it.rating }.average(),
-            divergence = PersonalDivergenceModel.fit(rated, calibrationPool, tagOverrides, communityVotePrior),
+            divergence = PersonalDivergenceModel.fit(
+                rated,
+                calibrationPool,
+                tagOverrides,
+                communityVotePrior,
+                divergenceOptions,
+                tagIdf,
+            ),
+            shadowDivergence = shadowOptions?.takeIf { it != divergenceOptions }?.let {
+                PersonalDivergenceModel.fit(rated, calibrationPool, tagOverrides, communityVotePrior, it, tagIdf)
+            },
             generatedAt = now,
         )
+        val circle = if (profile.divergence?.includesAnalogy == true) {
+            TasteCircle.fromCollection(rated, implicitSignals, calibrationPool)
+        } else {
+            null
+        }
+        val withCircle = profile.copy(circle = circle)
+        return withCircle.copy(tasteFit = TasteFit.scaleFor(withCircle, calibrationPool, tagOverrides))
     }
 
     /**

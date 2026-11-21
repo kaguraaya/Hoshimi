@@ -74,7 +74,11 @@ internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = f
         meta = parts.joinToString(" · "),
         tastePercent = score?.let { "$it%" } ?: "—",
         tasteFraction = (score ?: 0) / 100f,
-        tasteQualitative = if (score == null) "探索推荐" else TasteVerdict.of(score, match.prediction?.rating),
+        tasteQualitative = if (score == null) {
+            "探索推荐"
+        } else {
+            TasteVerdict.of(score, match.prediction?.rating, match.prediction?.isUncertain == true)
+        },
         reason = reason,
         tags = tags.take(5).map { it.name },
         synopsis = summary?.trim()?.takeIf { it.isNotBlank() },

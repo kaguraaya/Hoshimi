@@ -52,4 +52,44 @@ class TasteSelfCheckTest : StringSpec({
         report.quality.tagCoverage shouldBe 1.0
         report.quality.lowVoteShare shouldBe (0.1 plusOrMinus 1e-9)
     }
+
+    "heresy compares your ratings with the community" {
+        val heresy = TasteSelfCheck.quality(samples(40), emptyList()).heresy.shouldNotBeNull()
+        heresy.count shouldBe 40
+        heresy.correlation shouldBeGreaterThan 0.5
+        heresy.meanAbsDiff shouldBeGreaterThan 0.0
+    }
+
+    "no low-vote works means no sample, not zero" {
+        val popular = samples(40).map { it.copy(feature = it.feature.copy(bangumiVotes = 3000)) }
+        TasteSelfCheck.run(popular, emptyList(), now = 1L).accuracy.shouldNotBeNull().lowVoteOverrated.shouldBeNull()
+    }
+
+    "folds cover every rated work exactly once as held-out" {
+        val folds = TasteSelfCheck.folds(samples(23), folds = 5, seed = 3)
+        folds.flatMap { f -> f.test.map { it.subjectId } }.sorted() shouldBe samples(23).map { it.subjectId }.sorted()
+        folds.forEach { f ->
+            (
+                f.train.map {
+                    it.subjectId
+                }.toSet() intersect f.test.map { it.subjectId }.toSet()
+                ) shouldBe emptySet()
+        }
+    }
+
+    "gated model reports an interval and a paired comparison with confidence bounds" {
+        val comparison = TasteSelfCheck.compare(
+            samples(80),
+            emptyList(),
+            now = 1L,
+            base = DivergenceOptions.LEGACY,
+            other = DivergenceOptions(perUserGate = true),
+        )
+        comparison.paired shouldBe 80
+        comparison.base.shouldNotBeNull().intervalCoverage.shouldBeNull()
+        val other = comparison.other.shouldNotBeNull()
+        other.intervalCoverage.shouldNotBeNull()
+        val mae = comparison.maeDiff.shouldNotBeNull()
+        (mae.low <= mae.estimate && mae.estimate <= mae.high) shouldBe true
+    }
 })

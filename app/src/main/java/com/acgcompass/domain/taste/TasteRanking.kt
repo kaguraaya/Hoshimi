@@ -83,6 +83,9 @@ interface TasteRankingRepository {
 
     /** 按 Bangumi 排行从上次补到的位置往后取 [target] 部存进作品库（资料随结果一起存）。已在进行时忽略。 */
     fun startExpansion(target: Int)
+
+    /** 口味画像换了（重建完成、换了匹配度分支）时发一次：页面开着就跟着重算，不用等下次打开。 */
+    val profileChanges: kotlinx.coroutines.flow.Flow<Unit>
 }
 
 /** 作品库现状。 */
@@ -97,3 +100,36 @@ data class PoolExpansion(
     val added: Int? = null,
     val failed: Boolean = false,
 )
+
+/**
+ * 排行里折叠同一系列用的键：去掉开头的「剧场版」类前缀、括号 / 冒号后的副标题和「第 2 シリーズ」这类季数，
+ * 中日文标题取空格前的系列名（至少 4 个字），再去掉季数和紧贴在末尾的序号（[RecommendSimilarity.franchiseKey]）。
+ * 例：「剧场版 魔法少女小圆 [前篇]」「魔法少女小圆」、「3月のライオン 第2シリーズ」「3月のライオン」、
+ * 「響け！ユーフォニアム2」「響け！ユーフォニアム」、「攻殻機動隊 S.A.C. 2nd GIG」「攻殻機動隊 STAND ALONE COMPLEX」各是同一个键。
+ */
+fun rankFoldKey(title: String): String {
+    var t = title.trim()
+    for (prefix in FOLD_PREFIXES) if (t.startsWith(prefix)) t = t.removePrefix(prefix).trim()
+    val cut = t.indexOfAny(FOLD_CUTS).takeIf { it >= MIN_CUT } ?: t.length
+    t = t.substring(0, cut).replace(SERIES_PATTERN, " ").trim()
+    val head = t.substringBefore(' ')
+    if (head != t && isSeriesHead(head)) t = head
+    val key = com.acgcompass.domain.recommend.RecommendSimilarity.franchiseKey(t)
+    return key.replace(ATTACHED_ORDINAL, "").trim().ifBlank { key }
+}
+
+/** 中日文的系列名（至少 [MIN_HEAD] 个字，含汉字或假名）才按空格前的部分折叠；英文开头词太常见，不这样折。 */
+private fun isSeriesHead(head: String): Boolean =
+    head.length >= MIN_HEAD && head.any { Character.isIdeographic(it.code) || it in '\u3040'..'\u30ff' }
+
+/** 同一系列只留排得最靠前的一部（列表已按匹配度从高到低排好）。 */
+fun List<TasteRankItem>.foldFranchises(): List<TasteRankItem> =
+    distinctBy { item -> rankFoldKey(item.title).takeIf { it.length >= MIN_FOLD_KEY } ?: "#${item.subjectId}" }
+
+private val FOLD_PREFIXES = listOf("剧场版", "劇場版", "电影", "映画", "劇場版総集編")
+private val FOLD_CUTS = charArrayOf('[', '【', '（', '(', '：', ':', '～', '~', '「')
+private const val MIN_FOLD_KEY = 2
+private const val MIN_CUT = 3
+private const val MIN_HEAD = 4
+private val SERIES_PATTERN = Regex("第\\s*[0-9一二三四五六七八九十]+\\s*(シリーズ|期|季|部|章|クール|シーズン)")
+private val ATTACHED_ORDINAL = Regex("(?<=[^\\d\\s])\\d{1,2}$")

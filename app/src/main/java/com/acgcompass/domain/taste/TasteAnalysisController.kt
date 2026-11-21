@@ -27,6 +27,9 @@ interface TasteAnalysisController {
 
     suspend fun rebuildFromCache()
 
+    /** 把用户此刻看到的预测记进预测账本（只写本地、不联网；失败不影响调用方）。 */
+    suspend fun recordPredictions(context: PredictionContext, subjectIds: Collection<String>) = Unit
+
     suspend fun score(subjectId: String, userRating: Int?, allowNetwork: Boolean): TasteMatchResult?
 
     /** [fallback]：取不到 Bangumi 特征时用来出分的临时特征（作品自己的标签与评分）。 */

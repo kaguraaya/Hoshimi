@@ -62,6 +62,12 @@ data class AdvancedTasteProfile(
     val userAvgRating: Double = 0.0,
     /** 个人分歧模型（预测评分 + 分歧归因）；带社区分的已评分作品不足时为 `null`。 */
     val divergence: PersonalDivergenceModel? = null,
+    /** 对照用的另一版预计评分模型：只往预测账本里记一份对照，不参与任何展示。 */
+    val shadowDivergence: PersonalDivergenceModel? = null,
+    /** 圈子分：你常看的是哪类作品（[TasteCircle]）；按人权重的模型才有。 */
+    val circle: TasteCircle? = null,
+    /** 口味匹配度各部分在作品库上的分布；按人权重的模型才有，见 [TasteFit]。 */
+    val tasteFit: TasteFitScale? = null,
     /** 口味匹配度用的分支（设置里选）与它的公式。 */
     val matchBranch: TasteMatchBranch = TasteMatchBranch.STANDARD,
     val headlineFormula: HeadlineFormula = TasteAlgorithmConfig.DEFAULT.formula(TasteMatchBranch.STANDARD),

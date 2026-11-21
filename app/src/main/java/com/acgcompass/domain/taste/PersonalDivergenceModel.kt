@@ -2,11 +2,18 @@ package com.acgcompass.domain.taste
 
 import com.acgcompass.domain.recommend.RecommendSimilarity
 import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /** 一条分歧归因：某个因素让预计评分比「大众水准」高 / 低了多少分（10 分制）。 */
 data class DivergenceFactor(val label: String, val delta: Double)
+
+/** 标签的逆文档频率（越常见的标签区分度越低）；[defaultIdf] 给校准池里没出现过的标签。 */
+class TagIdf(val idf: Map<String, Double>, val defaultIdf: Double)
+
+/** 预测区间宽到这个程度（10 分制）就算把握不大。 */
+const val UNCERTAIN_WIDTH: Double = 3.0
 
 /** 一部你评过分的作品，连同它相对大众基线的分歧；[similarity] 仅在「相似作品」查询里有意义。 */
 data class RatedExample(
@@ -34,9 +41,18 @@ data class RatingPrediction(
     /** 你的平均分与评分标准差：判断「这个预计评分对你来说算高还是低」的参照。 */
     val userMean: Double = 0.0,
     val userStd: Double = 1.0,
+    /** 预测区间（10 分制）：按人权重的模型才有，名义覆盖率见 [DivergenceOptions.intervalCoverage]。 */
+    val low: Double? = null,
+    val high: Double? = null,
 ) {
     /** 预计评分比社区评分高 / 低多少；没有社区评分时为 `null`。 */
     val vsCommunity: Double? get() = community?.let { rating - it }
+
+    /** 预测区间宽度（分）；没有区间时为 `null`。 */
+    val intervalWidth: Double? get() = if (low != null && high != null) high - low else null
+
+    /** 区间太宽：这次判断把握不大，措辞上要说「信息不足」。 */
+    val isUncertain: Boolean get() = (intervalWidth ?: 0.0) >= UNCERTAIN_WIDTH
 
     /** 其中有多少只是打分习惯（你整体比社区宽松 / 严格）造成的：大众基线 − 社区评分。 */
     val habitOffset: Double? get() = community?.let { baseline - it }
@@ -70,7 +86,8 @@ data class RatingPrediction(
  *
  * 纯 Kotlin、无 Android / IO 依赖；由 [fit] 从已评分样本拟合，结果是不可变值对象。
  */
-@Suppress("LongParameterList") // 私有构造：只由 fit 组装的不可变拟合结果。
+// 私有构造：只由 fit 组装的不可变拟合结果；拟合、预测、类比、归因和区间是同一个模型的几面，拆开要来回传内部状态。
+@Suppress("LongParameterList", "TooManyFunctions")
 class PersonalDivergenceModel private constructor(
     val meanRating: Double,
     val meanCommunity: Double,
@@ -96,7 +113,20 @@ class PersonalDivergenceModel private constructor(
     private val sortedRatings: DoubleArray,
     val sampleCount: Int,
     internal val examples: List<Pair<RatedExample, Map<String, Double>>>,
+    /** 拟合时用的选项。 */
+    internal val options: DivergenceOptions = DivergenceOptions.LEGACY,
+    /** 分位映射（[ScaleMode.QUANTILE] 时才有）。 */
+    private val scale: PersonalScale? = null,
+    /** 按人决定的各部分权重；为 null 时用固定公式，相似作品类比由调用方另行修正（[withAnalogy]）。 */
+    val gateWeights: ExpertWeights? = null,
+    /** 预测区间半宽（10 分制，未乘证据系数）；只有按人权重的模型才有。 */
+    val intervalHalfWidth: Double = 0.0,
 ) {
+    /** 预测里是否已经包含相似作品类比（按人权重的模型把类比当成一个部分）。 */
+    val includesAnalogy: Boolean get() = gateWeights != null
+
+    /** 预测账本里的版本名。 */
+    val modelVersion: String get() = TasteModelVersion.of(options)
 
     /**
      * 你评过的作品里，题材上与 [feature] 最接近的几部（标签向量余弦相似度）。
@@ -142,16 +172,18 @@ class PersonalDivergenceModel private constructor(
     fun baseline(community10: Double?): Double = if (community10 == null || community10 <= 0.0) {
         meanRating
     } else {
-        meanRating + slope * (community10 - meanCommunity)
+        val linear = meanRating + slope * (community10 - meanCommunity)
+        scale?.map(community10, linear) ?: linear
     }
 
     fun predict(feature: WorkFeature): RatingPrediction {
+        gateWeights?.let { return predictGated(feature, it) }
         val base = baseline(shrinkCommunity(feature.bangumiScore?.toDouble(), feature.bangumiVotes, communityVotePrior))
         val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
         val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to PERSONAL_GAIN * it * x } }
         val tagPart = perTag.sumOf { it.second }
         val franchisePart = PERSONAL_GAIN * FRANCHISE_WEIGHT * franchiseResidual(feature)
-        val axes = axes(feature)
+        val axes = axes(feature, options.controversyAxis)
         val axisParts = AXIS_LABELS.indices.map { PERSONAL_GAIN * AXIS_WEIGHT * axisWeights[it] * axes[it] }
         val divergence = tagPart + franchisePart + axisParts.sum()
 
@@ -175,6 +207,82 @@ class PersonalDivergenceModel private constructor(
                 .take(MAX_FACTORS),
         )
     }
+
+    /**
+     * 四个部分的原始值（未乘权重，10 分制）：标签、同系列、取向、相似作品类比。
+     * 按人权重就是对这四个值做线性组合；内部交叉验证用它们来学权重。
+     */
+    internal fun expertValues(feature: WorkFeature): DoubleArray {
+        val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
+        val tag = vector.entries.sumOf { (tag, x) -> (tagWeights[tag] ?: 0.0) * x }
+        val ax = axes(feature, options.controversyAxis)
+        val axis = AXIS_LABELS.indices.sumOf { axisWeights[it] * ax[it] }
+        return doubleArrayOf(tag, franchiseResidual(feature), axis, analogyValue(analogy(feature)))
+    }
+
+    /** 类比部分的值：类比标准分 × 评分标准差 × 相似程度（最像的作品相似度 0.4 起算，0.7 满额）。 */
+    private fun analogyValue(analogy: TasteAnalogy?): Double {
+        if (analogy == null) return 0.0
+        val strength = ((analogy.topSimilarity - BOLD_FROM) / (BOLD_FULL - BOLD_FROM)).coerceIn(0.0, 1.0)
+        return strength * analogy.z * ratingStd.coerceAtLeast(MIN_ANALOGY_STD)
+    }
+
+    private fun predictGated(feature: WorkFeature, w: ExpertWeights): RatingPrediction {
+        val base = baseline(shrinkCommunity(feature.bangumiScore?.toDouble(), feature.bangumiVotes, communityVotePrior))
+        val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
+        val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to w.tag * it * x } }
+        val franchisePart = w.franchise * franchiseResidual(feature)
+        val ax = axes(feature, options.controversyAxis)
+        val axisParts = AXIS_LABELS.indices.map { w.axes * axisWeights[it] * ax[it] }
+        val analogy = analogy(feature)
+        val analogyPart = w.analogy * analogyValue(analogy)
+        val divergence = perTag.sumOf { it.second } + franchisePart + axisParts.sum() + analogyPart
+
+        val factors = ArrayList<DivergenceFactor>()
+        perTag.forEach { (tag, delta) -> factors += DivergenceFactor(tag, delta) }
+        if (franchisePart != 0.0) factors += DivergenceFactor(FRANCHISE_LABEL, franchisePart)
+        AXIS_LABELS.forEachIndexed { i, labels ->
+            if (axisParts[i] != 0.0) {
+                factors += DivergenceFactor(if (ax[i] >= 0.0) labels.first else labels.second, axisParts[i])
+            }
+        }
+        if (analogyPart != 0.0) factors += DivergenceFactor(ANALOGY_LABEL, analogyPart)
+        val rating = (base + divergence).coerceIn(MIN_RATING, MAX_RATING)
+        val half = intervalHalfWidth * evidenceFactor(feature, vector.isEmpty())
+        return RatingPrediction(
+            community = feature.bangumiScore?.toDouble()?.takeIf { it > 0.0 },
+            userMean = meanRating,
+            userStd = ratingStd,
+            rating = rating,
+            baseline = base.coerceIn(MIN_RATING, MAX_RATING),
+            divergence = divergence,
+            factors = factors.filter { kotlin.math.abs(it.delta) >= MIN_FACTOR_DELTA }
+                .sortedByDescending { kotlin.math.abs(it.delta) }
+                .take(MAX_FACTORS),
+            low = (rating - half).coerceIn(MIN_RATING, MAX_RATING),
+            high = (rating + half).coerceIn(MIN_RATING, MAX_RATING),
+        )
+    }
+
+    /** 证据越少区间越宽：没有可用标签、没有社区分、社区评分人数很少时放宽。 */
+    private fun evidenceFactor(feature: WorkFeature, noTags: Boolean): Double {
+        var f = 1.0
+        if (noTags) f *= NO_TAG_WIDEN
+        val score = feature.bangumiScore
+        if (score == null || score <= 0f) {
+            f *= NO_COMMUNITY_WIDEN
+        } else if (feature.bangumiVotes in 1 until FEW_VOTES) {
+            f *= FEW_VOTES_WIDEN
+        }
+        return f
+    }
+
+    /** 同一份拟合结果换上按人权重和区间。 */
+    private fun withGate(weights: ExpertWeights, halfWidth: Double) = PersonalDivergenceModel(
+        meanRating, meanCommunity, slope, communityVotePrior, tagWeights, tagSupport, idf, defaultIdf, tagOverrides,
+        franchise, axisWeights, residualStd, ratingStd, sortedRatings, sampleCount, examples, options, scale,
+        gateWeights = weights, intervalHalfWidth = halfWidth,
+    )
 
     private fun franchiseResidual(feature: WorkFeature): Double {
         var sum = 0.0
@@ -249,6 +357,25 @@ class PersonalDivergenceModel private constructor(
         const val FRANCHISE_SHRINK: Double = 0.5
         const val AXIS_RIDGE_LAMBDA: Double = 8.0
 
+        /** 按人权重：内部折数、随机种子、四个部分、学权重至少要的折外样本数。 */
+        private const val INNER_FOLDS = 5
+        private const val INNER_SEED = 17
+        private const val EXPERTS = 4
+        private const val MIN_GATE_ROWS = 20
+        private const val GATE_EPSILON = 1e-4
+
+        /** 学不出区间时的半宽：残差标准差 × 1.28（正态 80% 分位）。 */
+        private const val FALLBACK_INTERVAL_Z = 1.28
+
+        /** 区间按证据放宽的倍数：没有可用标签、没有社区分、社区评分人数少于 [FEW_VOTES]。 */
+        private const val NO_TAG_WIDEN = 1.25
+        private const val NO_COMMUNITY_WIDEN = 1.4
+        private const val FEW_VOTES_WIDEN = 1.15
+        private const val FEW_VOTES = 50
+
+        private const val DAY_MS = 86_400_000.0
+        private const val RECENCY_FLOOR = 0.5
+
         /**
          * 社区分按评分人数向全站均分收缩：`(人数·社区分 + K·均分)/(人数 + K)`，K = 10。
          * 只有一两个人打分的条目（比如 1 个人打的 10 分，收缩后约 6.9）不会把大众基线和预计评分抬到天上；
@@ -298,10 +425,16 @@ class PersonalDivergenceModel private constructor(
             "大众热门作" to "小众冷门作",
             "新番" to "老番",
             "长篇" to "短篇",
+            "口碑两极的作品" to "口碑一致的作品",
         )
 
         /** 各取向维度「典型一档差异」的大小（约等于一个标准差）。 */
-        private val AXIS_TYPICAL_STEP = doubleArrayOf(1.5, 1.0, 1.0)
+        private val AXIS_TYPICAL_STEP = doubleArrayOf(1.5, 1.0, 1.0, 1.0)
+
+        /** 社区评分标准差的中心与尺度（争议度维度）。 */
+        private const val SPREAD_CENTER = 1.6
+        private const val SPREAD_SCALE = 0.4
+        private const val SPREAD_CLIP = 3.0
 
         private const val VOTES_CENTER = 8.0
         private const val YEAR_CENTER = 2012.0
@@ -310,12 +443,22 @@ class PersonalDivergenceModel private constructor(
         private const val EPISODES_CAP = 200
         private val YEAR_REGEX = Regex("(19|20)\\d{2}")
 
-        /** 取向维度特征：[ln(1+票数) − 8, (年份 − 2012)/8, ln(1+集数) − 2.5]；缺失取中性 0。 */
-        internal fun axes(feature: WorkFeature): DoubleArray {
+        /**
+         * 取向维度特征：[ln(1+票数) − 8, (年份 − 2012)/8, ln(1+集数) − 2.5, (社区评分标准差 − 1.6)/0.4]；
+         * 缺失取中性 0；第四维只在 [controversy] 打开且作品带评分分布时有值。
+         */
+        internal fun axes(feature: WorkFeature, controversy: Boolean = false): DoubleArray {
             val votes = if (feature.bangumiVotes > 0) ln(1.0 + feature.bangumiVotes) - VOTES_CENTER else 0.0
             val year = yearOf(feature)?.let { (it - YEAR_CENTER) / YEAR_SCALE } ?: 0.0
             val eps = if (feature.eps > 0) ln(1.0 + minOf(feature.eps, EPISODES_CAP)) - EPISODES_CENTER else 0.0
-            return doubleArrayOf(votes, year, eps)
+            val spread = if (controversy) {
+                feature.communityStd()
+                    ?.let { ((it - SPREAD_CENTER) / SPREAD_SCALE).coerceIn(-SPREAD_CLIP, SPREAD_CLIP) }
+                    ?: 0.0
+            } else {
+                0.0
+            }
+            return doubleArrayOf(votes, year, eps, spread)
         }
 
         /** 从年代标签（「2016年7月」「2016」）里取年份；取标注人数最多的那个。 */
@@ -367,17 +510,50 @@ class PersonalDivergenceModel private constructor(
 
         /**
          * 拟合。[corpus] 用来估计标签的逆文档频率（越常见的标签区分度越低）；
-         * 传入已评分作品 + 本地缓存的未评分作品特征即可。
+         * 传入已评分作品 + 本地缓存的未评分作品特征即可。[options] 见 [DivergenceOptions]。
          */
         fun fit(
             samples: List<TasteSample>,
             corpus: List<WorkFeature> = emptyList(),
             overrides: Map<String, TasteCategory> = emptyMap(),
             communityVotePrior: Double = COMMUNITY_VOTE_PRIOR,
+            options: DivergenceOptions = DivergenceOptions.LEGACY,
+            idf: TagIdf? = null,
         ): PersonalDivergenceModel? {
-            val eligible = samples
-                .filter { it.rating != null && (it.feature.bangumiScore ?: 0f) > 0f }
-                .sortedByDescending { it.updatedAtMillis ?: 0L }
+            val eligible = eligibleSamples(samples)
+            // 逆文档频率只算一次：要扫一遍整个校准池（几千部），内部 5 折和对照模型都复用它。
+            val tagIdf = idf ?: tagIdf(samples, corpus, overrides)
+            val core = fitCore(eligible, tagIdf, overrides, communityVotePrior, options)
+            if (core == null || !options.perUserGate) return core
+            val (rows, targets) = innerCvRows(eligible, tagIdf, overrides, communityVotePrior, options)
+            val gate = solveGate(rows, targets, options, fallbackHalfWidth = core.residualStd * FALLBACK_INTERVAL_Z)
+            return core.withGate(gate.first, gate.second)
+        }
+
+        /** 标签的逆文档频率：回归用到的已评分作品 + 校准池。 */
+        fun tagIdf(
+            samples: List<TasteSample>,
+            corpus: List<WorkFeature>,
+            overrides: Map<String, TasteCategory> = emptyMap(),
+        ): TagIdf {
+            val rated = eligibleSamples(samples).take(MAX_SAMPLES)
+            val (idf, defaultIdf) = inverseDocumentFrequency(rated.map { it.feature } + corpus, overrides)
+            return TagIdf(idf, defaultIdf)
+        }
+
+        /** 有评分、有社区分的样本，按评分时间从新到旧。 */
+        private fun eligibleSamples(samples: List<TasteSample>): List<TasteSample> = samples
+            .filter { it.rating != null && (it.feature.bangumiScore ?: 0f) > 0f }
+            .sortedByDescending { it.updatedAtMillis ?: 0L }
+
+        @Suppress("LongMethod", "ReturnCount") // 一次拟合的各步骤按顺序写在一起更容易对照公式
+        private fun fitCore(
+            eligible: List<TasteSample>,
+            tagIdf: TagIdf,
+            overrides: Map<String, TasteCategory>,
+            communityVotePrior: Double,
+            options: DivergenceOptions,
+        ): PersonalDivergenceModel? {
             // 回归只用最近 [MAX_SAMPLES] 部（口味会变）；相似作品类比用全部评分，早年评过的同类作品也算数。
             val rated = eligible.take(MAX_SAMPLES)
             val n = rated.size
@@ -388,35 +564,133 @@ class PersonalDivergenceModel private constructor(
             val meanR = ratings.average()
             val meanC = community.average()
             val slope = shrunkSlope(ratings, community, meanR, meanC)
-            val residual = DoubleArray(n) { ratings[it] - (meanR + slope * (community[it] - meanC)) }
+            val scale = if (options.scale == ScaleMode.QUANTILE) PersonalScale.of(community, ratings) else null
+            val baselineOf = { c: Double ->
+                val linear = meanR + slope * (c - meanC)
+                scale?.map(c, linear) ?: linear
+            }
+            val residual = DoubleArray(n) { ratings[it] - baselineOf(community[it]) }
+            val weights = recencyWeights(rated, options.recencyHalfLifeDays)
 
-            val (idf, defaultIdf) = inverseDocumentFrequency(rated.map { it.feature } + corpus, overrides)
+            val idf = tagIdf.idf
+            val defaultIdf = tagIdf.defaultIdf
             val vectors = rated.map { tagVector(it.feature, idf, defaultIdf, overrides) }
             // 核矩阵非正定只会在数值异常时出现；此时不建模，调用方退回社区 + 画像口径。
-            return tagRidge(vectors, residual)?.let { (weights, support) ->
-                PersonalDivergenceModel(
-                    meanRating = meanR,
-                    meanCommunity = meanC,
-                    slope = slope,
-                    communityVotePrior = communityVotePrior,
-                    tagWeights = weights,
-                    tagSupport = support,
-                    idf = idf,
-                    defaultIdf = defaultIdf,
-                    tagOverrides = overrides,
-                    franchise = franchiseResiduals(rated, residual),
-                    axisWeights = axisRidge(rated, residual),
-                    residualStd = sqrt(residual.sumOf { it * it } / n),
-                    ratingStd = sqrt(ratings.sumOf { (it - meanR) * (it - meanR) } / n).coerceAtLeast(MIN_RATING_STD),
-                    sortedRatings = ratings.sortedArray(),
-                    sampleCount = n,
-                    examples = eligible.take(MAX_ANALOGY_EXAMPLES).mapIndexed { i, sample ->
-                        val c = sample.feature.communityForModel(communityVotePrior)
-                        RatedExample(sample.subjectId, sample.rating!!, meanR + slope * (c - meanC)) to
-                            (vectors.getOrNull(i) ?: tagVector(sample.feature, idf, defaultIdf, overrides))
-                    },
+            val (tagWeights, support) = tagRidge(vectors, residual, weights) ?: return null
+            return PersonalDivergenceModel(
+                meanRating = meanR,
+                meanCommunity = meanC,
+                slope = slope,
+                communityVotePrior = communityVotePrior,
+                tagWeights = tagWeights,
+                tagSupport = support,
+                idf = idf,
+                defaultIdf = defaultIdf,
+                tagOverrides = overrides,
+                franchise = franchiseResiduals(rated, residual),
+                axisWeights = axisRidge(rated, residual, weights, options.controversyAxis),
+                residualStd = sqrt(residual.sumOf { it * it } / n),
+                ratingStd = sqrt(ratings.sumOf { (it - meanR) * (it - meanR) } / n).coerceAtLeast(MIN_RATING_STD),
+                sortedRatings = ratings.sortedArray(),
+                sampleCount = n,
+                examples = eligible.take(MAX_ANALOGY_EXAMPLES).mapIndexed { i, sample ->
+                    val c = sample.feature.communityForModel(communityVotePrior)
+                    RatedExample(sample.subjectId, sample.rating!!, baselineOf(c)) to
+                        (vectors.getOrNull(i) ?: tagVector(sample.feature, idf, defaultIdf, overrides))
+                },
+                options = options,
+                scale = scale,
+            )
+        }
+
+        /**
+         * 按评分时间给回归样本加权：`0.5 + 0.5·2^(−距最新一条的天数 / 半衰期)`，最旧的也保留一半权重。
+         * 半衰期 ≤ 0 时全部为 1。
+         */
+        private fun recencyWeights(rated: List<TasteSample>, halfLifeDays: Double): DoubleArray {
+            if (halfLifeDays <= 0.0) return DoubleArray(rated.size) { 1.0 }
+            val newest = rated.maxOf { it.updatedAtMillis ?: 0L }
+            return DoubleArray(rated.size) { i ->
+                val days = (newest - (rated[i].updatedAtMillis ?: newest)).coerceAtLeast(0L) / DAY_MS
+                RECENCY_FLOOR + (1.0 - RECENCY_FLOOR) * 2.0.pow(-days / halfLifeDays)
+            }
+        }
+
+        /**
+         * 内部 5 折：每折用其余样本拟合（固定权重），对留出的样本记下四个部分的原始值和「评分 − 大众基线」。
+         * 按人权重和预测区间都从这些折外结果里学，不用被预测作品自己的评分。
+         */
+        internal fun innerCvRows(
+            eligible: List<TasteSample>,
+            tagIdf: TagIdf,
+            overrides: Map<String, TasteCategory>,
+            communityVotePrior: Double,
+            options: DivergenceOptions,
+        ): Pair<List<DoubleArray>, DoubleArray> {
+            val rated = eligible.take(MAX_SAMPLES)
+            if (rated.size < MIN_SAMPLES + INNER_FOLDS) return emptyList<DoubleArray>() to DoubleArray(0)
+            val order = rated.indices.shuffled(kotlin.random.Random(INNER_SEED))
+            val fixed = options.copy(perUserGate = false)
+            val rows = ArrayList<DoubleArray>()
+            val targets = ArrayList<Double>()
+            for (fold in 0 until INNER_FOLDS) {
+                val held = order.filterIndexed { k, _ -> k % INNER_FOLDS == fold }.toSet()
+                val train = eligible.filterIndexed { i, _ -> i !in held || i >= rated.size }
+                val sub = fitCore(train, tagIdf, overrides, communityVotePrior, fixed) ?: continue
+                for (i in held) {
+                    val s = rated[i]
+                    val c =
+                        shrinkCommunity(s.feature.bangumiScore?.toDouble(), s.feature.bangumiVotes, communityVotePrior)
+                    rows += sub.expertValues(s.feature)
+                    targets += s.rating!! - sub.baseline(c)
+                }
+            }
+            return rows to targets.toDoubleArray()
+        }
+
+        /**
+         * 由折外结果求各部分权重：带先验的最小二乘
+         * `min Σ(y − x·w)² + m·Σ d_k·(w_k − w̄_k)²`（`d_k` 为该部分值的均方，`m` 为先验强度），负权重截为 0。
+         * 区间半宽取折外残差绝对值的 [DivergenceOptions.intervalCoverage] 分位，并按样本量略放宽。
+         * 折外样本太少时用先验权重和 [fallbackHalfWidth]。
+         */
+        @Suppress("ReturnCount") // 样本太少、方程无解两种情况都直接退回先验
+        internal fun solveGate(
+            rows: List<DoubleArray>,
+            targets: DoubleArray,
+            options: DivergenceOptions,
+            fallbackHalfWidth: Double,
+        ): Pair<ExpertWeights, Double> {
+            if (rows.size < MIN_GATE_ROWS) return options.gatePrior to fallbackHalfWidth
+            val k = EXPERTS
+            val prior = options.gatePrior.toArray()
+            val gram = Array(k) { DoubleArray(k) }
+            val rhs = DoubleArray(k)
+            val meanSq = DoubleArray(k)
+            for ((r, x) in rows.withIndex()) {
+                for (p in 0 until k) {
+                    rhs[p] += x[p] * targets[r]
+                    meanSq[p] += x[p] * x[p] / rows.size
+                    for (q in 0 until k) gram[p][q] += x[p] * x[q]
+                }
+            }
+            for (p in 0 until k) {
+                val d = options.gatePriorStrength * (meanSq[p] + GATE_EPSILON)
+                gram[p][p] += d
+                rhs[p] += d * prior[p]
+            }
+            val solved = LinearSolver.solveSymmetricPositiveDefinite(gram, rhs)
+                ?: return options.gatePrior to fallbackHalfWidth
+            val w = DoubleArray(k) { solved[it].coerceAtLeast(0.0) }
+            val residuals = rows.indices.map { r ->
+                kotlin.math.abs(
+                    targets[r] - (0 until k).sumOf { rows[r][it] * w[it] },
                 )
             }
+                .sorted()
+            val idx = ((residuals.size - 1) * options.intervalCoverage).toInt().coerceIn(0, residuals.lastIndex)
+            val half = residuals[idx] * sqrt(1.0 + 1.0 / rows.size)
+            return ExpertWeights.of(w) to half
         }
 
         /** 个人评分对社区评分的最小二乘斜率，向全站先验 1.0 收缩。 */
@@ -453,12 +727,14 @@ class PersonalDivergenceModel private constructor(
         private fun tagRidge(
             vectors: List<Map<String, Double>>,
             residual: DoubleArray,
+            sampleWeights: DoubleArray,
         ): Pair<Map<String, Double>, Map<String, Int>>? {
             val n = vectors.size
             val kernel =
                 Array(n) { i -> DoubleArray(n) { j -> if (j <= i) LinearSolver.dot(vectors[i], vectors[j]) else 0.0 } }
             for (i in 0 until n) {
-                kernel[i][i] += TAG_RIDGE_LAMBDA
+                // 加权岭回归的核形式：权重小的样本对应更大的正则，等价于它在损失里占比更小。
+                kernel[i][i] += TAG_RIDGE_LAMBDA / sampleWeights[i]
                 for (j in i + 1 until n) kernel[i][j] = kernel[j][i]
             }
             val alpha = LinearSolver.solveSymmetricPositiveDefinite(kernel, residual) ?: return null
@@ -488,16 +764,22 @@ class PersonalDivergenceModel private constructor(
             return franchise
         }
 
-        /** 取向维度岭回归（3×3 正规方程）。 */
-        private fun axisRidge(rated: List<TasteSample>, residual: DoubleArray): DoubleArray {
+        /** 取向维度加权岭回归（4×4 正规方程；没有值的维度权重为 0）。 */
+        private fun axisRidge(
+            rated: List<TasteSample>,
+            residual: DoubleArray,
+            sampleWeights: DoubleArray,
+            controversy: Boolean,
+        ): DoubleArray {
             val dims = AXIS_LABELS.size
             val gram = Array(dims) { DoubleArray(dims) }
             val rhs = DoubleArray(dims)
             for (i in rated.indices) {
-                val row = axes(rated[i].feature)
+                val row = axes(rated[i].feature, controversy)
+                val w = sampleWeights[i]
                 for (p in 0 until dims) {
-                    rhs[p] += row[p] * residual[i]
-                    for (q in 0 until dims) gram[p][q] += row[p] * row[q]
+                    rhs[p] += w * row[p] * residual[i]
+                    for (q in 0 until dims) gram[p][q] += w * row[p] * row[q]
                 }
             }
             for (p in 0 until dims) gram[p][p] += AXIS_RIDGE_LAMBDA
@@ -545,5 +827,49 @@ internal object LinearSolver {
             x[i] = v / a[i][i]
         }
         return x
+    }
+}
+
+/**
+ * 分位映射（[ScaleMode.QUANTILE]）：社区分在你看过作品的社区分里排第几（经验分布，线性插值），
+ * 就取你自己评分里同一位置的分数（每个整数分看成铺在 ±0.5 上，得到连续的分位函数），
+ * 再按评分数和线性换算混合：`α = n / (n + 30)`，评分少时更信线性换算。
+ */
+internal class PersonalScale private constructor(
+    private val sortedCommunity: DoubleArray,
+    private val sortedRatings: DoubleArray,
+    private val alpha: Double,
+) {
+    fun map(community: Double, linear: Double): Double {
+        val f = cdf(community)
+        val n = sortedRatings.size
+        val pos = (f * n).coerceIn(0.0, n - POSITION_EPSILON)
+        val idx = pos.toInt()
+        val quantile = (sortedRatings[idx] - HALF + (pos - idx)).coerceIn(MIN, MAX)
+        return (1.0 - alpha) * linear + alpha * quantile
+    }
+
+    private fun cdf(c: Double): Double {
+        val n = sortedCommunity.size
+        var below = 0
+        var equal = 0
+        for (v in sortedCommunity) {
+            if (v < c) below++ else if (v == c) equal++
+        }
+        return ((below + HALF * equal) / n).coerceIn(HALF / n, 1.0 - HALF / n)
+    }
+
+    companion object {
+        private const val POSITION_EPSILON = 1e-9
+        private const val HALF = 0.5
+        private const val MIN = 1.0
+        private const val MAX = 10.0
+        private const val BLEND_SAMPLES = 30.0
+
+        fun of(community: DoubleArray, ratings: DoubleArray): PersonalScale = PersonalScale(
+            sortedCommunity = community.sortedArray(),
+            sortedRatings = ratings.sortedArray(),
+            alpha = ratings.size / (ratings.size + BLEND_SAMPLES),
+        )
     }
 }

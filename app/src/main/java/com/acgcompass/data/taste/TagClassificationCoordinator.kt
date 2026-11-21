@@ -90,7 +90,8 @@ class TagClassificationCoordinator private constructor(
 
     private suspend fun handleOutcome(outcome: TagClassifyOutcome): TagClassificationResult = when (outcome) {
         is TagClassifyOutcome.Done -> {
-            if (outcome.classified > 0) runCatchingCancellable { task.rebuildProfile() }
+            // 分类本身到这里已经写完；用新标签重建画像要好几秒，放到后台，不让界面一直停在「写入中」。
+            if (outcome.classified > 0) scope.launch { runCatchingCancellable { task.rebuildProfile() } }
             task.restoreState()?.let { restored ->
                 _state.value = restored.copy(active = true)
             } ?: _state.update {

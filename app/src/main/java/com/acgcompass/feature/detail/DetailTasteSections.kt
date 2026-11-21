@@ -360,7 +360,7 @@ internal fun RatingPredictionBlock(prediction: RatingPredictionUi) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                PredictionStat(label = "预计你会打", value = prediction.predictedText, emphasized = true)
+                PredictionStat(label = "口碑估计你会打", value = prediction.predictedText, emphasized = true)
                 PredictionStat(label = "社区评分", value = prediction.communityText ?: "—")
                 PredictionStat(label = "你的均分", value = prediction.userMeanText)
             }
@@ -369,6 +369,13 @@ internal fun RatingPredictionBlock(prediction: RatingPredictionUi) {
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
+            prediction.intervalText?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
                 text = prediction.communitySummary,
                 style = MaterialTheme.typography.bodySmall,

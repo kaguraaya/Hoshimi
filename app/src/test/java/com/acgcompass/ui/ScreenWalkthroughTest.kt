@@ -221,7 +221,7 @@ class ScreenWalkthroughTest {
                 }
             }
         }
-        compose.onNodeWithText("预计你会打").assertIsDisplayed()
+        compose.onNodeWithText("口碑估计你会打").assertIsDisplayed()
         compose.onNodeWithText("你和大众的分歧").assertIsDisplayed()
         compose.onNodeWithText("比大众更偏爱").assertIsDisplayed()
         shot("divergence-light")

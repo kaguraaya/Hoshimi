@@ -5,19 +5,23 @@ import androidx.lifecycle.viewModelScope
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.common.runCatchingResult
+import com.acgcompass.data.taste.PredictionLedgerRecorder
 import com.acgcompass.data.taste.TasteEngine
+import com.acgcompass.domain.detail.PersonalRecord
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RecommendationExposure
 import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.displayTitle
 import com.acgcompass.domain.recommend.ExploreRanker
+import com.acgcompass.domain.recommend.InterestSignals
 import com.acgcompass.domain.recommend.RecommendSimilarity
 import com.acgcompass.domain.repository.BacklogRepository
 import com.acgcompass.domain.repository.BangumiSummarySource
 import com.acgcompass.domain.repository.PersonalCollectionRepository
 import com.acgcompass.domain.repository.RecommendationExposureRepository
 import com.acgcompass.domain.repository.WorkRepository
+import com.acgcompass.domain.taste.PredictionContext
 import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.WorkFeatureRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,7 +46,7 @@ import kotlinx.coroutines.launch
  * 每次滑动都会更新反馈并重排尚未看到的卡片。
  * 韧性：生成异常兜底为 [ExploreQueueUiState.Error]，绝不崩溃。
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList") // 构造参数多是 Hilt 注入
 @HiltViewModel
 class ExploreQueueViewModel @Inject constructor(
     private val workRepository: WorkRepository,
@@ -52,6 +56,7 @@ class ExploreQueueViewModel @Inject constructor(
     private val exposures: RecommendationExposureRepository,
     private val summarySource: BangumiSummarySource,
     private val workFeatureRepository: WorkFeatureRepository,
+    private val predictionLedger: PredictionLedgerRecorder,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ExploreQueueUiState>(ExploreQueueUiState.Loading)
@@ -98,7 +103,8 @@ class ExploreQueueViewModel @Inject constructor(
 
     private suspend fun buildBatch(): ExploreQueueUiState {
         val all = workRepository.observeWorks().first()
-        val collected = personalCollections.getAll().map { it.workId }.toSet()
+        val records = personalCollections.getAll()
+        val collected = records.map { it.workId }.toSet()
         val inBacklog = backlogRepository.observeBacklog().first().map { it.workId }.toSet()
         val now = System.currentTimeMillis()
         val history = exposures.exposuresInContextSince(EXPLORE_CONTEXT, now - FEEDBACK_WINDOW_MS)
@@ -123,15 +129,10 @@ class ExploreQueueViewModel @Inject constructor(
             return ExploreQueueUiState.Empty(msg)
         }
 
-        // 历史左右滑 → 标签级反馈（本次的滑动会继续追加，见 [recordFeedback]）。
+        // 兴趣层：历史左右滑 + 收藏状态 → 标签级反馈（本次的滑动会继续追加，见 [recordFeedback]）。
         val worksAll = all.associateBy { it.id }
         feedback.clear()
-        history.forEach { e ->
-            val liked = e.clickedAt != null
-            if (!liked && e.dismissedAt == null) return@forEach
-            val tags = worksAll[e.subjectId]?.let(::fingerprintOf) ?: return@forEach
-            if (tags.isNotEmpty()) feedback += ExploreRanker.Feedback(tags, liked)
-        }
+        feedback += interestFeedback(history, records, worksAll, now)
         val model = ExploreRanker.feedbackModel(feedback)
 
         // 首批已有真实分数的卡片先展示，其余候选独立补齐后渐进加入。
@@ -163,12 +164,37 @@ class ExploreQueueViewModel @Inject constructor(
         return ExploreQueueUiState.Ready(cards = cards, index = 0)
     }
 
+    /** 兴趣信号：越久远权重越低；只影响探索队列排序，不重建口味画像。评过分的收藏不算兴趣信号。 */
+    private fun interestFeedback(
+        history: List<RecommendationExposure>,
+        records: List<PersonalRecord>,
+        worksAll: Map<String, Work>,
+        now: Long,
+    ): List<ExploreRanker.Feedback> {
+        val fromSwipes = history.mapNotNull { e ->
+            val kind = when {
+                e.clickedAt != null -> InterestSignals.Kind.EXPLORE_LIKE
+                e.dismissedAt != null -> InterestSignals.Kind.EXPLORE_SKIP
+                else -> null
+            }
+            val tags = worksAll[e.subjectId]?.let(::fingerprintOf).orEmpty()
+            val at = e.clickedAt ?: e.dismissedAt ?: e.exposedAt
+            if (kind == null || tags.isEmpty()) null else InterestSignals.feedback(kind, tags, at, now)
+        }
+        val fromStatuses = records.mapNotNull { r ->
+            val kind = InterestSignals.statusKind(r.status).takeIf { r.rating == null }
+            val tags = worksAll[r.workId]?.let(::fingerprintOf).orEmpty()
+            if (kind == null || tags.isEmpty()) null else InterestSignals.feedback(kind, tags, r.updatedAt, now)
+        }
+        return fromSwipes + fromStatuses
+    }
+
     private fun fingerprintOf(work: Work): Set<String> = RecommendSimilarity.genreFingerprint(work.tags.map { it.name })
 
     private fun rankerCandidate(work: Work, match: TasteMatchResult): ExploreRanker.Candidate = ExploreRanker.Candidate(
         id = work.id,
         // 排序用预计满意度（看完大概有多满意）；卡片上展示的仍是口味匹配度。
-        matchScore = match.satisfaction,
+        utilityBase = match.satisfaction,
         familiarity = match.familiarity,
         community10 = match.communityScore10,
         votes = match.communityVotes,
@@ -187,7 +213,10 @@ class ExploreQueueViewModel @Inject constructor(
         _state.value = newState
         val current = (newState as? ExploreQueueUiState.Ready)?.let { it.cards.getOrNull(it.index) }
         if (current != null && shownIds.add(current.workId)) {
-            viewModelScope.launch { runCatchingResult { exposures.upsert(exposureRow(current.workId)) } }
+            viewModelScope.launch {
+                runCatchingResult { exposures.upsert(exposureRow(current.workId)) }
+                predictionLedger.record(PredictionContext.EXPLORE, listOf(current.workId))
+            }
         }
     }
 

@@ -9,10 +9,13 @@ import com.acgcompass.data.local.dao.WorkFeatureDao
 import com.acgcompass.data.sync.WorkFeatureEnrichmentScheduler
 import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.taste.AdvancedTasteProfile
+import com.acgcompass.domain.taste.DivergenceOptions
 import com.acgcompass.domain.taste.LocalPoolStatus
 import com.acgcompass.domain.taste.LocalRankedWork
 import com.acgcompass.domain.taste.PoolExpansion
 import com.acgcompass.domain.taste.RankOwnership
+import com.acgcompass.domain.taste.TasteMatchBranch
+import com.acgcompass.domain.taste.TasteModelVersion
 import com.acgcompass.domain.taste.TasteRankItem
 import com.acgcompass.domain.taste.TasteRanking
 import com.acgcompass.domain.taste.TasteRankingRepository
@@ -20,7 +23,12 @@ import com.acgcompass.domain.taste.WorkFormat
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -58,6 +66,12 @@ class TasteRankingRepositoryImpl @Inject constructor(
         status
     }
 
+    override val profileChanges: Flow<Unit> = engine.observeProfile()
+        .filterNotNull()
+        .distinctUntilChanged { a, b -> a === b }
+        .drop(1)
+        .map { }
+
     private val mutex = Mutex()
     private var cachedFor: AdvancedTasteProfile? = null
     private var cachedPoolSize: Int = -1
@@ -85,11 +99,19 @@ class TasteRankingRepositoryImpl @Inject constructor(
         cachedFor = engine.observeProfile().value
         cachedPoolSize = poolSize
         cached = ranking
-        if (ranking != null) withContext(dispatchers.io) { diskCache.write(ranking) }
+        if (ranking != null) withContext(dispatchers.io) { diskCache.write(ranking, modelVersion()) }
         ranking
     }
 
-    override suspend fun lastResult(): TasteRanking? = cached ?: withContext(dispatchers.io) { diskCache.read() }
+    override suspend fun lastResult(): TasteRanking? =
+        cached ?: withContext(dispatchers.io) { diskCache.read(modelVersion()) }
+
+    /** 当前画像的模型版本加匹配度分支：换了任何一个，上次的结果都不再先显示。画像还没建好时按默认配置。 */
+    private fun modelVersion(): String {
+        val profile = engine.observeProfile().value
+        val model = profile?.divergence?.modelVersion ?: TasteModelVersion.of(DivergenceOptions.DEFAULT)
+        return "$model-${profile?.matchBranch?.key ?: TasteMatchBranch.STANDARD.key}"
+    }
 
     private suspend fun toItem(
         ranked: LocalRankedWork,
