@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.acgcompass.core.common.CrashLog
 import com.acgcompass.core.designsystem.AcgSnackbarHost
 import com.acgcompass.core.designsystem.PrismCard
 import com.acgcompass.core.ui.AcgScreenScaffold
@@ -41,6 +42,7 @@ import com.acgcompass.feature.cache.toSourceStatusText
 fun BackgroundTasksRoute(onBack: () -> Unit, viewModel: BackgroundTasksViewModel = hiltViewModel()) {
     val statuses by viewModel.statuses.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val crashEntries by viewModel.crashEntries.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) {
         message?.let {
@@ -54,6 +56,9 @@ fun BackgroundTasksRoute(onBack: () -> Unit, viewModel: BackgroundTasksViewModel
         snackbarHostState = snackbar,
         onBack = onBack,
         onRetry = viewModel::onRetry,
+        crashEntries = crashEntries,
+        onCrashLogCopied = viewModel::onCrashLogCopied,
+        onClearCrashLog = viewModel::onClearCrashLog,
     )
 }
 
@@ -71,6 +76,9 @@ fun BackgroundTasksScreen(
     onBack: () -> Unit,
     onRetry: (BackgroundTaskKind) -> Unit,
     modifier: Modifier = Modifier,
+    crashEntries: List<CrashLog.Entry> = emptyList(),
+    onCrashLogCopied: () -> Unit = {},
+    onClearCrashLog: () -> Unit = {},
 ) {
     AcgScreenScaffold(
         title = "后台任务",
@@ -103,6 +111,9 @@ fun BackgroundTasksScreen(
                 items(statuses, key = { it.kind.key }) { status ->
                     TaskCard(status = status, now = now, onRetry = { onRetry(status.kind) })
                 }
+            }
+            item(key = "crash-log") {
+                CrashLogCard(entries = crashEntries, onCopied = onCrashLogCopied, onClear = onClearCrashLog)
             }
         }
     }
