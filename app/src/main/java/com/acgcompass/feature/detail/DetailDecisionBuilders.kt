@@ -2,6 +2,7 @@ package com.acgcompass.feature.detail
 
 import com.acgcompass.domain.ai.SpoilerRadarResult
 import com.acgcompass.domain.model.AiGenerator
+import com.acgcompass.domain.model.MediaType
 import com.acgcompass.domain.model.RatingAggregate
 import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.Tag
@@ -112,7 +113,9 @@ internal fun computeBacklogPriority(
     completionCost: CompletionCostUiModel,
     tags: List<Tag>,
 ): Pair<String?, String?> {
-    val factors = priorityFactors(tasteMatch, consensus, completionCost)
+    // 已经评过分的作品不用再排补番优先级（而且那时的预计评分把这部作品自己也算进去了）。
+    val rated = (tasteMatch as? TasteMatchUiModel.Available)?.rated == true
+    val factors = if (rated) emptyList() else priorityFactors(tasteMatch, consensus, completionCost)
     val weight = factors.sumOf { it.weight.toDouble() }.toFloat()
     if (weight <= 0f) return null to null
     var score = (factors.sumOf { (it.value * it.weight).toDouble() }.toFloat() / weight).coerceIn(0f, 1f)
@@ -280,37 +283,34 @@ internal val personalTasteScorer = PersonalTasteScorer()
  * 几个大类标签；低置信（样本少）与已评分时补充说明（绝不伪造）。
  */
 internal fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
-    // 已评分作品优先显示回测匹配度（建画像时不知道这部作品），回测还没算完时先显示当前画像下的分。
+    // 已评分作品显示回测匹配度（建画像时不知道这部作品）。回测还没算完时不显示分数：
+    // 当前画像下的分把这部作品自己的评分也算进去了，和回测值不是一回事。
+    val pending = isRated && backtestPending
     val shown = backtest?.match?.takeIf { isRated } ?: score
-    val fraction = (shown / 100f).coerceIn(0f, 1f)
+    val fraction = if (pending) 0f else (shown / 100f).coerceIn(0f, 1f)
     val predicted = (if (isRated) backtest?.predicted else prediction?.rating)
         ?: TasteVerdict.PASS_LINE.takeIf { isRated && fromRatingModel }
     val qualitative = TasteVerdict.of(shown, predicted, uncertain = !isRated && prediction?.isUncertain == true)
-    val lowConf = confidence < 0.4
+    val lowConf = confidence < LOW_CONFIDENCE
     // 逐条呈现分维度贡献（含声优 / staff / 来源等，不再只压成一行），正/负向分色；取贡献绝对值最大的前几项。
     val reasonUis = reasons
         .sortedByDescending { kotlin.math.abs(it.contribution) }
         .take(4)
         .map { TasteMatchReasonUi(text = it.label, positive = it.contribution >= 0.0) }
     val reasonCore = matchReasonCore(predicted, reasonUis)
-    // 置信度独立成文案（不再塞进理由长句）。
-    val confidenceText = when {
-        confidence < 0.4 -> "置信度偏低（样本较少，仅供参考）"
-        confidence < 0.7 -> "置信度中等"
-        else -> "置信度较高"
-    }
     return TasteMatchUiModel.Available(
-        percentText = "$shown%",
-        qualitativeText = if (lowConf) "$qualitative（低置信）" else qualitative,
+        percentText = if (pending) "回测中" else "$shown%",
+        qualitativeText = qualitativeLabel(pending, lowConf, qualitative),
         fraction = fraction,
         reason = reasonCore,
         reasons = reasonUis,
-        confidenceText = confidenceText,
+        confidenceText = confidenceLabel(confidence),
         // 已评分作品不展示预测块（你已经给出了答案），回测值单独一行。
         prediction = prediction?.takeIf { !isRated }?.toUi(),
         rankPercent = satisfaction.takeIf { fromRatingModel },
         uncertain = !isRated && prediction?.isUncertain == true,
         backtestText = if (isRated && fromRatingModel) backtestLine() else null,
+        rated = isRated,
     )
 }
 
@@ -344,7 +344,7 @@ private fun TasteMatchResult.matchReasonCore(predicted: Double?, reasonUis: List
                 if (mainBasis.isNotEmpty()) "大众基线 ${"%.1f".format(gated.baseline)} 分，主要依据：$mainBasis。" else ""
             "匹配度看的是这部对你口味有多契合：是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像。" +
                 "它和下面的预计评分是两回事——预计评分是你看完大概会打几分。" + analogyText +
-                gapNote(gated.rating, gated.userMean) + basisText + tail
+                disagreementNote(score, gated, circleZ) + basisText + tail
         }
         isRated && fromRatingModel ->
             "匹配度看的是这部对你口味有多契合：是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像。$tail"
@@ -366,24 +366,24 @@ private fun TasteMatchResult.matchReasonCore(predicted: Double?, reasonUis: List
  * 口味匹配度：委托共享 [PersonalTasteScorer]，与推荐器同一口径。
  * 以作品标签与口味画像高/低分标签的**加权重合**为主导（题材标签全权重、年份/厂商等元数据弱化），
  * 社区评分仅作轻量先验。无画像或数据不足时返回 [TasteMatchUiModel.Unavailable]。
+ * 口味模型只用动画建立，游戏、书籍等作品不给匹配度和预计评分。
  */
 internal fun Work.toTasteMatch(
     advancedMatch: TasteMatchResult?,
     advancedProfile: AdvancedTasteProfile?,
-): TasteMatchUiModel {
+): TasteMatchUiModel = when {
+    mediaType != MediaType.ANIME -> TasteMatchUiModel.Unavailable("口味匹配度和预计评分只针对动画")
     // 12 维引擎为详情页主路径（已校准 + 分数拉开 + 已评分偏置 + 全维度标签）。
-    advancedMatch?.let { return it.toTasteMatchUi() }
+    advancedMatch != null -> advancedMatch.toTasteMatchUi()
     // 引擎无结果时按四态区分原因（弃用旧版只看题材的回退，不再笼统「暂无可匹配标签」）：
-    return when {
-        advancedProfile == null ->
-            TasteMatchUiModel.Unavailable("口味画像尚未就绪：请在「我的 → 口味画像」从 Bangumi 同步评分，或稍候自动构建")
-        !advancedProfile.isUsable ->
-            TasteMatchUiModel.Unavailable("口味样本不足：多给几部作品评分后，匹配会更准")
-        tags.isEmpty() ->
-            TasteMatchUiModel.Unavailable("该作品暂无可用标签（已排除噪声），暂无法计算口味匹配")
-        else ->
-            TasteMatchUiModel.Unavailable("正在获取这部作品的标签，几秒后会自动出分")
-    }
+    advancedProfile == null ->
+        TasteMatchUiModel.Unavailable("口味画像尚未就绪：请在「我的 → 口味画像」从 Bangumi 同步评分，或稍候自动构建")
+    !advancedProfile.isUsable ->
+        TasteMatchUiModel.Unavailable("口味样本不足：多给几部作品评分后，匹配会更准")
+    tags.isEmpty() ->
+        TasteMatchUiModel.Unavailable("该作品暂无可用标签（已排除噪声），暂无法计算口味匹配")
+    else ->
+        TasteMatchUiModel.Unavailable("正在获取这部作品的标签，几秒后会自动出分")
 }
 
 /** 取各源有效评分归一化到 10 分制后的平均值；无任一有效源返回 null。 */

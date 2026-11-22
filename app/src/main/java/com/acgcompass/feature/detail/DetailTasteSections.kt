@@ -371,18 +371,9 @@ internal fun RatingPredictionBlock(prediction: RatingPredictionUi) {
                 PredictionStat(label = "社区评分", value = prediction.communityText ?: "—")
                 PredictionStat(label = "你的均分", value = prediction.userMeanText)
             }
-            Text(
-                text = prediction.selfSummary,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            listOfNotNull(prediction.intervalText, prediction.highChanceText).forEach {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            PredictionSummaryLines(prediction)
+            if (prediction.chanceBuckets.isNotEmpty()) ChanceDistribution(prediction.chanceBuckets)
+            if (prediction.readingGuide.isNotEmpty()) PredictionReadingGuide(prediction.readingGuide)
             Text(
                 text = prediction.communitySummary,
                 style = MaterialTheme.typography.bodySmall,

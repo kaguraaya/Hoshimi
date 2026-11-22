@@ -323,7 +323,8 @@ class RecommenderViewModel @Inject constructor(
             val tasteFraction: Float?,
             val tasteAvailable: Boolean,
             val intent: IntentMatch?,
-            val predictedRating: Double? = null,
+            /** 预计评分的写法（「9」，分布的中位数）；没有评分模型时为 null。 */
+            val predictedText: String? = null,
         )
 
         // 重复推荐冷却——只看「今晚看什么」自己的曝光（探索队列的曝光不算，否则刚右滑进待补池的作品
@@ -398,7 +399,7 @@ class RecommenderViewModel @Inject constructor(
                     frac,
                     true,
                     intentById[w.id],
-                    engine.prediction?.rating,
+                    engine.prediction?.headline,
                 )
             } else {
                 val ts = personalTasteScorer.score(w, taste, bayes)
@@ -512,7 +513,7 @@ class RecommenderViewModel @Inject constructor(
                 TonightRanker.Slot.WILDCARD -> RecommendationKind.WILDCARD
             }
             val ratingPart = s.mean10?.let { "，社区均分约 %.1f".format(it) }.orEmpty() +
-                s.predictedRating?.let { "，预计你会打 %.1f".format(it) }.orEmpty()
+                s.predictedText?.let { "，预计你会打 $it 分" }.orEmpty()
             // 理由聚焦「为什么这部贴合你」：优先所选标签，其次你高分常见标签，再退化为综合口碑。
             val fit = when {
                 s.intent != null -> intentReason(s.intent.explain) + ratingPart
