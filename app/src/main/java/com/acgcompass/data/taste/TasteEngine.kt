@@ -28,6 +28,7 @@ import com.acgcompass.domain.taste.TasteRefreshProgress
 import com.acgcompass.domain.taste.TasteSample
 import com.acgcompass.domain.taste.WorkFeature
 import com.acgcompass.domain.taste.WorkFeatureRepository
+import com.acgcompass.domain.taste.isAnimeForTaste
 import java.time.Instant
 import java.time.OffsetDateTime
 import javax.inject.Inject
@@ -106,11 +107,26 @@ class TasteEngine @Inject constructor(
      */
     fun observeBacktest(): StateFlow<com.acgcompass.domain.taste.TasteBacktest?> = backtestState.asStateFlow()
 
-    /** 重建画像后启动回测；上一次还没算完就取消。回测只读输入，不改画像，不影响各页面出分。 */
+    /**
+     * 开始重建画像时先停掉还在算的旧回测：它的结果会被这次重建之后的回测替换，接着算只会和重建抢 CPU。
+     * 已有的结果保留并标「正在更新」，各页面继续显示上一次的回测值。
+     */
+    private fun stopBacktestForRebuild() {
+        backtestJob?.cancel()
+        backtestState.value = backtestState.value?.updatingCopy()
+    }
+
+    /**
+     * 重建画像后启动回测；上一次还没算完就取消。回测只读输入，不改画像，不影响各页面出分。
+     * 晚几秒再开始、只占一个线程：刚重建完时各页面要重新出分，回测不和它们抢 CPU。
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private fun startBacktest(inputs: com.acgcompass.domain.taste.TasteBuildInputs) {
         backtestJob?.cancel()
-        backtestState.value = null
-        backtestJob = appScope.launch(dispatchers.default) {
+        // 新的回测算完前继续用上一次的结果（标「正在更新」），不清空：清空后已评作品会退回把自己评分算进去的分。
+        backtestState.value = backtestState.value?.updatingCopy()
+        backtestJob = appScope.launch(dispatchers.default.limitedParallelism(1)) {
+            kotlinx.coroutines.delay(BACKTEST_START_DELAY_MS)
             val job = coroutineContext[kotlinx.coroutines.Job]
             val result = runCatchingCancellable {
                 com.acgcompass.domain.taste.TasteBacktest.run(inputs, buildProfile, computeMatch) {
@@ -184,7 +200,8 @@ class TasteEngine @Inject constructor(
                 }
             }.getOrDefault(emptyMap())
 
-            val samples = buildSamples(rated, withCommunityFallback(features))
+            // 口味模型只用动画：评过的游戏、漫画等不进画像和回测（收藏记录本身不受影响）。
+            val samples = buildSamples(rated, withCommunityFallback(features)).filter { it.feature.isAnimeForTaste }
             if (samples.isEmpty() && profileState.value?.isUsable == true) {
                 // 短暂的特征缓存缺口不能用空结果覆盖上一份有效画像。
                 if (networkBudget > 0) refreshProgressState.value = null
@@ -194,22 +211,11 @@ class TasteEngine @Inject constructor(
             // 出分落在 50 分附近、按契合度拉开（详见 BuildTasteProfileUseCase.calibrate）。排除已评分作品
             // （它们走显式评分锚定，且会污染「典型未评分作品」中心）。池不足时 build 内部回退训练样本留一 z。
             val ratedIds = rated.mapTo(HashSet()) { it.sourceItemId }
-            var calibrationPool = runCatchingCancellable { workFeatureRepository.getCachedPool() }
-                .getOrDefault(emptyList())
-                .filter { it.subjectId !in ratedIds }
-            // 联网重建时补足真实的未评分校准池，避免仅用已评分样本产生幸存者偏差。
-            // 补齐失败时保留原池，并由构建器使用训练样本校准作为回退。
-            if (networkBudget > 0 && calibrationPool.size < CALIB_POOL_TARGET) {
-                runCatchingCancellable {
-                    backfillCalibrationPool(ratedIds, calibrationPool.mapTo(HashSet()) { it.subjectId })
-                }
-                calibrationPool = runCatchingCancellable { workFeatureRepository.getCachedPool() }
-                    .getOrDefault(emptyList())
-                    .filter { it.subjectId !in ratedIds }
-            }
+            val calibrationPool = loadCalibrationPool(ratedIds, networkBudget)
             if (networkBudget > 0) {
                 refreshProgressState.value = TasteRefreshProgress(TasteRefreshProgress.Phase.BUILDING)
             }
+            stopBacktestForRebuild()
             val (profile, inputs) = buildWithImplicitSignals(samples, now, calibrationPool, ratedIds)
             // 显式评分锚定必须覆盖「全部已评分作品」——含特征未取到、未进 50 样本者，否则这些作品
             // 在详情页拿不到显式评分锚（rating 查不到）→ 仍会塌到个位数。用完整评分表覆盖 ratedSubjectScores。
@@ -220,6 +226,20 @@ class TasteEngine @Inject constructor(
             if (networkBudget > 0) refreshProgressState.value = null
             finalProfile
         }
+    }
+
+    /**
+     * 校准池：本地缓存里没评过分的动画。联网重建时补足真实的未评分校准池，避免仅用已评分样本产生幸存者偏差；
+     * 补齐失败时保留原池，并由构建器使用训练样本校准作为回退。
+     */
+    private suspend fun loadCalibrationPool(ratedIds: Set<String>, networkBudget: Int): List<WorkFeature> {
+        suspend fun cached() = runCatchingCancellable { workFeatureRepository.getCachedPool() }
+            .getOrDefault(emptyList())
+            .filter { it.subjectId !in ratedIds && it.isAnimeForTaste }
+        val pool = cached()
+        if (networkBudget <= 0 || pool.size >= CALIB_POOL_TARGET) return pool
+        runCatchingCancellable { backfillCalibrationPool(ratedIds, pool.mapTo(HashSet()) { it.subjectId }) }
+        return cached()
     }
 
     private suspend fun buildWithImplicitSignals(
@@ -274,7 +294,9 @@ class TasteEngine @Inject constructor(
         val ids = kinds.keys.filter { it !in ratedIds }
         if (ids.isEmpty()) return emptyList()
         val features = workFeatureRepository.getFeatures(ids, 0)
-        return ids.mapNotNull { id -> features[id]?.let { ImplicitSignal(it, kinds.getValue(id)) } }
+        return ids.mapNotNull { id ->
+            features[id]?.takeIf { it.isAnimeForTaste }?.let { ImplicitSignal(it, kinds.getValue(id)) }
+        }
     }
 
     private fun statusSignal(status: String?): ImplicitSignal.Kind? = when (status) {
@@ -418,8 +440,14 @@ class TasteEngine @Inject constructor(
         }
     }
 
-    private fun withBacktest(match: TasteMatchResult, subjectId: String, branch: TasteMatchBranch): TasteMatchResult =
-        match.copy(backtest = backtestState.value?.view(subjectId, branch))
+    private fun withBacktest(match: TasteMatchResult, subjectId: String, branch: TasteMatchBranch): TasteMatchResult {
+        val state = backtestState.value
+        val rating = profileState.value?.ratedSubjectScores?.get(subjectId)
+        return match.copy(
+            backtest = state?.view(subjectId, branch, rating),
+            backtestPending = com.acgcompass.domain.taste.TasteBacktest.pending(state, subjectId, rating),
+        )
+    }
 
     /**
      * 本地没有特征时先用作品自己的标签出分，不等联网（限流排队时可能要等十几秒）；
@@ -538,7 +566,7 @@ class TasteEngine @Inject constructor(
                 LOCAL_RANK_LIMIT,
             )
         }.getOrDefault(emptyList())
-            .filter { it.hasSignal && (it.mediaType == null || it.mediaType == MediaType.ANIME) }
+            .filter { it.hasSignal && it.isAnimeForTaste }
         val overrides = loadTagOverrides()
         val scored = parallelMap(pool) { f ->
             val match =
@@ -701,6 +729,9 @@ class TasteEngine @Inject constructor(
     }
 
     private companion object {
+        /** 重建完多久再开始回测（毫秒）。 */
+        const val BACKTEST_START_DELAY_MS: Long = 3_000
+
         /** 单次 refreshFull 联网补齐 work_features 的上限（覆盖典型 50 样本画像，避免无限拉取）。 */
         const val MAX_NETWORK_FILL: Int = 60
 

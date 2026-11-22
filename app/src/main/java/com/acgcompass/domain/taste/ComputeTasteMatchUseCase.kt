@@ -65,6 +65,8 @@ data class TasteMatchResult(
     val circleZ: Double? = null,
     /** 已评分作品的回测值（建画像时不知道这部作品）；未评分、或回测还没算完时为 null。 */
     val backtest: BacktestView? = null,
+    /** 已评分作品的回测还没算完（或刚评分 / 改了分）：先不显示分数，见 [TasteBacktest.pending]。 */
+    val backtestPending: Boolean = false,
 ) {
     /** 正向理由（真正「命中你口味」的维度）；负向贡献项不应被展示成「命中」。 */
     val positiveReasons: List<TasteReason> get() = reasons.filter { it.contribution > 0.0 }

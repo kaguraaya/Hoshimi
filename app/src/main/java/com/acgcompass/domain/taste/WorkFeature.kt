@@ -67,3 +67,10 @@ fun WorkFeature.communityStd(): Double? {
 
 private const val HISTOGRAM_BINS = 10
 private const val MIN_HISTOGRAM_VOTES = 20
+
+/**
+ * 口味模型（画像、评分模型、圈子分、匹配度刻度、回测、为你排行）只用动画：游戏、漫画、小说、音乐和真人作品的打分方式
+ * 和动画不同，混进来会污染刻度和评测。资料里没有类型的旧缓存按动画处理。
+ */
+val WorkFeature.isAnimeForTaste: Boolean
+    get() = mediaType == null || mediaType == com.acgcompass.domain.model.MediaType.ANIME

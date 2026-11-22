@@ -81,7 +81,7 @@ class TasteConsistencyTest : StringSpec({
         }
     }
 
-    "match: the three branches give different scores, and more weight on quality tracks the community more" {
+    "match: the three branches give different scores, and aggressive spreads them the widest" {
         val base = build(samples, 100_000L, pool, divergenceOptions = gated)
         base.tasteFit shouldNotBe null
         fun scores(branch: TasteMatchBranch): List<Int> {
@@ -97,9 +97,12 @@ class TasteConsistencyTest : StringSpec({
         // 换分支必须真的换分数：大多数作品的分数不同。
         (standard.indices.count { standard[it] != conservative[it] } >= candidates.size / 2) shouldBe true
         (standard.indices.count { standard[it] != aggressive[it] } >= candidates.size / 2) shouldBe true
-        val community = candidates.map { it.bangumiScore!!.toDouble() }
-        val follow = { s: List<Int> -> TasteSelfCheck.spearman(s.map { it.toDouble() }, community) }
-        (follow(conservative) > follow(aggressive)) shouldBe true
+        // 激进「敢给」：两端放得最开，分数的离散程度大于保守（保守往中间收）。
+        fun spread(s: List<Int>): Double {
+            val m = s.average()
+            return kotlin.math.sqrt(s.sumOf { (it - m) * (it - m) } / s.size)
+        }
+        (spread(aggressive) > spread(conservative)) shouldBe true
     }
 
     "match puts a typical library work near the middle of the scale" {
@@ -124,6 +127,46 @@ class TasteConsistencyTest : StringSpec({
             } && e.predicted != null
         } shouldBe true
         backtest.coupling(TasteMatchBranch.STANDARD) shouldNotBe null
+    }
+
+    "one more rating barely moves the other works' backtest (folds keyed by work id)" {
+        val extra = TasteSample("extra", 9, null, 999_000L, feature("extra"))
+        fun shift(folds: (List<TasteSample>) -> List<TasteSelfCheck.Fold>, options: DivergenceOptions): Double {
+            val before = TasteBacktest.run(
+                TasteBuildInputs(samples, 100_000L, pool, emptyMap(), emptyList(), options),
+                folds = folds,
+            )
+            val after = TasteBacktest.run(
+                TasteBuildInputs(samples + extra, 100_000L, pool, emptyMap(), emptyList(), options),
+                folds = folds,
+            )
+            return samples.map { s ->
+                val a = before.entries.getValue(s.subjectId).match(TasteMatchBranch.STANDARD)!!
+                val b = after.entries.getValue(s.subjectId).match(TasteMatchBranch.STANDARD)!!
+                kotlin.math.abs(a - b).toDouble()
+            }.average()
+        }
+        val shuffled: (List<TasteSample>) -> List<TasteSelfCheck.Fold> = { rated ->
+            val order = rated.shuffled(Random(1))
+            (0 until 5).map { f ->
+                TasteSelfCheck.Fold(
+                    order.filterIndexed { i, _ -> i % 5 != f },
+                    order.filterIndexed { i, _ -> i % 5 == f },
+                )
+            }
+        }
+        val stable = shift({ TasteSelfCheck.folds(it) }, DivergenceOptions.DEFAULT)
+        val reshuffled = shift(shuffled, DivergenceOptions.DEFAULT.copy(stableFolds = false))
+        println("backtest shift after one more rating: stable $stable, reshuffled $reshuffled")
+        (stable < reshuffled) shouldBe true
+    }
+
+    "folds keyed by work id: a new rating never moves another work to a different fold" {
+        fun foldOf(rated: List<TasteSample>) =
+            TasteSelfCheck.folds(rated).flatMapIndexed { k, f -> f.test.map { it.subjectId to k } }.toMap()
+        val before = foldOf(samples)
+        val after = foldOf(samples + TasteSample("extra", 9, null, 999_000L, feature("extra")))
+        samples.all { before[it.subjectId] == after[it.subjectId] } shouldBe true
     }
 
     "the chance of a 9 or 10 rises with the predicted rating and stays a probability" {

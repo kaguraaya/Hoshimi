@@ -11,7 +11,8 @@ enum class TasteMatchBranch(val key: String, val label: String, val description:
     STANDARD(
         key = "standard",
         label = "常规",
-        description = "平衡：口味为主，少量参考口碑；分数按你自己看过的作品定刻度（75 ≈ 你看过的作品的平均水平）。适合大多数人",
+        description = "平衡：口味为主，少量参考口碑；很可能打 9 分以上的作品略往上给。" +
+            "分数按你自己看过的作品定刻度（75 ≈ 你看过的作品的平均水平）。适合大多数人",
     ),
     CONSERVATIVE(
         key = "conservative",
@@ -21,7 +22,8 @@ enum class TasteMatchBranch(val key: String, val label: String, val description:
     AGGRESSIVE(
         key = "aggressive",
         label = "激进",
-        description = "只看口味：完全不看口碑，两端放开——对口的冷门作品敢给 90 以上，不对口的敢给 50 以下。适合口味鲜明、想多发现冷门对口作品的人",
+        description = "敢给：口味和口碑的比重同常规，但很可能是你 9 分以上的作品直接给到 90 以上，两端放开、" +
+            "不对口的敢给 50 以下。适合想让真正喜欢的作品一眼冒出来的人",
     ),
     ;
 

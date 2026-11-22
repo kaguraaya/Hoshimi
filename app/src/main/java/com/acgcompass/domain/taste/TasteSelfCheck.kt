@@ -155,15 +155,20 @@ object TasteSelfCheck {
         )
     }
 
-    /** 自检用的折：先按 [seed] 打乱，再按下标轮流分到 [folds] 折。别的对照（例如旧算法）也用这一组折。 */
+    /**
+     * 自检和回测用的折：按作品编号的散列（加上 [seed]）分到 [folds] 折，没有作品的折跳过。
+     * 只看编号、不看顺序，新增或删除一部评分时其余作品不换折。别的对照（例如旧算法）也用这一组折。
+     */
     fun folds(rated: List<TasteSample>, folds: Int = DEFAULT_FOLDS, seed: Int = 1): List<Fold> {
-        val shuffled = rated.shuffled(Random(seed))
+        val foldOf = rated.associate {
+            it.subjectId to Math.floorMod(TasteFit.stableHash("${it.subjectId}@$seed"), folds.toLong()).toInt()
+        }
         return (0 until folds).map { fold ->
             Fold(
-                train = shuffled.filterIndexed { i, _ -> i % folds != fold },
-                test = shuffled.filterIndexed { i, _ -> i % folds == fold },
+                train = rated.filter { foldOf[it.subjectId] != fold },
+                test = rated.filter { foldOf[it.subjectId] == fold },
             )
-        }
+        }.filter { it.test.isNotEmpty() }
     }
 
     fun quality(rated: List<TasteSample>, pool: List<WorkFeature>): DataQuality {

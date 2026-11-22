@@ -9,6 +9,9 @@ interface TasteAnalysisController {
     val advancedProfile: StateFlow<AdvancedTasteProfile?>
     val localAnalysisState: StateFlow<TasteLocalAnalysisState>
 
+    /** 已评分作品的回测（重建画像后在后台算，算完前为 null）。 */
+    val backtest: StateFlow<TasteBacktest?> get() = kotlinx.coroutines.flow.MutableStateFlow(null)
+
     suspend fun isBangumiConfigured(): Boolean
 
     suspend fun importFromBangumi(): TasteImportResult
