@@ -84,6 +84,16 @@ internal object EvalVariants {
         builder(train, now, pool, divergenceOptions = options)
     }
 
+    /** 稳定性对照：同一方案，训练集里按编号散列挑一部已评作品拿掉，看其余预测变多少。 */
+    private fun dropOne(name: String, options: DivergenceOptions) = EvalVariant(name) { train, now, pool ->
+        val drop = train.filter { it.rating != null }.minByOrNull {
+            TasteFit.stableHash(
+                it.subjectId + "#drop",
+            )
+        }?.subjectId
+        builder(train.filter { it.subjectId != drop }, now, pool, divergenceOptions = options)
+    }
+
     /** 不指定 `-Peval.variants` 时只跑这两个：上一个发布版和 App 当前默认。 */
     val DEFAULT_NAMES = setOf("legacy", "default")
 
@@ -100,6 +110,12 @@ internal object EvalVariants {
             "gateLq" to { variant("gateLq", DivergenceOptions.DEFAULT.copy(scale = ScaleMode.QUANTILE)) },
             "gateLr" to { variant("gateLr", DivergenceOptions.DEFAULT.copy(recencyHalfLifeDays = RECENCY_DAYS)) },
             "gateLc" to { variant("gateLc", DivergenceOptions.DEFAULT.copy(controversyAxis = true)) },
+            "gateS" to { variant("gateS", DivergenceOptions.DEFAULT.copy(seriesPrefix = true)) },
+            "gateShuffle" to { variant("gateShuffle", DivergenceOptions.DEFAULT.copy(stableFolds = false)) },
+            "gateR3" to { variant("gateR3", DivergenceOptions.DEFAULT.copy(innerRepeats = 3)) },
+            "defaultD" to { dropOne("defaultD", DivergenceOptions.DEFAULT) },
+            "gateShuffleD" to { dropOne("gateShuffleD", DivergenceOptions.DEFAULT.copy(stableFolds = false)) },
+            "gateR3D" to { dropOne("gateR3D", DivergenceOptions.DEFAULT.copy(innerRepeats = 3)) },
             "learned" to {
                 val learned = if (temporalFile.exists()) learnPrior(temporalFile, gate) else ExpertWeights.LEGACY
                 println("learned gate prior: $learned")
@@ -236,19 +252,23 @@ internal class EvalWriter(file: File, private val variants: List<EvalVariant>) {
                 ),
             )
             for (profile in profiles) {
-                val r = compute(t.feature, profile, withNeighbors = false, withReasons = false)
-                val p = r.prediction
-                cells.addAll(
-                    listOf(
-                        p?.rating ?: "", p?.baseline ?: "", p?.divergence ?: "",
-                        r.score, r.satisfaction, r.profileScore, r.analogy?.z ?: "",
-                        p?.low ?: "", p?.high ?: "",
-                    ),
-                )
+                cells.addAll(predictionCells(compute(t.feature, profile, withNeighbors = false, withReasons = false)))
             }
             out.appendLine(cells.joinToString("\t"))
             rows++
         }
+    }
+
+    /** 一个方案对一部作品的输出，顺序与 [FIELDS] 相同。 */
+    private fun predictionCells(r: TasteMatchResult): List<Any> {
+        val p = r.prediction
+        val s = p?.summary
+        return listOf(
+            p?.rating ?: "", p?.baseline ?: "", p?.divergence ?: "",
+            r.score, r.satisfaction, r.profileScore, r.analogy?.z ?: "",
+            p?.low ?: "", p?.high ?: "",
+            p?.location ?: "", s?.median ?: "", s?.low ?: "", s?.high ?: "", p?.highChance ?: "",
+        )
     }
 
     fun close() {
@@ -262,6 +282,9 @@ internal class EvalWriter(file: File, private val variants: List<EvalVariant>) {
 
     private companion object {
         val HEAD = listOf("user", "fold", "n_train", "subject", "rating", "community", "votes", "ts")
-        val FIELDS = listOf("pred", "base", "div", "score", "sat", "profile", "analogy", "low", "high")
+        val FIELDS = listOf(
+            "pred", "base", "div", "score", "sat", "profile", "analogy", "low", "high",
+            "loc", "med", "qlo", "qhi", "p9",
+        )
     }
 }

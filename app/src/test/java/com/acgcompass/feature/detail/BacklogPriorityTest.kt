@@ -47,4 +47,9 @@ class BacklogPriorityTest : StringSpec({
         unsure shouldBe "中"
         reason!! shouldContain "把握不大"
     }
+
+    "a work you already rated gets no catch-up priority" {
+        val rated = taste(0.95f, rank = 95).copy(rated = true)
+        computeBacklogPriority(rated, consensus(1f), short, emptyList()) shouldBe (null to null)
+    }
 })

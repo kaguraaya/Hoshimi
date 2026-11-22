@@ -1,5 +1,6 @@
 package com.acgcompass.data.remote.bangumi
 
+import com.acgcompass.core.common.AppExceptionHandler
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.network.RequestPriority
 import java.util.concurrent.ConcurrentHashMap
@@ -21,7 +22,7 @@ internal class RequestCoalescer<T>(
 ) {
     private data class InFlight<T>(val deferred: Deferred<AppResult<T>>, val priority: RequestPriority)
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + AppExceptionHandler)
     private val inFlight = ConcurrentHashMap<String, InFlight<T>>()
     private val recent = ConcurrentHashMap<String, Pair<Long, T>>()
 

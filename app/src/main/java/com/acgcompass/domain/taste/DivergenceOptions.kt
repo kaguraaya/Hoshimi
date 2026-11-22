@@ -64,6 +64,12 @@ data class DivergenceOptions(
     val recencyHalfLifeDays: Double = 0.0,
     val controversyAxis: Boolean = false,
     val intervalCoverage: Double = DEFAULT_COVERAGE,
+    /** 同系列也认标题分隔符（「!」「:」「〜」等）前面的部分：「BanG Dream! Ave Mujica」和「BanG Dream! It's MyGO!!!!!」算一个系列。 */
+    val seriesPrefix: Boolean = false,
+    /** 内部 5 折按作品编号的散列分折：新增或删除一部评分时，其余作品不换折。关闭时整体打乱后按位置轮流分。 */
+    val stableFolds: Boolean = false,
+    /** 内部 5 折做几遍（每遍换一种分法），各部分权重、区间和折外值取平均，减少分法带来的随机波动。 */
+    val innerRepeats: Int = 1,
 ) {
     companion object {
         private const val DEFAULT_PRIOR_STRENGTH = 20.0
@@ -73,9 +79,10 @@ data class DivergenceOptions(
         val LEGACY = DivergenceOptions()
 
         /**
-         * App 实际使用的配置：按人权重（向 [ExpertWeights.LEARNED] 收缩）+ 预测区间，线性换算。
-         * 依据见 docs/algorithm-eval.md 的时间切分评测：排序不低于旧版，伤害率显著下降，严重误推不增加。
+         * App 实际使用的配置：按人权重（向 [ExpertWeights.LEARNED] 收缩）+ 预测区间，线性换算，内部 5 折按作品编号分折。
+         * 依据见 docs/algorithm-eval.md 的时间切分评测：排序不低于旧版，伤害率显著下降，严重误推不增加；
+         * 按编号分折和整体打乱准确度相同，拿掉一部评分时其余预测的变化少一半以上。
          */
-        val DEFAULT = DivergenceOptions(perUserGate = true, gatePrior = ExpertWeights.LEARNED)
+        val DEFAULT = DivergenceOptions(perUserGate = true, gatePrior = ExpertWeights.LEARNED, stableFolds = true)
     }
 }

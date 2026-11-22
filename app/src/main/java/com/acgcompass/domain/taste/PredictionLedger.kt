@@ -15,18 +15,18 @@ enum class PredictionContext {
 /** 账本里的模型版本名：配置不同就是不同版本，互不覆盖。 */
 object TasteModelVersion {
     fun of(options: DivergenceOptions): String = buildString {
-        append(if (options.perUserGate) "gate2" else "legacy1")
+        append(if (options.perUserGate) "gate3" else "legacy1")
         if (options.scale == ScaleMode.QUANTILE) append("-q")
         if (options.recencyHalfLifeDays > 0.0) append("-r")
         if (options.controversyAxis) append("-c")
     }
 
-    /** 匹配度部分的版本：刻度方法 + 分支（`fit3` = 锚定刻度、圈子分封顶；没有匹配度模型时是旧公式）。 */
+    /** 匹配度部分的版本：刻度方法 + 分支（`fit4` = 锚定刻度、圈子分封顶、9 分以上可能的上尾；没有匹配度模型时是旧公式）。 */
     fun match(profile: AdvancedTasteProfile): String =
-        (if (profile.tasteFit != null) "fit3-" else "formula-") + profile.matchBranch.key
+        (if (profile.tasteFit != null) "fit4-" else "formula-") + profile.matchBranch.key
 
     /**
-     * 预测账本里的完整版本：评分模型、匹配度刻度、分支分开写（`gate2|fit3-standard`），换了其中任何一个，
+     * 预测账本里的完整版本：评分模型、匹配度刻度、分支分开写（`gate2|fit4-standard`），换了其中任何一个，
      * 新旧记录都能分开对账。[model] 默认是画像的主评分模型；记对照模型时传对照模型。
      */
     fun ledger(profile: AdvancedTasteProfile, model: PersonalDivergenceModel? = profile.divergence): String? =

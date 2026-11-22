@@ -31,18 +31,44 @@ class BacktestEntry(
         if (components != null && scale != null) TasteFit.score(components, scale, branch) else null
 }
 
-/** 详情页 / 为你排行展示用的回测值（按当前分支算好）。 */
-data class BacktestView(val match: Int?, val predicted: Double?, val low: Double?, val high: Double?, val rating: Int)
+/**
+ * 详情页 / 为你排行展示用的回测值（按当前分支算好）；[prediction] 是那一折的完整预测（含分布）。
+ * [updating] 为 true：画像刚重建、新的回测还没算完，这是上一次回测的结果。
+ */
+data class BacktestView(
+    val match: Int?,
+    val predicted: Double?,
+    val low: Double?,
+    val high: Double?,
+    val rating: Int,
+    val prediction: RatingPrediction? = null,
+    val updating: Boolean = false,
+)
 
 /**
  * 已评分作品的回测：分 [TasteSelfCheck.DEFAULT_FOLDS] 份，每次用其余几份建画像（作品库、收藏信号、标签分类和 App 一样），
  * 给留出的那份打分。详情页、为你排行里已评分作品的「回测匹配度」「回测预计评分」都来自这里——
  * 不是把你的评分换算出来的数。
  */
-class TasteBacktest(val entries: Map<String, BacktestEntry>) {
-    fun view(subjectId: String, branch: TasteMatchBranch): BacktestView? = entries[subjectId]?.let {
-        BacktestView(it.match(branch), it.predicted, it.prediction?.low, it.prediction?.high, it.rating)
-    }
+class TasteBacktest(val entries: Map<String, BacktestEntry>, val updating: Boolean = false) {
+    /**
+     * 这部作品的回测值。[rating] 是你现在的评分：和回测时的评分不一样（改过分）时这条已经过期，返回 null。
+     */
+    fun view(subjectId: String, branch: TasteMatchBranch, rating: Int? = null): BacktestView? =
+        entries[subjectId]?.takeIf { rating == null || it.rating == rating }?.let {
+            BacktestView(
+                it.match(branch),
+                it.predicted,
+                it.prediction?.low,
+                it.prediction?.high,
+                it.rating,
+                it.prediction,
+                updating = updating,
+            )
+        }
+
+    /** 画像重建后、新的回测算完前：继续用这一份，标上「正在更新」，不退回把你的评分算进去的分。 */
+    fun updatingCopy(): TasteBacktest = TasteBacktest(entries, updating = true)
 
     /** 你的评分和口味匹配度的关联（回测，排序相关）：越高，说明口味越对的作品你打分也越高。 */
     fun coupling(branch: TasteMatchBranch): Double? {
@@ -77,18 +103,33 @@ class TasteBacktest(val entries: Map<String, BacktestEntry>) {
         }
 
     companion object {
+        /**
+         * 已评分作品此刻没有可用的回测值、但回测之后会给出：回测还没算完，或这部作品刚评分 / 改了分、新的回测还没算完。
+         * 评过分的作品太少（不回测）或缺少作品资料（不在回测里）时为 false。
+         */
+        fun pending(state: TasteBacktest?, subjectId: String, rating: Int?): Boolean {
+            val entry = state?.entries?.get(subjectId)
+            val valid = entry != null && (rating == null || entry.rating == rating)
+            return when {
+                valid -> false
+                state == null || state.updating -> true
+                else -> entry != null
+            }
+        }
+
         /** 已评分作品少于这么多时不回测（每一折太小，结果没有意义）。 */
         const val MIN_RATED = 15
         private const val MIN_PAIRS = 8
 
         /**
-         * 按 [inputs] 分折回测。[beforeFold] 在每折开始前调用（调用方可以在这里检查取消、让出线程）。
-         * 已评分作品太少时返回空结果。
+         * 按 [inputs] 分折回测。[beforeFold] 在每折开始前调用（调用方可以在这里检查取消、让出线程）；
+         * [folds] 是分折方式，默认按作品编号散列分 5 折（[TasteSelfCheck.folds]）。已评分作品太少时返回空结果。
          */
         fun run(
             inputs: TasteBuildInputs,
             builder: BuildTasteProfileUseCase = BuildTasteProfileUseCase(),
             compute: ComputeTasteMatchUseCase = ComputeTasteMatchUseCase(),
+            folds: (List<TasteSample>) -> List<TasteSelfCheck.Fold> = { TasteSelfCheck.folds(it) },
             beforeFold: () -> Unit = {},
         ): TasteBacktest {
             val rated = inputs.samples.filter { it.rating != null }
@@ -96,7 +137,7 @@ class TasteBacktest(val entries: Map<String, BacktestEntry>) {
             val ratedIds = rated.mapTo(HashSet()) { it.subjectId }
             val unrated = inputs.samples.filter { it.rating == null }
             val entries = LinkedHashMap<String, BacktestEntry>()
-            for (fold in TasteSelfCheck.folds(rated)) {
+            for (fold in folds(rated)) {
                 beforeFold()
                 val held = fold.test.mapTo(HashSet()) { it.subjectId }
                 // 留出的作品当作没看过：不进画像，也不作为收藏信号进圈子分。

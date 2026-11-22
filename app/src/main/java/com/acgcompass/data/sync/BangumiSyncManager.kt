@@ -1,6 +1,7 @@
 package com.acgcompass.data.sync
 
 import com.acgcompass.core.common.AppError
+import com.acgcompass.core.common.AppExceptionHandler
 import com.acgcompass.core.common.AppResult
 import com.acgcompass.core.common.DispatcherProvider
 import com.acgcompass.core.common.runCatchingCancellable
@@ -106,7 +107,7 @@ class BangumiSyncManager @Inject constructor(
     private val dispatchers: DispatcherProvider,
 ) {
     /** 同步在自己的作用域里跑：发起同步的页面离开时，同步本身不会被取消。 */
-    private val syncScope = CoroutineScope(SupervisorJob() + dispatchers.io)
+    private val syncScope = CoroutineScope(SupervisorJob() + dispatchers.io + AppExceptionHandler)
     private val inFlightLock = Mutex()
     private var inFlight: Deferred<AppResult<SyncReport>>? = null
 

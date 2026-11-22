@@ -84,7 +84,7 @@ internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = f
         synopsis = summary?.trim()?.takeIf { it.isNotBlank() },
         discovery = discovery,
         predictionText = match?.prediction?.let { p ->
-            "预计你会打 %.1f".format(p.rating) + p.community?.let { " · 社区 %.1f".format(it) }.orEmpty()
+            "预计你会打 ${p.headline} 分" + p.community?.let { " · 社区 %.1f".format(it) }.orEmpty()
         },
     )
 }

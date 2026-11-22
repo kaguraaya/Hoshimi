@@ -85,6 +85,24 @@ class PersonalDivergenceModelTest : StringSpec({
         mystery.rating shouldBe (mystery.baseline + mystery.divergence plusOrMinus 1e-9)
     }
 
+    "App 默认模型：平均分、中位数、区间和打 9 分以上的可能出自同一个分布" {
+        val gated = PersonalDivergenceModel.fit(samples(80), options = DivergenceOptions.DEFAULT)!!
+        val tagSets = listOf(listOf("悬疑", "日常", "校园"), listOf("后宫", "日常", "校园"), listOf("日常", "校园", "音乐"))
+        for (tags in tagSets) {
+            for (community in listOf(5.0f, 6.5f, 7.5f, 8.5f, 9.3f)) {
+                val p = gated.predict(feature("c$community", tags, community))
+                val s = p.summary!!
+                val c = p.atLeast!!
+                p.rating shouldBe (s.mean plusOrMinus 1e-9)
+                c.zipWithNext().all { (a, b) -> a >= b } shouldBe true
+                // 打 9 分以上的可能过半，中位数就不会低于 9；不到一半，中位数就低于 9。
+                (s.median >= 9) shouldBe (p.highChance!! >= 0.5)
+                (s.low <= s.median && s.median <= s.high) shouldBe true
+                p.headline shouldBe scoreLabel(s.median)
+            }
+        }
+    }
+
     "大众基线随社区分单调，且落在 1–10" {
         val low = model.predict(feature("l", listOf("日常"), 5.0f))
         val high = model.predict(feature("g", listOf("日常"), 9.0f))

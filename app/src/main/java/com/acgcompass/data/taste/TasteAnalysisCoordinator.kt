@@ -42,6 +42,7 @@ class TasteAnalysisCoordinator @Inject constructor(
 ) : TasteAnalysisController {
     override val refreshProgress: StateFlow<TasteRefreshProgress?> = tasteEngine.observeRefreshProgress()
     override val advancedProfile: StateFlow<AdvancedTasteProfile?> = tasteEngine.observeProfile()
+    override val backtest: StateFlow<com.acgcompass.domain.taste.TasteBacktest?> = tasteEngine.observeBacktest()
     override val localAnalysisState: StateFlow<TasteLocalAnalysisState> = taskStateDao
         .observe(LOCAL_ANALYSIS_TASK_KEY)
         .map { it.toTasteLocalAnalysisState() }

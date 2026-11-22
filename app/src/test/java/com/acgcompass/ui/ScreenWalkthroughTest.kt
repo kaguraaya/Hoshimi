@@ -227,6 +227,92 @@ class ScreenWalkthroughTest {
         shot("divergence-light")
     }
 
+    /** 评分预测块：打 9 分以上的可能过半时单独一行，下面是打几分的分布条。 */
+    @Test
+    fun predictionChances() {
+        val prediction = com.acgcompass.feature.detail.RatingPredictionUi(
+            predictedText = "9",
+            communityText = "9.1",
+            userMeanText = "7.4",
+            selfSummary = "在你的评分里算高分",
+            communitySummary = "和社区评分基本一致",
+            factors = emptyList(),
+            intervalText = "大概率在 7–10 分之间",
+            highChanceText = "很可能打 9 分以上（约 55%）",
+            meanText = "平均 8.5",
+            likelyText = "最可能 9 分（43%）",
+            readingGuide = listOf(
+                "预计你会打 9 分：落在中间的分数，打得比它高、比它低的可能都不超过一半。",
+                "平均 8.5 分：把每个分数按可能大小加权平均。低分那几档会把它往下拉，所以常比上面的数低一点。",
+            ),
+            highChanceStrong = true,
+            chanceBuckets = listOf(
+                com.acgcompass.feature.detail.ChanceBucketUi("10 分", 13, 0.13),
+                com.acgcompass.feature.detail.ChanceBucketUi("9 分", 43, 0.43),
+                com.acgcompass.feature.detail.ChanceBucketUi("8 分", 29, 0.29),
+                com.acgcompass.feature.detail.ChanceBucketUi("7 分", 12, 0.12),
+                com.acgcompass.feature.detail.ChanceBucketUi("6 分及以下", 3, 0.03),
+            ),
+        )
+        compose.setContent {
+            AcgCompassTheme(darkTheme = false, dynamicColor = false) {
+                Surface {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) { RatingPredictionBlock(prediction) }
+                }
+            }
+        }
+        compose.onNodeWithText("最可能 9 分（43%） · 很可能打 9 分以上（约 55%）").assertIsDisplayed()
+        compose.onNodeWithText("平均 8.5 · 大概率在 7–10 分之间").assertIsDisplayed()
+        compose.onNodeWithText("可能打几分").assertIsDisplayed()
+        // 宽的段在段内写名称和百分比；≤6 那段太窄，写在图例里。
+        compose.onNodeWithContentDescription("可能打几分：10 分 13%，9 分 43%，8 分 29%，7 分 12%，6 分及以下 3%")
+            .assertIsDisplayed()
+        compose.onNodeWithText("≤6 分 3%").assertIsDisplayed()
+        compose.onNodeWithText("这几个数怎么看").assertIsDisplayed()
+        shot("prediction-chances")
+        compose.onNodeWithText("这几个数怎么看").performClick()
+        compose.onNodeWithText("预计你会打 9 分：落在中间的分数，打得比它高、比它低的可能都不超过一半。").assertIsDisplayed()
+        shot("prediction-guide")
+    }
+
+    /** 预计评分块（深色）：分段横条的深浅和段内文字在深色主题下也要看得清。 */
+    @Test
+    fun predictionChancesDark() {
+        val prediction = com.acgcompass.feature.detail.RatingPredictionUi(
+            predictedText = "9",
+            communityText = "9.1",
+            userMeanText = "7.4",
+            selfSummary = "在你的评分里算高分",
+            communitySummary = "和社区评分基本一致",
+            factors = emptyList(),
+            intervalText = "大概率在 7–10 分之间",
+            highChanceText = "很可能打 9 分以上（约 55%）",
+            meanText = "平均 8.5",
+            likelyText = "最可能 9 分（43%）",
+            readingGuide = listOf(
+                "预计你会打 9 分：落在中间的分数，打得比它高、比它低的可能都不超过一半。",
+                "平均 8.5 分：把每个分数按可能大小加权平均。低分那几档会把它往下拉，所以常比上面的数低一点。",
+            ),
+            highChanceStrong = true,
+            chanceBuckets = listOf(
+                com.acgcompass.feature.detail.ChanceBucketUi("10 分", 13, 0.13),
+                com.acgcompass.feature.detail.ChanceBucketUi("9 分", 43, 0.43),
+                com.acgcompass.feature.detail.ChanceBucketUi("8 分", 29, 0.29),
+                com.acgcompass.feature.detail.ChanceBucketUi("7 分", 12, 0.12),
+                com.acgcompass.feature.detail.ChanceBucketUi("6 分及以下", 3, 0.03),
+            ),
+        )
+        compose.setContent {
+            AcgCompassTheme(darkTheme = true, dynamicColor = false) {
+                Surface {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) { RatingPredictionBlock(prediction) }
+                }
+            }
+        }
+        compose.onNodeWithText("≤6 分 3%").assertIsDisplayed()
+        shot("prediction-chances-dark")
+    }
+
     /** 评分预测块 + 分歧画像（深色）。 */
     @Test
     fun divergenceDark() {

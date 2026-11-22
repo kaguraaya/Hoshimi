@@ -54,6 +54,10 @@ data class TasteRankItem(
     val ownership: RankOwnership?,
     /** 我的评分；没评过为 null。 */
     val myRating: Int? = null,
+    /** 预计评分的大字（分布的中位数，如「8」「≤5」）；没有分布时为 null，界面退回一位小数。 */
+    val predictedText: String? = null,
+    /** 已评分作品的回测还没算完（或刚评分）：[score] 只用来排序，界面显示「回测中」。 */
+    val scorePending: Boolean = false,
 )
 
 /** 一次排行的结果：[poolSize] 部动画参与排序，其中 [unratedCount] 部没评过分。 */

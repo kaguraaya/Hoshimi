@@ -11,6 +11,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.acgcompass.core.common.AppExceptionHandler
 import com.acgcompass.core.common.runCatchingCancellable
 import com.acgcompass.core.network.HttpClientFactory
 import com.acgcompass.core.network.HttpTimeouts
@@ -98,7 +99,7 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
 
     @Inject lateinit var trashRepository: Lazy<com.acgcompass.domain.repository.TrashRepository>
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + AppExceptionHandler)
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -155,6 +156,9 @@ class AcgCompassApplication : Application(), Configuration.Provider, ImageLoader
 
     override fun onCreate() {
         super.onCreate()
+        // 最先装上：之后任何一步闪退都能留下记录。
+        CrashDiagnostics.install(this)
+        appScope.launch { CrashDiagnostics.collectExitReasons(this@AcgCompassApplication) }
         // 将启动初始化移出主线程，依赖图构建和磁盘任务均在后台执行。
         // （Room / 网络客户端 / 仓库）与观察者注册都在后台完成，避免冷启动 / 开屏期间在主线程
         // 构建依赖图并与开屏动效争抢，减少掉帧。均为 best-effort，绝不阻塞 UI 起步。

@@ -20,5 +20,5 @@ object ApplicationScopeModule {
     @Singleton
     @ApplicationScope
     fun provideApplicationScope(dispatchers: DispatcherProvider): CoroutineScope =
-        CoroutineScope(SupervisorJob() + dispatchers.default)
+        CoroutineScope(SupervisorJob() + dispatchers.default + AppExceptionHandler)
 }

@@ -72,6 +72,7 @@ fun TasteProfileRoute(
     val pendingTagCount by viewModel.pendingTagCount.collectAsStateWithLifecycle()
     val tagClassifyProgress by viewModel.tagClassifyProgress.collectAsStateWithLifecycle()
     val advancedProfile by viewModel.advancedProfile.collectAsStateWithLifecycle()
+    val backtest by viewModel.backtest.collectAsStateWithLifecycle()
     val dimensionSummary by viewModel.dimensionSummary.collectAsStateWithLifecycle()
     val processingSummary by viewModel.processingSummary.collectAsStateWithLifecycle()
     val classificationState by viewModel.classificationState.collectAsStateWithLifecycle()
@@ -99,6 +100,7 @@ fun TasteProfileRoute(
         tagClassifyProgress = tagClassifyProgress,
         // 12 维引擎画像，供画像页展示更丰富的维度 / 组合 / 概况。
         advancedProfile = advancedProfile,
+        backtest = backtest,
         // AI 升维效果摘要（把多少兜底为「题材」的标签细化到了哪些精确维度）。
         dimensionSummary = dimensionSummary,
         processingSummary = processingSummary,
@@ -129,6 +131,7 @@ fun TasteProfileScreen(
     pendingTagCount: Int? = null,
     tagClassifyProgress: TagClassifyProgress? = null,
     advancedProfile: AdvancedTasteProfile? = null,
+    backtest: com.acgcompass.domain.taste.TasteBacktest? = null,
     dimensionSummary: TagDimensionSummary? = null,
     processingSummary: TasteProcessingSummary? = null,
     manualReviewCount: Int = 0,
@@ -357,6 +360,7 @@ fun TasteProfileScreen(
                 // 画像概况——真实样本量 + 各维度数据覆盖率（透明度 / 可信度）。
                 advancedProfile?.takeIf { it.isUsable }?.let { adv ->
                     ProfileOverviewSection(adv)
+                    if (adv.tasteFit != null) TasteBacktestSection(adv.matchBranch, backtest)
                 }
             }
         }

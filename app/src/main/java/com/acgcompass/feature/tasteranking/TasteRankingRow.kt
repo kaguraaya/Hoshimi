@@ -67,24 +67,34 @@ internal fun RankRow(rank: Int, item: TasteRankItem, onClick: () -> Unit) {
                     )
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    "${item.score}%",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                item.predictedRating?.let {
-                    Text(
-                        "预计 %.1f".format(it),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            ScoreColumn(item)
         }
     }
 }
+
+/** 右侧的匹配度和预计评分；已评分作品的回测还没算完时只写「回测中」（当前画像下的分把你自己的评分也算进去了）。 */
+@Composable
+private fun ScoreColumn(item: TasteRankItem) {
+    Column(horizontalAlignment = Alignment.End) {
+        if (item.scorePending) {
+            Text("回测中", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            return@Column
+        }
+        Text(
+            "${item.score}%",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        predictedLabel(item)?.let {
+            Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** 预计评分：和详情页一样写分布的中位数（整数）；没有分布时写一位小数。 */
+private fun predictedLabel(item: TasteRankItem): String? =
+    item.predictedText?.let { "预计 $it 分" } ?: item.predictedRating?.let { "预计 %.1f".format(it) }
 
 private fun meta(item: TasteRankItem): String = listOfNotNull(
     item.year?.let { "$it 年" },

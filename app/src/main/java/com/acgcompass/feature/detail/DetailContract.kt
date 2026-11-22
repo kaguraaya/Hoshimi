@@ -194,68 +194,125 @@ data class RatingPredictionUi(
     val intervalText: String? = null,
     /** 「打 9 分以上的可能约 25%」；模型不给时为 null。 */
     val highChanceText: String? = null,
+    /** 打 9 分以上的可能过半：在数字旁醒目标出。 */
+    val highChanceStrong: Boolean = false,
+    /** 打 10 / 9 / 8 / 7 / 6 分及以下各自的可能（百分比，加起来约 100）；模型不给时为空。 */
+    val chanceBuckets: List<ChanceBucketUi> = emptyList(),
+    /** 「平均 8.5」：同一个分布的平均分；只有分布时才有（大字显示的是中位数）。 */
+    val meanText: String? = null,
+    /** 「最可能 9 分（43%）」：分布里可能最大的那一档；只有分布时才有。 */
+    val likelyText: String? = null,
+    /** 「这几个数怎么看」：用这部作品自己的数说明大字、平均、最可能和 9 分以上各是什么；只有分布时才有。 */
+    val readingGuide: List<String> = emptyList(),
 )
 
+/** 分数分布条的一格：[label] 如「9 分」，[percent] 为四舍五入后的百分比。 */
+data class ChanceBucketUi(val label: String, val percent: Int, val share: Double)
+
 /** 由领域预测结果生成展示模型（详情页 / 探索卡片 / 今晚看什么共用同一口径的文案）。 */
-fun com.acgcompass.domain.taste.RatingPrediction.toUi(): RatingPredictionUi {
-    val self = relativeToSelf
-    val vs = vsCommunity
-    val habit = habitOffset
-    return RatingPredictionUi(
-        predictedText = "%.1f".format(rating),
-        communityText = community?.let { "%.1f".format(it) },
-        userMeanText = "%.1f".format(userMean),
-        selfSummary = when {
-            self >= SELF_HIGH -> "在你的评分里算高分"
-            self >= SELF_ABOVE -> "比你的平均分略高"
-            self <= -SELF_HIGH -> "明显低于你的平均分"
-            self <= -SELF_ABOVE -> "比你的平均分略低，对你来说偏一般"
-            else -> "接近你的平均分，中规中矩"
-        },
-        communitySummary = when {
-            vs == null || habit == null -> "这部作品还没有社区评分，按你的平均水平估计"
-            kotlin.math.abs(vs) < NOTABLE_DIVERGENCE -> "和社区评分基本一致"
-            else -> buildString {
-                append("比社区评分").append(if (vs > 0) "高 " else "低 ").append("%.1f".format(kotlin.math.abs(vs)))
-                append("：打分习惯 ").append("%+.1f".format(habit))
-                append(
-                    "，个人口味 ",
-                ).append(if (kotlin.math.abs(divergence) < MIN_SHOWN) "≈0" else "%+.1f".format(divergence))
-            }
-        },
-        factors = factors.map {
-            TasteMatchReasonUi(
-                text = "${it.label} %+.1f".format(it.delta),
-                positive = it.delta >= 0.0,
-            )
-        },
-        intervalText = intervalLabel(),
-        highChanceText = highChanceLabel(),
+fun com.acgcompass.domain.taste.RatingPrediction.toUi(): RatingPredictionUi = RatingPredictionUi(
+    predictedText = headline,
+    communityText = community?.let { "%.1f".format(it) },
+    userMeanText = "%.1f".format(userMean),
+    selfSummary = selfSummary(),
+    communitySummary = communitySummary(),
+    factors = factors.map {
+        TasteMatchReasonUi(
+            text = "${it.label} %+.1f".format(it.delta),
+            positive = it.delta >= 0.0,
+        )
+    },
+    intervalText = intervalLabel(),
+    highChanceText = highChanceLabel(),
+    highChanceStrong = (highChance ?: 0.0) >= STRONG_CHANCE,
+    chanceBuckets = chanceBuckets(),
+    meanText = summary?.let { "平均 ${"%.1f".format(rating)}" },
+    likelyText = summary?.let {
+        "最可能 ${com.acgcompass.domain.taste.scoreLabel(it.mode)} 分（${(it.modeChance * PERCENT).roundToInt()}%）"
+    },
+    readingGuide = readingGuide(),
+)
+
+/** 大字（中位数）、平均、最可能的分数、9 分以上：同一个分布的四种读法，用这部作品自己的数来说。 */
+private fun com.acgcompass.domain.taste.RatingPrediction.readingGuide(): List<String> {
+    val s = summary ?: return emptyList()
+    val median = com.acgcompass.domain.taste.scoreLabel(s.median)
+    val mode = com.acgcompass.domain.taste.scoreLabel(s.mode)
+    return listOfNotNull(
+        "预计你会打 $median 分：落在中间的分数，打得比它高、比它低的可能都不超过一半。",
+        "平均 ${"%.1f".format(rating)} 分：把每个分数按可能大小加权平均。低分那几档会把它往下拉，所以常比上面的数低一点。",
+        "最可能 $mode 分（${(s.modeChance * PERCENT).roundToInt()}%）：单个分数里可能最大的一档，不一定和上面的数相同。",
+        "「打 9 分以上」：9 分和 10 分两档的可能加起来。".takeIf { highChance != null },
     )
 }
 
+/** 预计评分在你自己的评分里处在什么位置。 */
+private fun com.acgcompass.domain.taste.RatingPrediction.selfSummary(): String {
+    val self = relativeToSelf
+    return when {
+        self >= SELF_HIGH -> "在你的评分里算高分"
+        self >= SELF_ABOVE -> "比你的平均分略高"
+        self <= -SELF_HIGH -> "明显低于你的平均分"
+        self <= -SELF_ABOVE -> "比你的平均分略低，对你来说偏一般"
+        else -> "接近你的平均分，中规中矩"
+    }
+}
+
+/** 和社区评分比：差多少，其中打分习惯和个人口味各占多少。 */
+private fun com.acgcompass.domain.taste.RatingPrediction.communitySummary(): String {
+    val vs = vsCommunity
+    val habit = habitOffset
+    return when {
+        vs == null || habit == null -> "这部作品还没有社区评分，按你的平均水平估计"
+        kotlin.math.abs(vs) < NOTABLE_DIVERGENCE -> "和社区评分基本一致"
+        else -> buildString {
+            append("比社区评分").append(if (vs > 0) "高 " else "低 ").append("%.1f".format(kotlin.math.abs(vs)))
+            append("：打分习惯 ").append("%+.1f".format(habit))
+            append("，个人口味 ").append(if (kotlin.math.abs(divergence) < MIN_SHOWN) "≈0" else "%+.1f".format(divergence))
+        }
+    }
+}
+
+/** 打 10 / 9 / 8 / 7 / 6 分及以下各自的可能；模型不给累积可能时为空。 */
+private fun com.acgcompass.domain.taste.RatingPrediction.chanceBuckets(): List<ChanceBucketUi> =
+    atLeast?.let { com.acgcompass.domain.taste.RatingChances.buckets(it) }.orEmpty()
+        .map { (label, p) -> ChanceBucketUi(label, (p * PERCENT).roundToInt(), p.coerceAtLeast(0.0)) }
+
 /**
- * 「打 9 分以上的可能约 xx%」：按 5% 取整；公开数据上最高一档偏乐观，60% 以上统一写「60% 以上」。
+ * 「打 9 分以上」的说法：按 5% 取整；公开数据上最高一档偏乐观，60% 以上统一写「60% 以上」。
+ * 过半时写「很可能」，三成以上写「有不小的可能」。
  */
 private fun com.acgcompass.domain.taste.RatingPrediction.highChanceLabel(): String? {
     val chance = highChance ?: return null
     val percent = (chance * PERCENT / CHANCE_STEP).roundToInt() * CHANCE_STEP
-    return if (percent >= CHANCE_CAP) {
-        "打 9 分以上的可能在 $CHANCE_CAP% 以上"
-    } else {
-        "打 9 分以上的可能约 ${percent.coerceAtLeast(
-            CHANCE_STEP,
-        )}%"
+    val amount = if (percent >= CHANCE_CAP) "$CHANCE_CAP% 以上" else "约 ${percent.coerceAtLeast(CHANCE_STEP)}%"
+    return when {
+        chance >= STRONG_CHANCE -> "很可能打 9 分以上（$amount）"
+        chance >= NOTABLE_CHANCE -> "有不小的可能打 9 分以上（$amount）"
+        else -> "打 9 分以上的可能$amount"
     }
 }
 
 private const val PERCENT = 100.0
 private const val CHANCE_STEP = 5
 private const val CHANCE_CAP = 60
+private const val STRONG_CHANCE = 0.5
+private const val NOTABLE_CHANCE = 0.3
 
-/** 预测区间的一行说明；模型不给区间时为 null。 */
-private fun com.acgcompass.domain.taste.RatingPrediction.intervalLabel(): String? =
-    if (low != null && high != null) "大概率在 ${"%.1f".format(low)}–${"%.1f".format(high)} 分之间" else null
+/**
+ * 预测区间的一行说明：有分布时取分布的 10%–90%（整数），否则用回归给的区间；都没有时为 null。
+ */
+private fun com.acgcompass.domain.taste.RatingPrediction.intervalLabel(): String? {
+    val s = summary
+    return when {
+        s != null && s.low == s.high -> "大概率就是 ${com.acgcompass.domain.taste.scoreLabel(s.low)} 分"
+        s != null && s.low < com.acgcompass.domain.taste.RatingChances.THRESHOLDS.first() ->
+            "大概率不超过 ${s.high} 分"
+        s != null -> "大概率在 ${s.low}–${s.high} 分之间"
+        low != null && high != null -> "大概率在 ${"%.1f".format(low)}–${"%.1f".format(high)} 分之间"
+        else -> null
+    }
+}
 
 internal const val NOTABLE_DIVERGENCE = 0.25
 internal const val MIN_SHOWN = 0.05
@@ -289,6 +346,8 @@ sealed interface TasteMatchUiModel {
         val uncertain: Boolean = false,
         /** 已评分作品的回测说明（回测匹配度、回测预计评分、你的评分）；未评分作品为 null。 */
         val backtestText: String? = null,
+        /** 你已经评过分：不给补番优先级。 */
+        val rated: Boolean = false,
     ) : TasteMatchUiModel
 
     /** 尚未生成口味画像，或样本/标签不足以计算匹配度（[message] 说明具体原因，不伪造）。 */
