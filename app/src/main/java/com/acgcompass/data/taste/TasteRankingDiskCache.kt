@@ -72,6 +72,8 @@ private data class StoredItem(
     val reason: String? = null,
     val ownership: String? = null,
     val myRating: Int? = null,
+    val predictedText: String? = null,
+    val scorePending: Boolean = false,
 ) {
     fun toDomain() = TasteRankItem(
         subjectId = subjectId,
@@ -85,12 +87,14 @@ private data class StoredItem(
         reason = reason,
         ownership = RankOwnership.entries.firstOrNull { it.name == ownership },
         myRating = myRating,
+        predictedText = predictedText,
+        scorePending = scorePending,
     )
 
     companion object {
         fun of(i: TasteRankItem) = StoredItem(
             i.subjectId, i.title, i.coverUrl, i.year, i.format.name, i.finished, i.score,
-            i.predictedRating, i.reason, i.ownership?.name, i.myRating,
+            i.predictedRating, i.reason, i.ownership?.name, i.myRating, i.predictedText, i.scorePending,
         )
     }
 }
