@@ -71,6 +71,9 @@ class TasteProfileViewModel @Inject constructor(
     /** 12 维引擎画像（各维度偏好 / 题材组合 / 样本量 / 覆盖率 / 均分），供画像页「更丰富」展示；null=尚未构建。 */
     val advancedProfile: StateFlow<AdvancedTasteProfile?> = analysisController.advancedProfile
 
+    /** 已评分作品的回测：口味画像页「评分和口味的关系」读它。 */
+    val backtest: StateFlow<com.acgcompass.domain.taste.TasteBacktest?> = analysisController.backtest
+
     val classifying: StateFlow<Boolean> = tagClassificationController.state
         .map { it.active }
         .stateIn(viewModelScope, SharingStarted.Eagerly, tagClassificationController.state.value.active)
