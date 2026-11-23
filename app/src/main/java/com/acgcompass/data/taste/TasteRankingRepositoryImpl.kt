@@ -211,16 +211,17 @@ class TasteRankingRepositoryImpl @Inject constructor(
     }
 
     /**
-     * 显示的匹配度和预计评分：已评分作品用回测值（建画像时不知道这部作品）。回测还没算完时标成待定，
-     * 不显示当前画像下的分（它把这部作品自己的评分也算进去了）。
+     * 显示的匹配度和预计评分：已评分作品用回测值（建画像时不知道这部作品）；刚评分、画像还没重建时当前的分就是盲测值。
+     * 回测还没算完、又没有盲测值时标成待定，不显示当前画像下的分（它把这部作品自己的评分也算进去了）。
      */
     private fun displayed(ranked: LocalRankedWork): Shown {
         val id = ranked.feature.subjectId
         val rating = ranked.myRating ?: return Shown(ranked.match.score, ranked.match.prediction, null, false)
-        val branch = engine.observeProfile().value?.matchBranch ?: TasteMatchBranch.STANDARD
+        val profile = engine.observeProfile().value
+        val branch = profile?.matchBranch ?: TasteMatchBranch.STANDARD
         val state = engine.observeBacktest().value
-        val view = state?.view(id, branch, rating)
-        val pending = TasteBacktest.pending(state, id, rating)
+        val view = state?.view(id, branch, rating) ?: TasteBacktest.beforeRating(id, ranked.match, rating, profile)
+        val pending = view == null && TasteBacktest.pending(state, id, rating)
         return Shown(
             score = view?.match ?: ranked.match.score,
             prediction = view?.prediction ?: ranked.match.prediction.takeIf { !pending },

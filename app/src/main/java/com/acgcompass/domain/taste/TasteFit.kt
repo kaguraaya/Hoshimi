@@ -21,7 +21,8 @@ import kotlin.math.sqrt
  *   很可能是你高分作品的，匹配度敢往上给（激进给得最多，常规少量，保守不加）。
  *
  * 刻度锚在你自己的作品上（[Anchors]）：作品库中位作品 ≈ 50，你看过的作品的中位 ≈ 75，你看过的前 10% ≈ 90；
- * 分支决定锚点和两端放多开（保守往中间收，激进两端放开）。分支只作用于匹配度，预计评分不分支。
+ * 分支决定锚点和两端放多开（保守往中间收，激进两端放开）。预计评分另按分支调整（[branchPrediction]），
+ * 这里的部件始终用常规的预计评分，分支不重复叠加。
  * 作品库样本按作品编号的散列固定挑选：作品库增减几部，其它样本不变，刻度不会跟着跳。
  * 参数在公开数据上选定，评测见 docs/algorithm-eval.md §7.3。
  */
@@ -60,12 +61,13 @@ object TasteFit {
      * （模型不给时为 NaN，按 0 计）；没有评分模型或圈子分时为 null。
      */
     fun components(result: TasteMatchResult): DoubleArray? {
-        val baseline = result.prediction?.baseline
+        val prediction = result.standardPrediction ?: result.prediction
+        val baseline = prediction?.baseline
         val circle = result.circleZ
         return if (baseline == null || circle == null) {
             null
         } else {
-            val chance = result.prediction?.highChance
+            val chance = prediction.highChance
             doubleArrayOf(
                 baseline,
                 result.analogy?.z ?: 0.0,

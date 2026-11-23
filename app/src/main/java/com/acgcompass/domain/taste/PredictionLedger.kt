@@ -26,11 +26,16 @@ object TasteModelVersion {
         (if (profile.tasteFit != null) "fit4-" else "formula-") + profile.matchBranch.key
 
     /**
-     * 预测账本里的完整版本：评分模型、匹配度刻度、分支分开写（`gate2|fit4-standard`），换了其中任何一个，
-     * 新旧记录都能分开对账。[model] 默认是画像的主评分模型；记对照模型时传对照模型。
+     * 预测账本里的完整版本：评分模型、匹配度刻度、分支分开写（`gate3|fit4-standard`），换了其中任何一个，
+     * 新旧记录都能分开对账。保守 / 激进的预计评分调整了个人偏离和离平均分距离的倍数，评分模型后面再写上这两个倍数（`gate3-x0.6s0.8|…`）。
+     * [model] 默认是画像的主评分模型；记对照模型时传对照模型。
      */
     fun ledger(profile: AdvancedTasteProfile, model: PersonalDivergenceModel? = profile.divergence): String? =
-        model?.let { "${it.modelVersion}|${match(profile)}" }
+        model?.let {
+            val b = profile.matchBranch
+            val scale = if (b.adjustsRating) "-x${b.ratingScale}s${b.ratingSpread}" else ""
+            "${it.modelVersion}$scale|${match(profile)}"
+        }
 }
 
 /** 一条有了实际评分的事前预测。 */

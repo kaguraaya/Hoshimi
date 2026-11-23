@@ -6,31 +6,63 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** 口味匹配度的三个分支，设置里可选。 */
-enum class TasteMatchBranch(val key: String, val label: String, val description: String) {
+/**
+ * 口味匹配度的三个分支，设置里可选；预计评分也跟着分支调整：
+ * - [ratingScale]：个人偏离（标签、系列、取向、相似作品带来的、相对大众基线的高低）的倍数；
+ * - [ratingSpread]：预计位置离你平均分的距离的倍数。小于 1 往你的平均分收（少说极端分），大于 1 两端放开（更敢说 9 分和 6 分以下）。
+ * 常规两个都是 1。倍数在公开数据上评测选定（见 docs/algorithm-eval.md）。
+ */
+enum class TasteMatchBranch(
+    val key: String,
+    val label: String,
+    val description: String,
+    val ratingScale: Double,
+    val ratingSpread: Double,
+) {
     STANDARD(
         key = "standard",
         label = "常规",
         description = "平衡：口味为主，少量参考口碑；很可能打 9 分以上的作品略往上给。" +
             "分数按你自己看过的作品定刻度（75 ≈ 你看过的作品的平均水平）。适合大多数人",
+        ratingScale = 1.0,
+        ratingSpread = 1.0,
     ),
     CONSERVATIVE(
         key = "conservative",
         label = "保守",
-        description = "口碑兜底：口味为主，但口碑差的作品不给高分；分数往中间收，少给极端分。适合不想踩雷、希望高分更稳的人",
+        description = "口碑兜底：口味为主，但口碑差的作品不给高分；分数往中间收，少给极端分。" +
+            "预计评分也往你的平均分收、更靠近社区评价，很少说 9 分或 6 分以下。适合不想踩雷、希望高分更稳的人",
+        ratingScale = CONSERVATIVE_RATING_SCALE,
+        ratingSpread = CONSERVATIVE_RATING_SPREAD,
     ),
     AGGRESSIVE(
         key = "aggressive",
         label = "激进",
         description = "敢给：口味和口碑的比重同常规，但很可能是你 9 分以上的作品直接给到 90 以上，两端放开、" +
-            "不对口的敢给 50 以下。适合想让真正喜欢的作品一眼冒出来的人",
+            "不对口的敢给 50 以下；预计评分也两端放开，喜欢的更敢说 9 分，不对口的更敢说 6 分以下。" +
+            "适合想让真正喜欢的作品一眼冒出来的人",
+        ratingScale = AGGRESSIVE_RATING_SCALE,
+        ratingSpread = AGGRESSIVE_RATING_SPREAD,
     ),
     ;
+
+    /** 这个分支的预计评分和常规不一样（两个倍数有一个不是 1）。 */
+    val adjustsRating: Boolean get() = ratingScale != 1.0 || ratingSpread != 1.0
 
     companion object {
         fun fromKey(key: String?): TasteMatchBranch = entries.firstOrNull { it.key == key } ?: STANDARD
     }
 }
+
+/**
+ * 保守 / 激进分支预计评分的两个倍数（[TasteMatchBranch.ratingScale]、[TasteMatchBranch.ratingSpread]）。
+ * 公开数据的开发集上，在「每人大字误差最多多 0.03、分布评分最多差 0.005」的范围内取最外端；
+ * 留出的用户上两个分支的大字误差各多约 0.03，切换后大字会变的作品约 16%–20%（保守和激进之间约 34%）。
+ */
+private const val CONSERVATIVE_RATING_SCALE = 0.6
+private const val AGGRESSIVE_RATING_SCALE = 1.5
+private const val CONSERVATIVE_RATING_SPREAD = 0.7
+private const val AGGRESSIVE_RATING_SPREAD = 1.3
 
 /**
  * 一个分支的主分数公式。

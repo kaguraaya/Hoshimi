@@ -53,6 +53,8 @@ data class TasteMatchResult(
      * 画像样本不足以建模时为 `null`。
      */
     val prediction: RatingPrediction? = null,
+    /** 常规分支的预计评分（匹配度的部件用它，换分支时匹配度不重复叠加）；和 [prediction] 相同时可以为 null。 */
+    val standardPrediction: RatingPrediction? = null,
     /** 你评过的作品里题材最接近的几部（类比证据：相似的作品你当时怎么评的）。 */
     val similarRated: List<RatedExample> = emptyList(),
     /** 相似作品类比（主分数的主要依据）；评分太少建不了模型时为 null。 */
@@ -152,7 +154,12 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             timeCoverage = profile.coverage.time,
         )
 
-        val (prediction, analogy) = predictWithAnalogy(profile.divergence, feature)
+        val (standard, analogy) = predictWithAnalogy(profile.divergence, feature)
+        // 预计评分按分支调整（[branchPrediction]）；匹配度的部件仍用常规预测，分支不重复叠加。
+        val prediction = profile.divergence?.let { model ->
+            standard?.takeIf { profile.matchBranch.adjustsRating }
+                ?.let { branchPrediction(model, feature, profile.matchBranch, analogy, it) }
+        } ?: standard
         val likeability = likeabilityOf(profile.divergence, rating, prediction)
         val satisfaction = likeability
             ?: fallbackSatisfaction(isRated, score, feature, profile, rawZ, evidence, prediction)
@@ -162,6 +169,7 @@ class ComputeTasteMatchUseCase @Inject constructor() {
             fromRatingModel = likeability != null,
             satisfaction = satisfaction,
             prediction = prediction,
+            standardPrediction = standard,
             similarRated = neighborsOf(profile, feature, withNeighbors),
             analogy = analogy,
             score = score,
@@ -343,6 +351,29 @@ class ComputeTasteMatchUseCase @Inject constructor() {
 /** 候选证据量对置信度的折扣：没有证据时保留 [floor]，证据齐全时不打折。 */
 private fun evidenceConfidence(evidence: Double, floor: Double): Double = floor + (1.0 - floor) * evidence
 
+/**
+ * [branch] 分支下的预计评分：个人偏离乘 [TasteMatchBranch.ratingScale]，位置离你平均分的距离乘 [TasteMatchBranch.ratingSpread]。
+ * 记下和常规分支（[standard]，没传时现算）差了多少（[RatingPrediction.branchOffset]），界面上单独列出这一项。
+ * [knownAnalogy] 已经算过时传进来，省一次相似作品查找。
+ */
+internal fun branchPrediction(
+    model: PersonalDivergenceModel,
+    feature: WorkFeature,
+    branch: TasteMatchBranch,
+    knownAnalogy: TasteAnalogy? = null,
+    standard: RatingPrediction? = null,
+): RatingPrediction {
+    val analogy = knownAnalogy ?: model.analogy(feature)
+    fun predictWith(scale: Double, spread: Double): RatingPrediction {
+        val p = model.predict(feature, scale, spread, analogy)
+        return if (model.includesAnalogy) p else p.withAnalogy(analogy, model.ratingStd)
+    }
+    if (!branch.adjustsRating) return standard ?: predictWith(1.0, 1.0)
+    val base = standard ?: predictWith(1.0, 1.0)
+    val adjusted = predictWith(branch.ratingScale, branch.ratingSpread)
+    return adjusted.copy(branch = branch, branchOffset = adjusted.rating - base.rating, factors = base.factors)
+}
+
 /** 预计评分（有很像的已评分作品时按类比修正）与相似作品类比。 */
 private fun predictWithAnalogy(
     model: PersonalDivergenceModel?,
@@ -351,7 +382,7 @@ private fun predictWithAnalogy(
     if (model == null) return null to null
     val analogy = model.analogy(feature)
     // 按人权重的模型已经把类比当成预测的一部分，这里不另外修正。
-    val prediction = model.predict(feature)
+    val prediction = model.predict(feature, knownAnalogy = analogy)
     return (if (model.includesAnalogy) prediction else prediction.withAnalogy(analogy, model.ratingStd)) to analogy
 }
 
