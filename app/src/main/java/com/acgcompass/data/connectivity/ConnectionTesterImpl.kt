@@ -47,7 +47,7 @@ class ConnectionTesterImpl @Inject constructor(
             credentialStore.observeStatus().first()[target.toCredentialSource()]?.configured == true
         }.getOrDefault(false)
 
-        return when {
+        val result = when {
             target == ConnectionTarget.BANGUMI -> testBangumi(configured, docUrl)
             target == ConnectionTarget.MAL && !mal.isEnabled() -> ConnectionTestResult(
                 success = false,
@@ -57,6 +57,11 @@ class ConnectionTesterImpl @Inject constructor(
             target == ConnectionTarget.AI_PROVIDER -> testAi(configured)
             else -> testPublicSource(target, configured, docUrl)
         }
+        // 没配置又没连上（例如还没填 Key）不记：页面上继续显示「未配置」，而不是「连接失败」。
+        if (configured || result.success) {
+            runCatchingCancellable { credentialStore.recordTestResult(target.toCredentialSource(), result.success) }
+        }
+        return result
     }
 
     private suspend fun testAi(configured: Boolean): ConnectionTestResult = if (!configured) {

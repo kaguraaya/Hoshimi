@@ -46,6 +46,12 @@ interface CredentialStore {
     fun observeStatus(): Flow<Map<SourceId, CredentialStatus>>
 
     /**
+     * 记下一次连接测试的结果和时间（「我的」「设置」页的「最后测试」读它）。只写非敏感元数据。
+     * 默认不做事，测试替身不用实现。
+     */
+    suspend fun recordTestResult(source: SourceId, success: Boolean, at: Long = System.currentTimeMillis()) = Unit
+
+    /**
      * 导出**脱敏**后的凭据集合（敏感字段掩码，如 `sk-****…ab`）。
      *
      * 默认备份不含凭据；仅当用户显式选择导出并二次确认时调用。输出不含任何完整明文。

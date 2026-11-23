@@ -101,6 +101,21 @@ class CredentialStoreImpl @Inject constructor(
 
     override fun observeStatus(): Flow<Map<SourceId, CredentialStatus>> = statusFlow.asStateFlow()
 
+    override suspend fun recordTestResult(source: SourceId, success: Boolean, at: Long) {
+        withContext(Dispatchers.IO) {
+            mutex.withLock {
+                prefs.edit()
+                    .putLong(testedMetaKey(source), at)
+                    .putString(
+                        statusMetaKey(source),
+                        if (success) CredentialStatus.Status.TEST_SUCCESS else CredentialStatus.Status.TEST_FAILED,
+                    )
+                    .apply()
+                refreshStatus()
+            }
+        }
+    }
+
     override suspend fun exportRedacted(): RedactedCredentials = withContext(Dispatchers.IO) {
         mutex.withLock {
             val entries = SourceId.entries.mapNotNull { source ->

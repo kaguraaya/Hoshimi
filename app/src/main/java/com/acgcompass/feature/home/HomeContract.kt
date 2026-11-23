@@ -503,13 +503,13 @@ private fun bangumiSyncStatusText(s: com.acgcompass.data.sync.SyncStatus): Strin
     else -> "尚未同步（已配置，点下方立即同步）"
 }
 
-/** 单源同步状态文案：失败优先标记，否则展示最近测试相对时间或「尚未同步」。 */
+/** 单源状态文案：只有连接测试的时间（这些源没有同步记录），失败优先标记；从没测试过显示「尚未同步」。 */
 private fun syncStatusText(status: CredentialStatus, nowMillis: Long): String {
     val tested = status.lastTestedAt ?: return "尚未同步"
     val relative = relativeTimeText(nowMillis - tested)
     return when (status.status) {
         CredentialStatus.Status.TEST_FAILED -> "最近测试失败 · $relative"
-        else -> "最近同步 · $relative"
+        else -> "最近测试正常 · $relative"
     }
 }
 
