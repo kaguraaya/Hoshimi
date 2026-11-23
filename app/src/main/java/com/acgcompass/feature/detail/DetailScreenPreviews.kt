@@ -52,7 +52,7 @@ internal fun DetailScreenPreview() {
                         fraction = 0.78f,
                         reason = "命中 2 个你高分作品常见的标签，倾向于符合你的口味",
                     ),
-                    recommendReasons = listOf("与口味画像高度匹配", "社区补番优先级较高"),
+                    recommendReasons = listOf("与口味画像高度匹配", "社区口碑好、值得补"),
                     notRecommendReasons = emptyList(),
                     spoilerRadarSummary = NO_DATA,
                     suitableMoods = listOf("治愈", "放松"),

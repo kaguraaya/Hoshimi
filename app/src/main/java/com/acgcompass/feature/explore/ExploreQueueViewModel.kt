@@ -15,20 +15,27 @@ import com.acgcompass.domain.model.Work
 import com.acgcompass.domain.model.displayTitle
 import com.acgcompass.domain.recommend.ExploreRanker
 import com.acgcompass.domain.recommend.InterestSignals
+import com.acgcompass.domain.recommend.PopularityReference
+import com.acgcompass.domain.recommend.PreferenceRanking
+import com.acgcompass.domain.recommend.RecommendPreferences
 import com.acgcompass.domain.recommend.RecommendSimilarity
 import com.acgcompass.domain.repository.BacklogRepository
 import com.acgcompass.domain.repository.BangumiSummarySource
 import com.acgcompass.domain.repository.PersonalCollectionRepository
 import com.acgcompass.domain.repository.RecommendationExposureRepository
 import com.acgcompass.domain.repository.WorkRepository
+import com.acgcompass.domain.taste.LightScore
 import com.acgcompass.domain.taste.PredictionContext
 import com.acgcompass.domain.taste.TasteMatchResult
 import com.acgcompass.domain.taste.WorkFeatureRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -57,6 +64,7 @@ class ExploreQueueViewModel @Inject constructor(
     private val summarySource: BangumiSummarySource,
     private val workFeatureRepository: WorkFeatureRepository,
     private val predictionLedger: PredictionLedgerRecorder,
+    private val settingsDataStore: com.acgcompass.data.datastore.SettingsDataStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ExploreQueueUiState>(ExploreQueueUiState.Loading)
@@ -78,8 +86,15 @@ class ExploreQueueViewModel @Inject constructor(
     /** 本批已记过曝光的卡片（避免重复写库）。 */
     private val shownIds = mutableSetOf<String>()
 
+    /** 推荐偏好（设置 → 推荐偏好）；每批开始时读一次。 */
+    private var prefs = RecommendPreferences.DEFAULT
+
     init {
         generate()
+        // 在推荐偏好页改了设置，回来时这一批已经按新偏好重排好了。
+        viewModelScope.launch {
+            settingsDataStore.recommendPreferences.distinctUntilChanged().drop(1).collect { generate() }
+        }
     }
 
     /** 生成 / 重新生成一批探索卡片（首屏与「再来一批」共用）。 */
@@ -101,6 +116,8 @@ class ExploreQueueViewModel @Inject constructor(
         }
     }
 
+    // 读取 → 冷却 → 打分 → 组批 → 出卡片一条线写下来，拆开要来回传一堆中间结果；几种「没法组批」的情况各自提前返回
+    @Suppress("LongMethod", "ReturnCount")
     private suspend fun buildBatch(): ExploreQueueUiState {
         val all = workRepository.observeWorks().first()
         val records = personalCollections.getAll()
@@ -135,18 +152,39 @@ class ExploreQueueViewModel @Inject constructor(
         feedback += interestFeedback(history, records, worksAll, now)
         val model = ExploreRanker.feedbackModel(feedback)
 
+        prefs = runCatchingCancellable { settingsDataStore.recommendPreferences.first() }
+            .getOrDefault(RecommendPreferences.DEFAULT)
+        // 只读本地作品资料（不联网）；推荐偏好选了「被低估」时只留社区分低于上限的作品。
+        val features = tasteEngine.cachedFeatures(candidates.map { it.id })
+        val eligible = candidates.filter { w ->
+            val f = features[w.id]
+            prefs.passesUnderrated(f?.bangumiScore?.toDouble(), f?.bangumiVotes ?: 0)
+        }
+        if (eligible.isEmpty()) return ExploreQueueUiState.Empty(underratedEmptyMessage())
+        // 排序只要分数：所有候选只算轻量分（不带推荐理由，画像没变时直接用上次存下的），
+        // 推荐理由只给这一批要展示的卡片算。分数和逐部完整打分完全一样。
+        val eligibleIds = eligible.mapTo(HashSet()) { it.id }
+        val light = tasteEngine.lightScores(features.filterKeys { it in eligibleIds })
         // 首批已有真实分数的卡片先展示，其余候选独立补齐后渐进加入。
-        val scores = tasteEngine.scoreBatch(candidates.map { it.id }, networkBudget = 0)
         // 待补齐的候选按「标签越全越优先」排，优先把信息量大的作品补出分数。
-        unscoredCandidates = candidates.filter { it.id !in scores }.sortedByDescending { it.tags.size }
-        val byId = candidates.associateBy { it.id }
+        unscoredCandidates = eligible.filter { it.id !in light }.sortedByDescending { it.tags.size }
+        val byId = eligible.associateBy { it.id }
+        val scored = eligible.mapNotNull { work ->
+            light[work.id]?.let { score ->
+                val f = features[work.id]
+                rankerCandidate(work, score, f?.bangumiScore?.toDouble(), f?.bangumiVotes ?: 0)
+            }
+        }
         val ranked = ExploreRanker.buildBatch(
-            candidates = candidates.mapNotNull { work -> scores[work.id]?.let { rankerCandidate(work, it) } },
+            candidates = withPreferences(scored, light, features, byId),
             model = model,
             batchSize = BATCH_SIZE,
             // 在高分段里加权随机挑，每次进来的顺序不再和「为你排行」完全一样。
             random = kotlin.random.Random.Default,
+            discoveryShare = prefs.discoveryShare,
         )
+        val batchIds = ranked.mapTo(HashSet()) { it.candidate.id }
+        val scores = tasteEngine.scoreFeatures(features.filterKeys { it in batchIds })
 
         if (ranked.isEmpty()) {
             return ExploreQueueUiState.Preparing(
@@ -159,7 +197,7 @@ class ExploreQueueViewModel @Inject constructor(
             val work = byId[r.candidate.id] ?: return@mapNotNull null
             worksById[work.id] = work
             rankerCandidates[work.id] = r.candidate
-            work.toExploreCard(scores[work.id], discovery = r.discovery)
+            work.toExploreCard(scores[work.id], discovery = r.discovery, prefsNote = prefsNote(work, features[work.id]))
         }
         return ExploreQueueUiState.Ready(cards = cards, index = 0)
     }
@@ -191,18 +229,68 @@ class ExploreQueueViewModel @Inject constructor(
 
     private fun fingerprintOf(work: Work): Set<String> = RecommendSimilarity.genreFingerprint(work.tags.map { it.name })
 
-    private fun rankerCandidate(work: Work, match: TasteMatchResult): ExploreRanker.Candidate = ExploreRanker.Candidate(
+    private fun rankerCandidate(
+        work: Work,
+        score: LightScore,
+        community10: Double?,
+        votes: Int,
+    ): ExploreRanker.Candidate = ExploreRanker.Candidate(
         id = work.id,
         // 排序用预计满意度（看完大概有多满意）；卡片上展示的仍是口味匹配度。
-        utilityBase = match.satisfaction,
-        familiarity = match.familiarity,
-        community10 = match.communityScore10,
-        votes = match.communityVotes,
+        utilityBase = score.satisfaction,
+        familiarity = score.familiarity,
+        community10 = community10?.takeIf { it > 0.0 },
+        votes = votes,
         franchiseKey = RecommendSimilarity.franchiseKey(
             work.titles.ja?.takeIf { it.isNotBlank() } ?: work.titles.canonical,
         ),
         tags = fingerprintOf(work),
     )
+
+    private fun rankerCandidate(work: Work, match: TasteMatchResult): ExploreRanker.Candidate =
+        rankerCandidate(work, LightScore.of(match), match.communityScore10, match.communityVotes)
+
+    /**
+     * 推荐偏好：按 [PreferenceRanking] 在预计满意度之上重排（发回去的仍是这批候选原有的满意度，
+     * 后面的多样性、随机挑选、滑动反馈力度不变）。默认偏好下原样返回。
+     */
+    private fun withPreferences(
+        candidates: List<ExploreRanker.Candidate>,
+        light: Map<String, LightScore>,
+        features: Map<String, com.acgcompass.domain.taste.WorkFeature>,
+        works: Map<String, Work>,
+    ): List<ExploreRanker.Candidate> {
+        if (!prefs.reranks) return candidates
+        val today = java.time.LocalDate.now()
+        val adjusted = PreferenceRanking.rerank(
+            candidates.map { c ->
+                val f = features[c.id]
+                val air = PopularityReference.airDay(f?.airDate, works[c.id]?.year)
+                PreferenceRanking.Factors(
+                    id = c.id,
+                    base = c.utilityBase.toDouble(),
+                    match = light[c.id]?.score?.toDouble(),
+                    community = PreferenceRanking.shrunkCommunity(c.community10, c.votes),
+                    freshness = air?.toDouble(),
+                    popularity = PopularityReference.percentile(c.votes, air, today),
+                )
+            },
+            prefs,
+        )
+        return candidates.map { c -> adjusted[c.id]?.let { c.copy(utilityBase = it.roundToInt()) } ?: c }
+    }
+
+    /** 卡片上的补充说明：看重冷门时写出热度档和评分人数。 */
+    private fun prefsNote(work: Work, feature: com.acgcompass.domain.taste.WorkFeature?): String? {
+        val votes = feature?.bangumiVotes?.takeIf { prefs.obscurity != 0 && it > 0 } ?: return null
+        val air = PopularityReference.airDay(feature.airDate, work.year)
+        val tier = PopularityReference.percentile(votes, air, java.time.LocalDate.now())
+            ?.let { PopularityReference.tierOf(it).label }
+        return listOfNotNull(tier, "评分 $votes 人").joinToString(" · ")
+    }
+
+    private fun underratedEmptyMessage(): String =
+        "没有社区分低于 %.1f、评分人数够多的候选：可以到「推荐偏好」把上限调高，或换回其它档位".format(prefs.underratedThreshold)
 
     /**
      * 发布状态；若为 [ExploreQueueUiState.Ready]，把**当前这张**卡片记为已曝光。
@@ -242,13 +330,13 @@ class ExploreQueueViewModel @Inject constructor(
             if (generation != expectedGeneration) return
             for (work in group) {
                 val match = matches[work.id]
-                if (match != null) {
+                if (match != null && prefs.passesUnderrated(match.communityScore10, match.communityVotes)) {
                     worksById[work.id] = work
                     rankerCandidates[work.id] = rankerCandidate(work, match)
                     acceptEnrichedCard(
                         position = position,
                         lastPosition = candidates.lastIndex,
-                        newCard = work.toExploreCard(match),
+                        newCard = work.toExploreCard(match, prefsNote = prefsNote(work, null)),
                         preparingCards = preparingCards,
                     )
                 }

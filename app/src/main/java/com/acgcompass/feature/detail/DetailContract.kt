@@ -258,20 +258,44 @@ private fun com.acgcompass.domain.taste.RatingPrediction.selfSummary(): String {
     }
 }
 
-/** 和社区评分比：差多少，其中打分习惯和个人口味各占多少。 */
+/**
+ * 和社区评分比：差多少，其中打分习惯、个人口味各占多少；选了保守 / 激进时再单列分支带来的变化。
+ * 各部分各自取一位小数，总差用各部分之和，保证写出来的数加得起来；不到 0.1 的部分写「≈0」，分支那一项不到 0.1 时不写。
+ * 总差很小、分支也没带来变化时只说「基本一致」；分支有变化时即使总差很小也列出来，切换分支后能看出差在哪里。
+ */
 private fun com.acgcompass.domain.taste.RatingPrediction.communitySummary(): String {
     val vs = vsCommunity
     val habit = habitOffset
-    return when {
-        vs == null || habit == null -> "这部作品还没有社区评分，按你的平均水平估计"
-        kotlin.math.abs(vs) < NOTABLE_DIVERGENCE -> "和社区评分基本一致"
-        else -> buildString {
-            append("比社区评分").append(if (vs > 0) "高 " else "低 ").append("%.1f".format(kotlin.math.abs(vs)))
-            append("：打分习惯 ").append("%+.1f".format(habit))
-            append("，个人口味 ").append(if (kotlin.math.abs(divergence) < MIN_SHOWN) "≈0" else "%+.1f".format(divergence))
-        }
+    return if (vs == null || habit == null) {
+        "这部作品还没有社区评分，按你的平均水平估计"
+    } else {
+        communityBreakdown(vs, habit) ?: "和社区评分基本一致"
     }
 }
+
+/** 拆开写的那一行；总差很小、分支也没带来变化时为 null。 */
+private fun com.acgcompass.domain.taste.RatingPrediction.communityBreakdown(vs: Double, habit: Double): String? {
+    val habitShown = kotlin.math.round(habit * TENTHS) / TENTHS
+    val tasteShown = kotlin.math.round((divergence - branchOffset) * TENTHS) / TENTHS
+    val branchShown = kotlin.math.round(branchOffset * TENTHS) / TENTHS
+    val branchPart = branch?.takeIf { kotlin.math.abs(branchShown) >= MIN_SHOWN }
+    if (kotlin.math.abs(vs) < NOTABLE_DIVERGENCE && branchPart == null) return null
+    val total = habitShown + tasteShown + (if (branchPart != null) branchShown else 0.0)
+    return buildString {
+        when {
+            kotlin.math.abs(total) < MIN_SHOWN -> append("和社区评分持平")
+            else -> append("比社区评分").append(if (total > 0) "高 " else "低 ")
+                .append("%.1f".format(kotlin.math.abs(total)))
+        }
+        append("：打分习惯 ").append(signedTenths(habitShown))
+        append("，个人口味 ").append(signedTenths(tasteShown))
+        branchPart?.let { append("，${it.label}算法 ").append(signedTenths(branchShown)) }
+    }
+}
+
+private const val TENTHS = 10.0
+
+private fun signedTenths(x: Double): String = if (kotlin.math.abs(x) < MIN_SHOWN) "≈0" else "%+.1f".format(x)
 
 /** 打 10 / 9 / 8 / 7 / 6 分及以下各自的可能；模型不给累积可能时为空。 */
 private fun com.acgcompass.domain.taste.RatingPrediction.chanceBuckets(): List<ChanceBucketUi> =
@@ -348,6 +372,8 @@ sealed interface TasteMatchUiModel {
         val backtestText: String? = null,
         /** 你已经评过分：不给补番优先级。 */
         val rated: Boolean = false,
+        /** 回测值还没出来、暂不显示分数（[fraction] 为 0 只是占位，不能当成「匹配度低」）。 */
+        val pending: Boolean = false,
     ) : TasteMatchUiModel
 
     /** 尚未生成口味画像，或样本/标签不足以计算匹配度（[message] 说明具体原因，不伪造）。 */
@@ -481,7 +507,7 @@ sealed interface AiMatchUi {
         val predictedRatingText: String? = null,
         /** 与大众相比会更高 / 更低的一句话原因。 */
         val divergenceReason: String? = null,
-        /** AI 归纳的「你打分最看重的角度」。 */
+        /** AI 归纳的你看作品时在意的角度（界面写「AI 认为你在意」）。 */
         val ratingAngles: List<String> = emptyList(),
     ) : AiMatchUi
 
@@ -490,7 +516,7 @@ sealed interface AiMatchUi {
 }
 
 /** 观看路线无法从关联资料可靠推导时的提示文案（绝不编造顺序）。 */
-const val ROUTE_UNCONFIRMED: String = "路线待确认：关联资料不足，暂不推荐确定观看顺序（不编造）。"
+const val ROUTE_UNCONFIRMED: String = "路线待确认：关联资料不足，暂不推荐确定观看顺序。"
 
 /**
  * 角色署名：角色名、关系和声优。

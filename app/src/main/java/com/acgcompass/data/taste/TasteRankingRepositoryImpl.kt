@@ -38,8 +38,10 @@ import kotlinx.coroutines.withContext
 
 /**
  * 口味排行：调 [TasteEngine.rankLocalPoolDetailed] 排序，再补上标题、年份、是否完结和「是否已收藏 / 在待补池」。
- * 结果按画像对象缓存在内存里：画像没重建就直接返回上次的结果，重新打开页面不用再算；
- * 同时存一份到本地文件（[TasteRankingDiskCache]），冷启动后也能先显示上次的结果，再在后台重算。
+ *
+ * 结果按「画像输入指纹」（[TasteEngine.inputsKey]）缓存：评分、作品资料、标签分类、兴趣信号、分支都没变时，
+ * 排行一定和上次一样，直接返回，不用重排整个作品库。内存一份，本地文件（[TasteRankingDiskCache]）一份：
+ * 重启应用后指纹没变也直接用上次的排行，只把已评作品换成当前的回测值。
  */
 @Singleton
 @Suppress("LongParameterList") // 排行要合并画像、作品、收藏、待补池、作品库补充和补资料
@@ -84,21 +86,56 @@ class TasteRankingRepositoryImpl @Inject constructor(
 
     private val mutex = Mutex()
     private var cachedFor: AdvancedTasteProfile? = null
+    private var cachedKey: String? = null
     private var cachedPoolSize: Int = -1
     private var cachedBacktest: TasteBacktest? = null
     private var cachedLocal: LocalRanking? = null
     private var cached: TasteRanking? = null
 
+    /** 一次加载时的现状：画像、回测、画像输入指纹、作品库部数。 */
+    private class Snapshot(
+        val profile: AdvancedTasteProfile?,
+        val backtest: TasteBacktest?,
+        val key: String?,
+        val poolSize: Int,
+    )
+
     override suspend fun load(force: Boolean): TasteRanking? = mutex.withLock {
-        val profile = engine.observeProfile().value
-        val backtest = engine.observeBacktest().value
+        // 先把画像准备好（冷启动时用本地资料重建），才能拿到输入指纹判断能不能沿用上次的排行。
+        val profile = engine.observeProfile().value ?: withContext(dispatchers.io) { engine.ensureReady() }
+        val now = Snapshot(
+            profile = profile,
+            backtest = engine.observeBacktest().value,
+            key = engine.inputsKey(),
+            poolSize = withContext(dispatchers.io) { workFeatureDao.countAnime() },
+        )
+        // 画像输入和作品库部数（补资料、补充作品库都会让部数变化）都没变。
+        val sameInputs = if (now.key != null) now.key == cachedKey else now.profile === cachedFor
+        val unchanged = now.profile != null && sameInputs && now.poolSize == cachedPoolSize
+        (if (force) null else reuse(now, unchanged)) ?: compute(now, cachedLocal.takeIf { !force && unchanged })
+    }
+
+    /** 能沿用上次的结果就返回它：内存里有且回测没变；或只是回测变了；或冷启动时本地文件里的指纹对得上。 */
+    private suspend fun reuse(now: Snapshot, unchanged: Boolean): TasteRanking? {
         val hit = cached
-        // 画像没重建、作品库也没变（补资料、补充作品库都会让部数变化）时直接用上次的结果；只有回测变了时只重新套回测值。
-        val poolSize = withContext(dispatchers.io) { workFeatureDao.countAnime() }
-        val unchanged = profile != null && profile === cachedFor && poolSize == cachedPoolSize
-        val sameBacktest = backtest === cachedBacktest
-        hit?.takeIf { !force && unchanged && sameBacktest }?.let { return@withLock it }
-        val reusable = cachedLocal.takeIf { !force && unchanged }
+        val backtest = engine.observeBacktest().value
+        val branch = engine.observeProfile().value?.matchBranch ?: TasteMatchBranch.STANDARD
+        return when {
+            hit != null && unchanged && now.backtest === cachedBacktest -> hit
+            // 这份排行是从本地文件读的（没有逐部的打分结果），回测变了就直接改已评作品的分。
+            hit != null && unchanged && cachedLocal == null -> remember(now, null, hit.withBacktest(backtest, branch))
+            hit == null && now.key != null -> {
+                val disk = withContext(dispatchers.io) { diskCache.readExact(modelVersion(), now.key, now.poolSize) }
+                disk?.let {
+                    remember(now, null, it.withBacktest(backtest, branch))
+                }
+            }
+            else -> null
+        }
+    }
+
+    /** 重新排：[reusable] 不为空（画像输入没变、只是回测变了）时沿用逐部打分，否则给整个作品库重新打分。 */
+    private suspend fun compute(now: Snapshot, reusable: LocalRanking?): TasteRanking? {
         val ranking = withContext(dispatchers.io) {
             val local = reusable ?: engine.rankLocalPoolDetailed() ?: return@withContext null
             cachedLocal = local
@@ -113,12 +150,21 @@ class TasteRankingRepositoryImpl @Inject constructor(
                 unratedCount = local.unratedCount,
             )
         }
-        cachedFor = engine.observeProfile().value
-        cachedBacktest = backtest
-        cachedPoolSize = poolSize
+        remember(Snapshot(engine.observeProfile().value, now.backtest, now.key, now.poolSize), cachedLocal, ranking)
+        if (ranking != null) {
+            withContext(dispatchers.io) { diskCache.write(ranking, modelVersion(), now.key, now.poolSize) }
+        }
+        return ranking
+    }
+
+    private fun remember(now: Snapshot, local: LocalRanking?, ranking: TasteRanking?): TasteRanking? {
+        cachedFor = now.profile
+        cachedKey = now.key
+        cachedPoolSize = now.poolSize
+        cachedBacktest = now.backtest
+        cachedLocal = local
         cached = ranking
-        if (ranking != null) withContext(dispatchers.io) { diskCache.write(ranking, modelVersion()) }
-        ranking
+        return ranking
     }
 
     override suspend fun lastResult(): TasteRanking? =
@@ -165,16 +211,17 @@ class TasteRankingRepositoryImpl @Inject constructor(
     }
 
     /**
-     * 显示的匹配度和预计评分：已评分作品用回测值（建画像时不知道这部作品）。回测还没算完时标成待定，
-     * 不显示当前画像下的分（它把这部作品自己的评分也算进去了）。
+     * 显示的匹配度和预计评分：已评分作品用回测值（建画像时不知道这部作品）；刚评分、画像还没重建时当前的分就是盲测值。
+     * 回测还没算完、又没有盲测值时标成待定，不显示当前画像下的分（它把这部作品自己的评分也算进去了）。
      */
     private fun displayed(ranked: LocalRankedWork): Shown {
         val id = ranked.feature.subjectId
         val rating = ranked.myRating ?: return Shown(ranked.match.score, ranked.match.prediction, null, false)
-        val branch = engine.observeProfile().value?.matchBranch ?: TasteMatchBranch.STANDARD
+        val profile = engine.observeProfile().value
+        val branch = profile?.matchBranch ?: TasteMatchBranch.STANDARD
         val state = engine.observeBacktest().value
-        val view = state?.view(id, branch, rating)
-        val pending = TasteBacktest.pending(state, id, rating)
+        val view = state?.view(id, branch, rating) ?: TasteBacktest.beforeRating(id, ranked.match, rating, profile)
+        val pending = view == null && TasteBacktest.pending(state, id, rating)
         return Shown(
             score = view?.match ?: ranked.match.score,
             prediction = view?.prediction ?: ranked.match.prediction.takeIf { !pending },
@@ -190,13 +237,34 @@ class TasteRankingRepositoryImpl @Inject constructor(
         val predicted: Double?,
         val pending: Boolean,
     )
+}
 
-    /** 优先用作品状态；没有状态时按开播日期 + 集数 × 一周估算。 */
-    private fun finished(status: String?, airDate: LocalDate?, eps: Int, today: LocalDate): Boolean? = when (status) {
-        "FINISHED" -> true
-        "RELEASING", "NOT_RELEASED" -> false
-        else -> airDate?.let { start ->
-            if (eps > 0) start.plusWeeks(eps.toLong()).isBefore(today) else start.plusYears(1).isBefore(today)
-        }
+/**
+ * 把已评作品的分换成当前的回测值（排行本身来自上次的结果，没有逐部打分可重算）。还没有回测时保留原值：
+ * 画像输入没变，上次存下的回测值就是这次会算出的值。
+ */
+internal fun TasteRanking.withBacktest(state: TasteBacktest?, branch: TasteMatchBranch): TasteRanking {
+    state ?: return this
+    val updated = items.map { item ->
+        val rating = item.myRating ?: return@map item
+        val view = state.view(item.subjectId, branch, rating)
+        val pending = TasteBacktest.pending(state, item.subjectId, rating)
+        item.copy(
+            score = view?.match ?: item.score,
+            predictedRating = view?.prediction?.rating ?: view?.predicted
+                ?: item.predictedRating.takeIf { !pending },
+            predictedText = view?.prediction?.headline ?: item.predictedText.takeIf { !pending },
+            scorePending = pending,
+        )
+    }
+    return copy(items = updated.sortedByDescending { it.score })
+}
+
+/** 优先用作品状态；没有状态时按开播日期 + 集数 × 一周估算。 */
+private fun finished(status: String?, airDate: LocalDate?, eps: Int, today: LocalDate): Boolean? = when (status) {
+    "FINISHED" -> true
+    "RELEASING", "NOT_RELEASED" -> false
+    else -> airDate?.let { start ->
+        if (eps > 0) start.plusWeeks(eps.toLong()).isBefore(today) else start.plusYears(1).isBefore(today)
     }
 }

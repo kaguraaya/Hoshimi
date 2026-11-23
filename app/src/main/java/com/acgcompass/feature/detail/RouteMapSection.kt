@@ -156,7 +156,7 @@ fun RouteMapSection(
             // 路线待确认：资料不足时明示，绝不编造观看顺序。
             if (!routeConfirmed) {
                 Text(
-                    text = "路线待确认：资料不足，暂不推荐确定观看顺序（不编造）。",
+                    text = "路线待确认：资料不足，暂不推荐确定观看顺序。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )

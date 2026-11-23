@@ -16,8 +16,12 @@ import com.acgcompass.domain.model.SourceId
 import com.acgcompass.domain.model.TagNoise
 import com.acgcompass.domain.model.TasteProfile
 import com.acgcompass.domain.model.Work
+import com.acgcompass.domain.recommend.PopularityReference
+import com.acgcompass.domain.recommend.PreferenceRanking
+import com.acgcompass.domain.recommend.RecommendPreferences
 import com.acgcompass.domain.recommend.RecommendSimilarity
 import com.acgcompass.domain.recommend.SessionFit
+import com.acgcompass.domain.recommend.TonightModes
 import com.acgcompass.domain.recommend.TonightRanker
 import com.acgcompass.domain.recommend.intent.IntentExplain
 import com.acgcompass.domain.recommend.intent.IntentMatch
@@ -263,12 +267,19 @@ class RecommenderViewModel @Inject constructor(
         // 用户可调的社区评分下限与口味匹配度阈值。
         val minScore = settingsDataStore.recommendMinCommunityScore.first()
         val tasteThreshold = settingsDataStore.tasteMatchThreshold.first()
-        val excludeIds = runCatchingCancellable {
-            personalCollections.getAll()
-                .filter { it.status == "看过" || it.status == "抛弃" }
-                .map { it.workId }
-                .toSet()
-        }.getOrDefault(emptySet())
+        val prefs = runCatchingCancellable { settingsDataStore.recommendPreferences.first() }
+            .getOrDefault(RecommendPreferences.DEFAULT)
+        val records = runCatchingCancellable { personalCollections.getAll() }.getOrDefault(emptyList())
+        val excludeIds = records.filter { it.status == "看过" || it.status == "抛弃" }.mapTo(HashSet()) { it.workId }
+        // 低负担模式下，看过前作的续作不算负担：记下看过 / 在看的作品属于哪些系列。
+        val watchedFranchises: Set<String> = if (input.finalsProtectionMode) {
+            val byId = animeWorks.filterNotNull().first().associateBy { it.id }
+            records.filter { it.status == "看过" || it.status == "在看" }
+                .mapNotNull { byId[it.workId] }
+                .mapTo(HashSet(), ::franchiseKeyOf)
+        } else {
+            emptySet()
+        }
 
         // 用户直接选择真实标签（来自候选池作品的 Bangumi 社区标签）；命中即匹配。
         // chip 标签是清洗后的社区标签，而作品原始标签未清洗——两侧口径不同会导致「选了却命不中」。
@@ -287,8 +298,8 @@ class RecommenderViewModel @Inject constructor(
                 w.mediaType == MediaType.ANIME && w.id !in excludeIds &&
                     // 单集都放不进这段时间（20 分钟配剧场版）的直接排除；时长未知放行。
                     TonightRanker.episodeFitsBudget(w.units.episodeMinutes, input.time?.availableMinutes) &&
-                    // 期末保护模式——排除长篇/未完结/高耗能（致郁·上头·烧脑）。
-                    (!input.finalsProtectionMode || passesFinalsProtection(w))
+                    // 低负担模式：已完结、一季以内、不用先看前作（标签上的「烧脑」等在读到作品资料后判断）。
+                    (!input.finalsProtectionMode || passesLowBurden(w, watchedFranchises))
             }
             .mapNotNull { w ->
                 val tagNames = w.tags.map { it.name }
@@ -342,20 +353,47 @@ class RecommenderViewModel @Inject constructor(
         // 引擎对该候选不可用（无特征 / 非 Bangumi / 画像未建）时回退共享 [PersonalTasteScorer] 旧标签重合估计。
         // 特征只读一次：打分、意图匹配、风险气质都用这一份；只用本地缓存，不联网（缺的由后台任务补齐）。
         val featureById = tasteEngine.cachedFeatures(workingSet.mapNotNull { subjectIdOf(it.first) })
-        val engineScores: Map<String, com.acgcompass.domain.taste.TasteMatchResult> = runCatchingCancellable {
-            tasteEngine.scoreFeatures(featureById)
+        fun repOf(w: Work): TagRepresentativeness {
+            val feature = subjectIdOf(w)?.let { featureById[it] }
+            return TagRepresentativeness(
+                tags = feature?.tagCounts?.takeIf { it.isNotEmpty() } ?: w.tags.map { TagCount(it.name, 0) },
+                episodes = feature?.eps?.takeIf { it > 0 } ?: w.units.episodes ?: 0,
+            )
+        }
+        fun votesOf(w: Work): Int = subjectIdOf(w)?.let { featureById[it]?.bangumiVotes } ?: 0
+
+        // 低负担 / 深夜模式：主打费脑、致郁、吓人、停不下来气质的直接排除，沾边的往后排（[TonightModes]）。
+        val modesOn = input.finalsProtectionMode || input.lateNightMode
+        val verdicts: Map<String, TonightModes.Verdict> = if (modesOn) {
+            workingSet.associate { (w, _, _) ->
+                w.id to TonightModes.verdict(input.finalsProtectionMode, input.lateNightMode, repOf(w), selectedTags)
+            }
+        } else {
+            emptyMap()
+        }
+        val afterModes = workingSet.filter { verdicts[it.first.id]?.excludedBy == null }
+        if (afterModes.isEmpty()) return UiState.Empty(MODE_CTA)
+        // 推荐偏好里的「被低估」：只留社区分低于上限、评分人数够多的作品。
+        val pool = afterModes.filter { (w, _, _) ->
+            val f = subjectIdOf(w)?.let { featureById[it] }
+            prefs.passesUnderrated(f?.bangumiScore?.toDouble(), f?.bangumiVotes ?: 0)
+        }
+        if (pool.isEmpty()) return UiState.Empty(underratedCta(prefs))
+        val today = java.time.LocalDate.now()
+        fun airOf(w: Work): Long? = PopularityReference.airDay(subjectIdOf(w)?.let { featureById[it]?.airDate }, w.year)
+        fun popularityOf(w: Work): Double? = PopularityReference.percentile(votesOf(w), airOf(w), today)
+
+        // 粗排只要分数：先给候选池算轻量分（不带推荐理由，画像没变时直接用存下的），精排的前几名再完整打分。
+        val lightById: Map<String, com.acgcompass.domain.taste.LightScore> = runCatchingCancellable {
+            val ids = pool.mapNotNullTo(HashSet()) { subjectIdOf(it.first) }
+            tasteEngine.lightScores(featureById.filterKeys { it in ids })
         }.getOrDefault(emptyMap())
 
         // 当晚意图匹配：按标签在作品里的代表性（标注人数 + 名次）判断「这部是不是今晚想看的那一类」，
         // 多个标签按 soft-AND 组合处理。有缓存特征时用带标注人数的标签，否则退回作品标签的顺序。
         val intentById: Map<String, IntentMatch> = if (tagSelected) {
-            workingSet.mapNotNull { (w, _, _) ->
-                val feature = subjectIdOf(w)?.let { featureById[it] }
-                val rep = TagRepresentativeness(
-                    tags = feature?.tagCounts?.takeIf { it.isNotEmpty() } ?: w.tags.map { TagCount(it.name, 0) },
-                    episodes = feature?.eps?.takeIf { it > 0 } ?: w.units.episodes ?: 0,
-                )
-                IntentMatcher.match(selectedTags, rep)?.let { w.id to it }
+            pool.mapNotNull { (w, _, _) ->
+                IntentMatcher.match(selectedTags, repOf(w))?.let { w.id to it }
             }.toMap()
         } else {
             emptyMap()
@@ -363,13 +401,42 @@ class RecommenderViewModel @Inject constructor(
 
         // 社区评分逐部查库，候选池大（全部作品）时很慢：先按「口味 + 意图」粗排，只给前
         // [RATING_LOOKUP_POOL] 名查评分并进入精排，排在后面的本来也不可能被选中。
-        val preRanked = workingSet.map { triple ->
+        val rough = pool.map { triple ->
             val w = triple.first
-            val engine = subjectIdOf(w)?.let { engineScores[it] }
-            val roughTaste = engine?.let { it.satisfaction / 100f }
+            val light = subjectIdOf(w)?.let { lightById[it] }
+            val roughTaste = light?.let { it.satisfaction / 100f }
                 ?: personalTasteScorer.score(w, taste, null).personal
-            triple to (roughTaste + (intentById[w.id]?.fit?.toFloat() ?: 0f))
-        }.sortedByDescending { it.second }.take(RATING_LOOKUP_POOL).map { it.first }
+            triple to (roughTaste + (intentById[w.id]?.fit?.toFloat() ?: 0f)).toDouble()
+        }
+        // 推荐偏好也作用在粗排上，否则看重的作品可能在这一步就被挤出前 [RATING_LOOKUP_POOL] 名。
+        val roughAdjusted = if (prefs.reranks) {
+            PreferenceRanking.rerank(
+                rough.map { (triple, score) ->
+                    val w = triple.first
+                    val f = subjectIdOf(w)?.let { featureById[it] }
+                    PreferenceRanking.Factors(
+                        id = w.id,
+                        base = score,
+                        match = subjectIdOf(w)?.let { lightById[it] }?.score?.toDouble(),
+                        community = PreferenceRanking.shrunkCommunity(
+                            f?.bangumiScore?.toDouble(),
+                            f?.bangumiVotes ?: 0,
+                        ),
+                        freshness = airOf(w)?.toDouble(),
+                        popularity = popularityOf(w),
+                    )
+                },
+                prefs,
+            )
+        } else {
+            emptyMap()
+        }
+        val preRanked = rough.sortedByDescending { (triple, score) -> roughAdjusted[triple.first.id] ?: score }
+            .take(RATING_LOOKUP_POOL).map { it.first }
+        val engineScores: Map<String, com.acgcompass.domain.taste.TasteMatchResult> = runCatchingCancellable {
+            val ids = preRanked.mapNotNullTo(HashSet()) { subjectIdOf(it.first) }
+            tasteEngine.scoreFeatures(featureById.filterKeys { it in ids })
+        }.getOrDefault(emptyMap())
 
         val ratingsById = workRepository.aggregateRatingsCached(preRanked.map { it.first.id })
         val ranked = preRanked.map { (w, matchedSelected, hitSelected) ->
@@ -425,7 +492,12 @@ class RecommenderViewModel @Inject constructor(
         if (tasteEligible.isEmpty()) {
             return UiState.Empty(if (tasteFloor > 0f) TASTE_FLOOR_CTA else NO_CANDIDATE_CTA)
         }
-        val filtered = tasteEligible.filter { passesCommunity(it) }.ifEmpty { tasteEligible }
+        // 推荐偏好选了「被低估」时，要找的正是社区分不高的作品，社区分下限不起作用。
+        val filtered = if (prefs.underrated) {
+            tasteEligible
+        } else {
+            tasteEligible.filter { passesCommunity(it) }.ifEmpty { tasteEligible }
+        }
         if (filtered.isEmpty()) return UiState.Empty(NO_CANDIDATE_CTA)
 
         // 接受程度「可慢热 / 可致郁 / 可党争」：没勾选的风险气质按其在作品里的代表性做软惩罚
@@ -437,12 +509,7 @@ class RecommenderViewModel @Inject constructor(
         } else {
             filtered.mapNotNull { s ->
                 val w = s.work
-                val feature = subjectIdOf(w)?.let { featureById[it] }
-                val rep = TagRepresentativeness(
-                    tags = feature?.tagCounts?.takeIf { it.isNotEmpty() } ?: w.tags.map { TagCount(it.name, 0) },
-                    episodes = feature?.eps?.takeIf { it > 0 } ?: w.units.episodes ?: 0,
-                )
-                untolerated.values.flatten().toSet().let(rep::strongest)
+                untolerated.values.flatten().toSet().let(repOf(w)::strongest)
                     ?.takeIf { it.second >= RISK_MIN_REPRESENTATIVENESS }
                     ?.let { w.id to it }
             }.toMap()
@@ -470,7 +537,7 @@ class RecommenderViewModel @Inject constructor(
                     intentFit = if (tagSelected) s.intent?.fit ?: 0.0 else null,
                     dominantConflict = (
                         (s.intent?.dominantConflict ?: 0.0) + riskById[w.id]?.second.orZero() +
-                            lateNightPenalty(input, w)
+                            verdicts[w.id]?.penalty.orZero()
                         ).coerceAtMost(1.0),
                     scoreCap = s.intent?.scoreCap,
                     community10 = s.bayes10?.toDouble(),
@@ -495,10 +562,15 @@ class RecommenderViewModel @Inject constructor(
                         w.titles.ja?.takeIf { it.isNotBlank() } ?: w.titles.canonical,
                     ),
                     tags = RecommendSimilarity.genreFingerprint(w.tags.map { it.name }),
+                    calm = verdicts[w.id]?.calm.orZero(),
+                    match = s.tasteFraction?.takeIf { s.tasteAvailable }?.let { it * PERCENT.toDouble() },
+                    popularity = popularityOf(w),
+                    releaseDay = airOf(w),
                 )
             },
             count = if (input.indecisionMode) 1 else 3,
             currentYear = java.time.Year.now().value,
+            prefs = prefs,
         )
         if (picks.isEmpty()) return UiState.Empty(NO_CANDIDATE_CTA)
 
@@ -521,6 +593,8 @@ class RecommenderViewModel @Inject constructor(
                 else -> "综合口碑与你的口味挑选$ratingPart"
             }
             val riskNote = riskById[s.work.id]?.let { "；带明显的「${it.first}」气质" }.orEmpty()
+            val calmNote = if ((verdicts[s.work.id]?.calm ?: 0.0) >= TonightModes.STRONG) "；轻松日常，适合深夜看" else ""
+            val prefsNote = preferenceNote(prefs, popularityOf(s.work), votesOf(s.work))
             val timeNote = sessionById[s.work.id]?.let { fitResult ->
                 val total = s.work.units.episodes?.let { e -> s.work.units.episodeMinutes?.let { e * it } }
                 SessionFit.note(fitResult, total)
@@ -535,7 +609,7 @@ class RecommenderViewModel @Inject constructor(
                 kind = kind,
                 workId = s.work.id,
                 card = s.work.toRecommendCard(),
-                reason = "${kind.tagline()}。$fit$timeNote$contrast$riskNote",
+                reason = "${kind.tagline()}。$fit$timeNote$contrast$riskNote$calmNote$prefsNote",
                 matchPercent = s.tasteFraction?.takeIf { s.tasteAvailable }
                     ?.let { (it * PERCENT).toInt().coerceIn(0, PERCENT) },
             )
@@ -610,21 +684,18 @@ class RecommenderViewModel @Inject constructor(
         }
     }
 
-    /** 期末保护——排除长篇坑/未完结/高耗能（致郁·上头·烧脑）作品。 */
-    /** 深夜模式：主打悬疑剧情、致郁、上头的作品容易一集接一集停不下来，往后排。 */
-    private fun lateNightPenalty(input: RecommenderInput, w: Work): Double {
-        if (!input.lateNightMode) return 0.0
-        val heavy = SessionFit.SERIAL_TAGS + "上头"
-        return if (w.tags.take(LATE_NIGHT_TAG_WINDOW).any { it.name in heavy }) LATE_NIGHT_PENALTY else 0.0
-    }
+    /** 低负担模式对作品形态的要求（[TonightModes.lowBurdenBlocker]）：已完结、一季以内、不用先看前作。 */
+    private fun passesLowBurden(w: Work, watchedFranchises: Set<String>): Boolean =
+        w.completionCost != com.acgcompass.domain.model.CompletionCost.LONG_HAUL &&
+            TonightModes.lowBurdenBlocker(
+                finished = w.status == com.acgcompass.domain.model.ReleaseStatus.FINISHED,
+                episodes = w.units.episodes,
+                sequel = TonightModes.isSequel(listOfNotNull(w.titles.canonical, w.titles.ja) + w.titles.aliases),
+                prequelWatched = franchiseKeyOf(w) in watchedFranchises,
+            ) == null
 
-    private fun passesFinalsProtection(w: Work): Boolean {
-        if (w.completionCost == com.acgcompass.domain.model.CompletionCost.LONG_HAUL) return false
-        if (w.status != com.acgcompass.domain.model.ReleaseStatus.FINISHED) return false
-        val heavy = setOf("致郁", "上头", "烧脑")
-        if (w.tags.any { it.name in heavy }) return false
-        return true
-    }
+    private fun franchiseKeyOf(w: Work): String =
+        RecommendSimilarity.franchiseKey(w.titles.ja?.takeIf { it.isNotBlank() } ?: w.titles.canonical)
 
     /** 由 [Work] 构建推荐卡片模型（全部作品池无聚合评分，评分位留空 → UI 显示「暂无数据」）。 */
     private fun Work.toRecommendCard(): WorkCardUiModel = WorkCardUiModel(
@@ -677,8 +748,23 @@ class RecommenderViewModel @Inject constructor(
             AcceptanceOption.BRAIN_BURN to listOf("烧脑", "上头", "意识流"),
         )
 
-        private const val LATE_NIGHT_TAG_WINDOW = 4
-        private const val LATE_NIGHT_PENALTY = 0.5
+        /** 开了低负担 / 深夜模式后没有作品剩下时的空态。 */
+        val MODE_CTA = Cta(label = "开着的模式把作品都排除了，可以关掉一个模式或换个条件", action = "adjust")
+
+        /** 推荐偏好选了「被低估」后没有作品剩下时的空态。 */
+        fun underratedCta(prefs: RecommendPreferences) = Cta(
+            label = "没有社区分低于 %.1f、评分人数够多的作品，可以到「推荐偏好」把上限调高或换个档位"
+                .format(prefs.underratedThreshold),
+            action = "adjust",
+        )
+
+        /** 推荐偏好看重冷门或选了「被低估」时，理由里补一句热度档 / 为什么算被低估。 */
+        fun preferenceNote(prefs: RecommendPreferences, popularity: Double?, votes: Int): String {
+            val tier = popularity?.takeIf { prefs.obscurity != 0 }?.let { PopularityReference.tierOf(it).label }
+            val heat = tier?.let { "；热度：$it（评分 $votes 人）" }.orEmpty()
+            val underrated = if (prefs.underrated) "；社区评价一般，但可能合你的口味" else ""
+            return heat + underrated
+        }
 
         /** 风险气质的代表性达到多少才算「主打」并触发软惩罚。 */
         const val RISK_MIN_REPRESENTATIVENESS = 0.3

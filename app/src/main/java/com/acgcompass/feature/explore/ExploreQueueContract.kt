@@ -59,11 +59,16 @@ data class ExploreCardUiModel(
  * 将 12 维匹配结果和作品映射为探索卡片；理由只呈现题材、组合和情节维度，
  * 引擎无结果时退化为「探索尝试 / 按热度」措辞（绝不伪造匹配度）。
  */
-internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = false): ExploreCardUiModel {
+internal fun Work.toExploreCard(
+    match: TasteMatchResult?,
+    discovery: Boolean = false,
+    prefsNote: String? = null,
+): ExploreCardUiModel {
     val parts = listOfNotNull(
         units.episodes?.let { "$it 话" },
         year?.toString(),
         mediaTypeLabel(mediaType),
+        prefsNote,
     )
     val reason = exploreReason(match, discovery)
     val score = match?.score
@@ -100,11 +105,11 @@ private fun exploreReason(match: TasteMatchResult?, discovery: Boolean): String 
     return when {
         discovery -> {
             val rating = match?.communityScore10?.let { "社区评分 %.1f，".format(it) }.orEmpty()
-            "${rating}口碑扎实，但题材在你常看的范围之外——换换口味的跨界候选"
+            "${rating}口碑扎实，题材和你常看的不一样，可以换换口味"
         }
         topicReasons.isNotEmpty() ->
             "命中「${topicReasons.take(MAX_REASON_LABELS).joinToString(" + ") { it.label }}」，与长期口味画像接近"
-        match != null -> "与口味画像重合较少，作为探索性候选"
+        match != null -> "和你常看的不太一样，可以试试"
         else -> "口味画像尚未就绪，先按热度作为探索推荐"
     }
 }

@@ -51,6 +51,14 @@ object TonightRanker {
         val releaseYear: Int? = null,
         val franchiseKey: String = "",
         val tags: Set<String> = emptySet(),
+        /** 深夜模式下轻松日常的程度 ∈ [0,1]（[TonightModes.Verdict.calm]），其它情况为 0。 */
+        val calm: Double = 0.0,
+        /** 口味匹配度（0–100，推荐偏好的「口味契合」用）；没有为 `null`。 */
+        val match: Double? = null,
+        /** 热度（[PopularityReference.percentile]，推荐偏好的「热度」用）；不知道为 `null`。 */
+        val popularity: Double? = null,
+        /** 首播日（[PopularityReference.airDay]，推荐偏好的「新番」用）；不知道时退回 [releaseYear]。 */
+        val releaseDay: Long? = null,
     )
 
     /** 三档角色。 */
@@ -90,7 +98,8 @@ object TonightRanker {
             p.TONIGHT_W_COMMUNITY * community +
             p.TONIGHT_W_NOVELTY * novelty +
             p.TONIGHT_W_COMPLETION_EASE * c.completionEase.coerceIn(0.0, 1.0) +
-            p.TONIGHT_W_FRESHNESS * freshness(c.releaseYear, currentYear)
+            p.TONIGHT_W_FRESHNESS * freshness(c.releaseYear, currentYear) +
+            p.TONIGHT_W_CALM * c.calm.coerceIn(0.0, 1.0)
         val penalty = (c.daysSinceExposure?.let { p.TONIGHT_W_REPEAT_PENALTY * repeatDecay(it) } ?: 0.0) +
             p.TONIGHT_W_DOMINANT_CONFLICT * c.dominantConflict.coerceIn(0.0, 1.0)
         val raw = positive - penalty
@@ -165,12 +174,18 @@ object TonightRanker {
      *
      * @param count 需要的部数（1 = 单一推荐模式，只出稳妥档）。
      * @param random 随机源（注入以便测试复现）。
+     * @param prefs 推荐偏好（[withPreferences]）。
      * @return 按 稳妥 → 探索 → 随机 顺序的结果；候选不足时档位缺省，绝不重复或凑数。
      */
-    fun pick(candidates: List<Candidate>, count: Int, currentYear: Int, random: Random = Random.Default): List<Pick> {
+    fun pick(
+        candidates: List<Candidate>,
+        count: Int,
+        currentYear: Int,
+        random: Random = Random.Default,
+        prefs: RecommendPreferences = RecommendPreferences.DEFAULT,
+    ): List<Pick> {
         if (candidates.isEmpty() || count <= 0) return emptyList()
-        val scored = candidates
-            .map { it to score(it, currentYear) }
+        val scored = withPreferences(candidates.map { it to score(it, currentYear) }, prefs)
             .sortedWith(compareByDescending<Pair<Candidate, Double>> { it.second }.thenBy { it.first.id })
 
         val picks = ArrayList<Pick>(count)
@@ -203,6 +218,31 @@ object TonightRanker {
         val rest = topPool.filter(::available)
         weightedSample(rest, random)?.let { take(it, Slot.WILDCARD) }
         return picks
+    }
+
+    /**
+     * 推荐偏好：在今晚分之上按 [PreferenceRanking] 重排（今晚分的分布不变，三档选片的力度也就不变）。
+     * 社区分用贝叶斯均分，新番用首播日。默认偏好下原样返回。
+     */
+    fun withPreferences(
+        scored: List<Pair<Candidate, Double>>,
+        prefs: RecommendPreferences,
+    ): List<Pair<Candidate, Double>> {
+        if (!prefs.reranks) return scored
+        val adjusted = PreferenceRanking.rerank(
+            scored.map { (c, s) ->
+                PreferenceRanking.Factors(
+                    id = c.id,
+                    base = s,
+                    match = c.match,
+                    community = c.community10,
+                    freshness = (c.releaseDay ?: PopularityReference.airDay(null, c.releaseYear))?.toDouble(),
+                    popularity = c.popularity,
+                )
+            },
+            prefs,
+        )
+        return scored.map { (c, s) -> c to (adjusted[c.id] ?: s) }
     }
 
     private fun weightedSample(entries: List<Pair<Candidate, Double>>, random: Random): Pair<Candidate, Double>? {

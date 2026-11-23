@@ -30,7 +30,7 @@ class BacktestDisplayTest : StringSpec({
         val ui = rated(BacktestView(78, 7.6, 6.0, 9.0, rating = 8, updating = true), pending = false).toTasteMatchUi()
         ui.shouldBeInstanceOf<TasteMatchUiModel.Available>()
         ui.percentText shouldBe "78%"
-        ui.backtestText!! shouldContain "上一次的结果"
+        ui.backtestText!! shouldContain "稍后会换成新的回测结果"
     }
 
     "without a backtest yet, no number is shown" {
@@ -38,6 +38,6 @@ class BacktestDisplayTest : StringSpec({
         ui.shouldBeInstanceOf<TasteMatchUiModel.Available>()
         ui.percentText shouldBe "回测中"
         ui.fraction shouldBe 0f
-        ui.backtestText!! shouldContain "回测计算中"
+        ui.backtestText!! shouldContain "回测还在算"
     }
 })

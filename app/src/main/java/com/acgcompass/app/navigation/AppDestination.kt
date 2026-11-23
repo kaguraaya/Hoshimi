@@ -129,6 +129,11 @@ sealed interface AppDestination {
         override val route: String = "data_safety"
     }
 
+    /** 推荐偏好：探索队列和今晚看什么看重什么（设置 → 推荐与口味；探索队列、今晚看什么页也能进）。 */
+    data object RecommendPreferences : AppDestination {
+        override val route: String = "recommend_preferences"
+    }
+
     /** 后台任务：各后台任务的运行状况与手动重试（设置 → 数据 → 后台任务）。 */
     data object BackgroundTasks : AppDestination {
         override val route: String = "background_tasks"

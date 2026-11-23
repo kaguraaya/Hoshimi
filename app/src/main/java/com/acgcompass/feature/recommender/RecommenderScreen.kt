@@ -3,6 +3,7 @@
 package com.acgcompass.feature.recommender
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Explore
@@ -104,6 +106,7 @@ fun recommenderRoute(presetTags: List<String> = emptyList()): String = if (prese
 fun RecommenderRoute(
     onOpenWork: (String) -> Unit,
     onBack: () -> Unit = {},
+    onOpenPreferences: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: RecommenderViewModel = hiltViewModel(),
 ) {
@@ -125,6 +128,7 @@ fun RecommenderRoute(
         onSubmit = viewModel::onSubmit,
         onOpenWork = onOpenWork,
         onBack = onBack,
+        onOpenPreferences = onOpenPreferences,
         modifier = modifier,
     )
 }
@@ -153,6 +157,7 @@ fun RecommenderScreen(
     onOpenWork: (String) -> Unit,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    onOpenPreferences: () -> Unit = {},
 ) {
     val resultAnchor = remember { BringIntoViewRequester() }
     // 结果（或「无候选」提示）出来后把结果区滚进视野；初始空态不滚动。
@@ -224,11 +229,12 @@ fun RecommenderScreen(
                 onToggleIndecision = onToggleIndecision,
                 onToggleFinalsProtection = onToggleFinalsProtection,
                 onToggleLateNight = onToggleLateNight,
+                onOpenPreferences = onOpenPreferences,
             )
 
             if (input.lateNightMode) {
                 Text(
-                    text = "已开启深夜模式：少推停不下来的剧情向，看完记得早点休息。",
+                    text = "已开启深夜模式：避开情绪重和停不下来的作品，看完记得早点休息。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
@@ -292,6 +298,7 @@ private fun ModeSwitches(
     onToggleIndecision: () -> Unit,
     onToggleFinalsProtection: () -> Unit,
     onToggleLateNight: () -> Unit,
+    onOpenPreferences: () -> Unit,
 ) {
     FlatCard(
         title = "特别模式",
@@ -307,17 +314,45 @@ private fun ModeSwitches(
             )
             ModeSwitchRow(
                 label = "低负担模式",
-                supporting = "排除长篇、致郁、烧脑和未完结的作品",
+                supporting = "只推已完结、一季以内、不用先看前作的作品，避开烧脑和头绪多的",
                 checked = input.finalsProtectionMode,
                 onToggle = onToggleFinalsProtection,
             )
             ModeSwitchRow(
                 label = "深夜模式",
-                supporting = "避开容易停不下来的悬疑剧情和致郁作品，并提醒早点休息",
+                supporting = "避开致郁、压抑、吓人和一集接一集停不下来的作品，轻松日常优先，并提醒早点休息",
                 checked = input.lateNightMode,
                 onToggle = onToggleLateNight,
             )
+            PreferencesLinkRow(onClick = onOpenPreferences)
         }
+    }
+}
+
+/** 「推荐偏好」入口：看重口味、口碑、新番、冷门，或专找社区低估的作品（和探索队列共用一份设置）。 */
+@Composable
+private fun PreferencesLinkRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("推荐偏好", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "看重口味、口碑、新番或冷门，也可以专找社区评价一般、但可能合你口味的作品（和探索队列共用）",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

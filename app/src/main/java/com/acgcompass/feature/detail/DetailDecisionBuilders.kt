@@ -27,7 +27,7 @@ internal fun Work.toDecisionUiModel(
             add("与口味画像高度匹配")
         }
         if (consensus is ConsensusUiModel.Available && consensus.priority.fraction >= 0.66f) {
-            add("社区补番优先级较高")
+            add("社区口碑好、值得补")
         }
         if (completionCost.available && completionCost.bucketLabel == "今晚可看完") {
             add("篇幅短，今晚即可看完")
@@ -48,7 +48,7 @@ internal fun Work.toDecisionUiModel(
         }
     }
     val notRecommend = buildList {
-        if (tasteMatch is TasteMatchUiModel.Available && tasteMatch.fraction < 0.33f) {
+        if (tasteMatch is TasteMatchUiModel.Available && !tasteMatch.pending && tasteMatch.fraction < 0.33f) {
             add("与口味画像匹配度较低")
         }
         if (consensus is ConsensusUiModel.Available && consensus.controversy.fraction >= 0.66f) {
@@ -192,7 +192,7 @@ internal fun priorityReason(level: String, factors: List<PriorityFactor>, risk: 
             else -> (ups + downs).joinToString(" · ")
         }
     }
-    return text.ifEmpty { "各项信号都在中间，仅供参考" }
+    return text.ifEmpty { "各方面都中规中矩" }
 }
 
 internal const val TASTE_FLOOR = 0.5f
@@ -311,6 +311,7 @@ internal fun TasteMatchResult.toTasteMatchUi(): TasteMatchUiModel {
         uncertain = !isRated && prediction?.isUncertain == true,
         backtestText = if (isRated && fromRatingModel) backtestLine() else null,
         rated = isRated,
+        pending = pending,
     )
 }
 
@@ -321,9 +322,9 @@ private const val CIRCLE_CORE = 1.0
 private val TasteMatchResult.circleText: String
     get() = when {
         circleZ == null -> ""
-        circleZ >= CIRCLE_CORE -> "（这部是）"
-        circleZ >= 0.0 -> "（这部和你常看的有些重合）"
-        else -> "（这部不太是）"
+        circleZ >= CIRCLE_CORE -> "这部是你常看的那类。"
+        circleZ >= 0.0 -> "这部和你常看的有些重合。"
+        else -> "这部不太是你常看的那类。"
     }
 
 /**
@@ -342,12 +343,12 @@ private fun TasteMatchResult.matchReasonCore(predicted: Double?, reasonUis: List
                 .joinToString("、") { "${it.label} ${"%+.1f".format(it.delta)}" }
             val basisText =
                 if (mainBasis.isNotEmpty()) "大众基线 ${"%.1f".format(gated.baseline)} 分，主要依据：$mainBasis。" else ""
-            "匹配度看的是这部对你口味有多契合：是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像。" +
+            "匹配度看的是这部对你口味有多契合：是不是你常看的那类、题材相近的作品你打了几分、题材像不像。$circleText" +
                 "它和下面的预计评分是两回事——预计评分是你看完大概会打几分。" + analogyText +
                 disagreementNote(score, gated, circleZ) + basisText + tail
         }
         isRated && fromRatingModel ->
-            "匹配度看的是这部对你口味有多契合：是不是你常看的那类$circleText、题材相近的作品你打了几分、题材像不像。$tail"
+            "匹配度看的是这部对你口味有多契合：是不是你常看的那类、题材相近的作品你打了几分、题材像不像。$circleText$tail"
         predicted != null -> {
             // 把百分数的含义说出来：以相似作品类比为主，再参考评分和题材相似度。
             val basis = if (isRated) "你的评分" else "预计评分"

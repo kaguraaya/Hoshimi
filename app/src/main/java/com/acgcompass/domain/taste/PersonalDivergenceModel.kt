@@ -58,6 +58,10 @@ data class RatingPrediction(
     val summary: RatingChances.Summary? = null,
     /** 回归模型给出的位置（分布的输入）；按人权重的模型才有。 */
     val location: Double? = null,
+    /** 保守 / 激进分支算出的预计评分时是那个分支；常规分支为 null。 */
+    val branch: TasteMatchBranch? = null,
+    /** 分支带来的变化：[rating] 减去常规分支的预计评分。[divergence] 里包含这一项。 */
+    val branchOffset: Double = 0.0,
 ) {
     /** 预计评分比社区评分高 / 低多少；没有社区评分时为 `null`。 */
     val vsCommunity: Double? get() = community?.let { rating - it }
@@ -209,8 +213,19 @@ class PersonalDivergenceModel private constructor(
         scale?.map(community10, linear) ?: linear
     }
 
-    fun predict(feature: WorkFeature): RatingPrediction {
-        gateWeights?.let { return predictGated(feature, it) }
+    /**
+     * 预计评分。两个倍数来自口味匹配度分支（[TasteMatchBranch]），都是 1 时就是常规：
+     * - [personalScale]：个人偏离的倍数，小于 1 更靠近按社区评分换算的大众基线，大于 1 更信你的个人口味；
+     * - [spread]：位置离你平均分的距离的倍数，小于 1 往你的平均分收，大于 1 两端放开。
+     * 分布、区间、「打 9 分以上的可能」都跟着同一个位置重新算，仍然出自同一个分布。
+     */
+    fun predict(
+        feature: WorkFeature,
+        personalScale: Double = 1.0,
+        spread: Double = 1.0,
+        knownAnalogy: TasteAnalogy? = null,
+    ): RatingPrediction {
+        gateWeights?.let { return predictGated(feature, it, personalScale, spread, knownAnalogy) }
         val base = baseline(shrinkCommunity(feature.bangumiScore?.toDouble(), feature.bangumiVotes, communityVotePrior))
         val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
         val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to PERSONAL_GAIN * it * x } }
@@ -218,13 +233,13 @@ class PersonalDivergenceModel private constructor(
         val franchisePart = PERSONAL_GAIN * FRANCHISE_WEIGHT * franchiseResidual(feature)
         val axes = axes(feature, options.controversyAxis)
         val axisParts = AXIS_LABELS.indices.map { PERSONAL_GAIN * AXIS_WEIGHT * axisWeights[it] * axes[it] }
-        val divergence = tagPart + franchisePart + axisParts.sum()
+        val divergence = (tagPart + franchisePart + axisParts.sum()) * personalScale
 
         val factors = ArrayList<DivergenceFactor>()
-        perTag.forEach { (tag, delta) -> factors += DivergenceFactor(tag, delta) }
-        if (franchisePart != 0.0) factors += DivergenceFactor(FRANCHISE_LABEL, franchisePart)
+        perTag.forEach { (tag, delta) -> factors += DivergenceFactor(tag, delta * personalScale) }
+        if (franchisePart != 0.0) factors += DivergenceFactor(FRANCHISE_LABEL, franchisePart * personalScale)
         AXIS_LABELS.forEachIndexed { i, labels ->
-            val delta = axisParts[i]
+            val delta = axisParts[i] * personalScale
             // 取向维度的标签随方向变化：同一条权重，对热门作是「偏爱大众向」，对冷门作是「偏爱小众向」。
             if (delta != 0.0) factors += DivergenceFactor(if (axes[i] >= 0.0) labels.first else labels.second, delta)
         }
@@ -232,7 +247,7 @@ class PersonalDivergenceModel private constructor(
             community = feature.bangumiScore?.toDouble()?.takeIf { it > 0.0 },
             userMean = meanRating,
             userStd = ratingStd,
-            rating = (base + divergence).coerceIn(MIN_RATING, MAX_RATING),
+            rating = spreadAroundMean(base + divergence, spread),
             baseline = base.coerceIn(MIN_RATING, MAX_RATING),
             divergence = divergence,
             factors = factors.filter { kotlin.math.abs(it.delta) >= MIN_FACTOR_DELTA }
@@ -260,27 +275,35 @@ class PersonalDivergenceModel private constructor(
         return strength * analogy.z * ratingStd.coerceAtLeast(MIN_ANALOGY_STD)
     }
 
-    private fun predictGated(feature: WorkFeature, w: ExpertWeights): RatingPrediction {
+    @Suppress("LongParameterList") // 分支的两个倍数和已算好的类比，逐个传入比打包更直白
+    private fun predictGated(
+        feature: WorkFeature,
+        w: ExpertWeights,
+        personalScale: Double,
+        spread: Double,
+        knownAnalogy: TasteAnalogy?,
+    ): RatingPrediction {
         val base = baseline(shrinkCommunity(feature.bangumiScore?.toDouble(), feature.bangumiVotes, communityVotePrior))
         val vector = tagVector(feature, idf, defaultIdf, tagOverrides)
         val perTag = vector.mapNotNull { (tag, x) -> tagWeights[tag]?.let { tag to w.tag * it * x } }
         val franchisePart = w.franchise * franchiseResidual(feature)
         val ax = axes(feature, options.controversyAxis)
         val axisParts = AXIS_LABELS.indices.map { w.axes * axisWeights[it] * ax[it] }
-        val analogy = analogy(feature)
+        val analogy = knownAnalogy ?: analogy(feature)
         val analogyPart = w.analogy * analogyValue(analogy)
-        val divergence = perTag.sumOf { it.second } + franchisePart + axisParts.sum() + analogyPart
+        val divergence = (perTag.sumOf { it.second } + franchisePart + axisParts.sum() + analogyPart) * personalScale
 
         val factors = ArrayList<DivergenceFactor>()
-        perTag.forEach { (tag, delta) -> factors += DivergenceFactor(tag, delta) }
-        if (franchisePart != 0.0) factors += DivergenceFactor(FRANCHISE_LABEL, franchisePart)
+        perTag.forEach { (tag, delta) -> factors += DivergenceFactor(tag, delta * personalScale) }
+        if (franchisePart != 0.0) factors += DivergenceFactor(FRANCHISE_LABEL, franchisePart * personalScale)
         AXIS_LABELS.forEachIndexed { i, labels ->
             if (axisParts[i] != 0.0) {
-                factors += DivergenceFactor(if (ax[i] >= 0.0) labels.first else labels.second, axisParts[i])
+                val label = if (ax[i] >= 0.0) labels.first else labels.second
+                factors += DivergenceFactor(label, axisParts[i] * personalScale)
             }
         }
-        if (analogyPart != 0.0) factors += DivergenceFactor(ANALOGY_LABEL, analogyPart)
-        val rating = (base + divergence).coerceIn(MIN_RATING, MAX_RATING)
+        if (analogyPart != 0.0) factors += DivergenceFactor(ANALOGY_LABEL, analogyPart * personalScale)
+        val rating = spreadAroundMean(base + divergence, spread)
         val half = intervalHalfWidth * evidenceFactor(feature, vector.isEmpty())
         val low = (rating - half).coerceIn(MIN_RATING, MAX_RATING)
         val high = (rating + half).coerceIn(MIN_RATING, MAX_RATING)
@@ -308,6 +331,10 @@ class PersonalDivergenceModel private constructor(
             location = rating,
         )
     }
+
+    /** 位置离你平均分的距离乘 [spread]（1 = 不变），再收进 1–10 分。 */
+    private fun spreadAroundMean(location: Double, spread: Double): Double =
+        (meanRating + spread * (location - meanRating)).coerceIn(MIN_RATING, MAX_RATING)
 
     /** 你自己 5 分及以下评分的平均（分布里「6 分以下」那一档按它算）；没有这样的评分时按 [DEFAULT_LOW_MEAN]。 */
     private val lowRatingMean: Double by lazy {

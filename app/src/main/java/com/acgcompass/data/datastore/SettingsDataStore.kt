@@ -329,6 +329,16 @@ class SettingsDataStore @Inject constructor(
         dataStore.edit { it[SettingsKeys.BACKLOG_GRID_MODE] = grid }
     }
 
+    /** 推荐偏好（设置 → 推荐偏好）；没设过时是默认偏好，排序和没有这项设置时一样。 */
+    val recommendPreferences: Flow<com.acgcompass.domain.recommend.RecommendPreferences> =
+        dataStore.data.map {
+            com.acgcompass.domain.recommend.RecommendPreferences.decode(it[SettingsKeys.RECOMMEND_PREFERENCES])
+        }
+
+    suspend fun setRecommendPreferences(prefs: com.acgcompass.domain.recommend.RecommendPreferences) {
+        dataStore.edit { it[SettingsKeys.RECOMMEND_PREFERENCES] = prefs.normalized().encode() }
+    }
+
     /** 是否记录并显示发现页的最近搜索。 */
     val searchHistoryEnabled: Flow<Boolean> = dataStore.data.map { it[SettingsKeys.SEARCH_HISTORY_ENABLED] ?: true }
 

@@ -104,6 +104,7 @@ data class SettingsActions(
     val onOpenCacheManagement: () -> Unit = {},
     val onOpenDataSafety: () -> Unit = {},
     val onOpenBackgroundTasks: () -> Unit = {},
+    val onOpenRecommendPreferences: () -> Unit = {},
 )
 
 /**
@@ -172,6 +173,7 @@ fun SettingsSourceScreen(
     onBangumiLogin: () -> Unit = {},
     onOpenCacheManagement: () -> Unit = {},
     onOpenDataSafety: () -> Unit = {},
+    onOpenRecommendPreferences: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val actions = rememberSettingsActions(
@@ -183,6 +185,7 @@ fun SettingsSourceScreen(
         onOpenCacheManagement = onOpenCacheManagement,
         onOpenDataSafety = onOpenDataSafety,
         onBangumiLogin = onBangumiLogin,
+        onOpenRecommendPreferences = onOpenRecommendPreferences,
     )
 
     // 「凭据仅保存在本机」提示：与主页面一致。
@@ -232,6 +235,7 @@ internal fun rememberSettingsActions(
     onOpenDataSafety: () -> Unit = {},
     onBangumiLogin: () -> Unit = {},
     onOpenBackgroundTasks: () -> Unit = {},
+    onOpenRecommendPreferences: () -> Unit = {},
 ): SettingsActions {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -326,7 +330,14 @@ internal fun rememberSettingsActions(
         }
     }
     val actions =
-        remember(viewModel, effectiveOpenDoc, onOpenCacheManagement, onOpenDataSafety, onOpenBackgroundTasks) {
+        remember(
+            viewModel,
+            effectiveOpenDoc,
+            onOpenCacheManagement,
+            onOpenDataSafety,
+            onOpenBackgroundTasks,
+            onOpenRecommendPreferences,
+        ) {
             SettingsActions(
                 onNavigateBack = onNavigateBack,
                 onOpenDoc = effectiveOpenDoc,
@@ -387,6 +398,7 @@ internal fun rememberSettingsActions(
                 onOpenCacheManagement = onOpenCacheManagement,
                 onOpenDataSafety = onOpenDataSafety,
                 onOpenBackgroundTasks = onOpenBackgroundTasks,
+                onOpenRecommendPreferences = onOpenRecommendPreferences,
             )
         }
     return actions
