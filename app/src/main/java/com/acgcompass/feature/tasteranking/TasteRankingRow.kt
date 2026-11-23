@@ -94,7 +94,7 @@ private fun ScoreColumn(item: TasteRankItem) {
 
 /** 预计评分：和详情页一样写分布的中位数（整数）；没有分布时写一位小数。 */
 private fun predictedLabel(item: TasteRankItem): String? =
-    item.predictedText?.let { "预计 $it 分" } ?: item.predictedRating?.let { "预计 %.1f".format(it) }
+    item.predictedText?.let { "预计 $it 分" } ?: item.predictedRating?.let { "预计 %.1f 分".format(it) }
 
 private fun meta(item: TasteRankItem): String = listOfNotNull(
     item.year?.let { "$it 年" },

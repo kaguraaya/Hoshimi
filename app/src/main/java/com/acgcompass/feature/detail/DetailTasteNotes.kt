@@ -5,21 +5,24 @@ import com.acgcompass.domain.taste.TasteMatchResult
 
 // 详情页口味区的两句补充说明：已评分作品的回测值，以及匹配度和预计评分差得多时的解释。
 
-/** 已评分作品的回测说明。 */
+/**
+ * 已评分作品的回测说明：数字直接写出来，必要时补一句。刚评分或改了分时显示的是评分前的盲测值或上一次的回测值，
+ * 只补一句「稍后会换成新的结果」。
+ */
 internal fun TasteMatchResult.backtestLine(): String {
     val bt = backtest ?: return if (backtestPending) {
-        "回测计算中：一两分钟内显示「建画像时不知道这部作品」算出的匹配度和预计评分。"
+        "回测还在算，稍等一会儿就能看到不考虑你评分时算出的匹配度和预计评分。"
     } else {
-        "这部作品没有回测值（评过分的作品少于 ${com.acgcompass.domain.taste.TasteBacktest.MIN_RATED} 部，或缺少作品资料）；" +
+        "这部作品没有回测值（评过分的作品少于 ${com.acgcompass.domain.taste.TasteBacktest.MIN_RATED} 部，或缺少作品资料），" +
             "上面的匹配度把你的评分也算进去了，只作参考。"
     }
     val match = bt.match?.let { "匹配度 $it%" } ?: "匹配度暂无"
     val predicted = (bt.prediction?.inlineText ?: bt.predicted?.let { "${"%.1f".format(it)} 分" })
         ?.let { " · 预计你会打 $it" }.orEmpty()
     val gap = bt.match?.let { m -> bt.prediction?.let { disagreementNote(m, it, circleZ) } }.orEmpty()
-    val updating = if (bt.updating) "画像刚更新，正在重新回测，这里先显示上一次的结果。" else ""
-    return "回测（建画像时不知道这部作品）：$match$predicted · 你的评分 ${bt.rating} 分。" +
-        updating + "这两个数是算法自己算的，不是按你的评分换算。" + gap
+    val updating = if (bt.updating) "画像刚更新，稍后会换成新的回测结果。" else ""
+    return "回测：$match$predicted · 你的评分 ${bt.rating} 分。匹配度和预计评分是在不知道你评分的情况下算的。" +
+        updating + gap
 }
 
 /** 匹配度「对你口味」的门槛（和判定措辞一致）、「不太对口」的门槛。 */

@@ -263,6 +263,48 @@ class ScreenWalkthroughTest {
         shot("divergence-light")
     }
 
+    /** 同一部作品在三个分支下的预计评分块：大字、分布条和「比社区评分高 / 低」那一行都会跟着变。 */
+    @Test
+    @Config(qualifiers = "w411dp-h2000dp-420dpi")
+    fun predictionBranches() {
+        val pool = (0 until 80).map { i ->
+            val tags = listOf(
+                listOf("悬疑", "科幻", "群像"),
+                listOf("后宫", "校园", "恋爱"),
+                listOf("日常", "治愈", "音乐"),
+                listOf("战斗", "热血", "冒险"),
+            )[i % 4]
+            feature("p$i", tags, 6.0f + (i % 7) * 0.4f)
+        }
+        val profile = com.acgcompass.domain.taste.BuildTasteProfileUseCase()(
+            divergenceSamples(),
+            100_000L,
+            pool,
+            divergenceOptions = com.acgcompass.domain.taste.DivergenceOptions.DEFAULT,
+        )
+        val work = feature("new", listOf("悬疑", "科幻", "群像"), 8.0f)
+        val compute = com.acgcompass.domain.taste.ComputeTasteMatchUseCase()
+        val shown = com.acgcompass.domain.taste.TasteMatchBranch.entries.map { b ->
+            b.label to compute(work, profile.copy(matchBranch = b), withNeighbors = false).prediction!!.toUi()
+        }
+        compose.setContent {
+            AcgCompassTheme(darkTheme = false, dynamicColor = false) {
+                Surface {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        shown.forEach { (label, prediction) ->
+                            androidx.compose.material3.Text("分支：$label")
+                            RatingPredictionBlock(prediction)
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("激进算法", substring = true).assertExists()
+        // 三个分支的分布各不相同。
+        assertEquals(3, shown.map { it.second.chanceBuckets.map { b -> b.percent } }.distinct().size)
+        shot("prediction-branches")
+    }
+
     /** 评分预测块：打 9 分以上的可能过半时单独一行，下面是打几分的分布条。 */
     @Test
     fun predictionChances() {
@@ -426,7 +468,7 @@ private val sampleExploreCards = listOf(
         tastePercent = "58%",
         tasteFraction = 0.58f,
         tasteQualitative = "可能感觉一般",
-        reason = "社区评分 8.9，口碑扎实，但题材在你常看的范围之外——换换口味的跨界候选",
+        reason = "社区评分 8.9，口碑扎实，题材和你常看的不一样，可以换换口味",
         tags = listOf("奇幻", "冒险", "治愈", "漫画改"),
         synopsis = "勇者一行打倒魔王之后，精灵魔法使踏上了重新认识人类的旅途。",
         discovery = true,
@@ -453,7 +495,7 @@ private val sampleExploreCards = listOf(
         tastePercent = "41%",
         tasteFraction = 0.41f,
         tasteQualitative = "可以试试看",
-        reason = "与口味画像重合较少，作为探索性候选",
+        reason = "和你常看的不太一样，可以试试",
         tags = listOf("后宫", "校园"),
         synopsis = null,
     ),

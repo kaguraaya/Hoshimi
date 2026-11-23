@@ -300,7 +300,8 @@ class ComputeTasteMatchUseCase @Inject constructor() {
                 catTags.entries.maxByOrNull { (k, q) -> q * (pref.negative[k] ?: 0.0) }
                     ?.takeIf { (k, q) -> q * (pref.negative[k] ?: 0.0) > 0.0 }?.key
             }
-            val text = if (topTag != null) "${cat.label}·$topTag" else cat.label
+            val shownTag = if (cat == TasteCategory.TIME) topTag?.let { TagClassifier.eraLabel(it) } else topTag
+            val text = if (shownTag != null) "${cat.label}·$shownTag" else cat.label
             reasons += TasteReason(cat, text, contribution)
         }
 

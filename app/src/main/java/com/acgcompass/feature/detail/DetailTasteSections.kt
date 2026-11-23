@@ -430,7 +430,7 @@ internal fun AiPredictionExtras(aiMatch: AiMatchUi.Result) {
     }
     if (aiMatch.ratingAngles.isNotEmpty()) {
         Text(
-            text = "你打分最看重：" + aiMatch.ratingAngles.joinToString(" · "),
+            text = "AI 认为你在意：" + aiMatch.ratingAngles.joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -242,6 +242,19 @@ object TagClassifier {
         return "$start-${start + TIME_BUCKET_SPAN - 1}"
     }
 
+    /**
+     * 年代档在界面上的写法：含今年的那一档写「近几年」（「2025-2029」读起来像在说未来），更早的写「2010–2014 年」；
+     * 不是年代档的时间标签原样返回。
+     */
+    fun eraLabel(bucket: String, currentYear: Int = java.time.Year.now().value): String {
+        val match = TIME_BUCKET_KEY.matchEntire(bucket) ?: return bucket
+        val start = match.groupValues[1].toInt()
+        val end = match.groupValues[2].toInt()
+        return if (end >= currentYear) "近几年" else "$start–$end 年"
+    }
+
+    private val TIME_BUCKET_KEY = Regex("(\\d{4})-(\\d{4})")
+
     private fun isStudioTag(cleaned: String): Boolean = TasteTagTaxonomy.isStudio(cleaned)
 
     /** 厂牌标签是否与真实 staff 名集合相符（任一 staff 名包含厂牌串或反之）。 */
