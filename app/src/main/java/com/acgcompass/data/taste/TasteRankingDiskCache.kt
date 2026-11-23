@@ -29,11 +29,28 @@ class TasteRankingDiskCache @Inject constructor(
             ?.toDomain()
     }.getOrNull()
 
+    /**
+     * 读上次的结果，且要求当时的画像输入指纹（[TasteEngine.inputsKey]）和作品库部数都和现在一样：
+     * 满足时这份结果就是现在会算出的结果，可以直接当作最新的用。
+     */
+    fun readExact(modelVersion: String, inputsKey: String, featureCount: Int): TasteRanking? = runCatchingCancellable {
+        file.takeIf { it.exists() }?.readText()
+            ?.let { json.decodeFromString(StoredRanking.serializer(), it) }
+            ?.takeIf {
+                it.modelVersion == modelVersion && it.inputsKey == inputsKey && it.featureCount == featureCount
+            }
+            ?.toDomain()
+    }.getOrNull()
+
     /** 先写临时文件再改名，写到一半被打断也不会留下坏文件。 */
-    fun write(ranking: TasteRanking, modelVersion: String) {
+    fun write(ranking: TasteRanking, modelVersion: String, inputsKey: String? = null, featureCount: Int = -1) {
         runCatchingCancellable {
             val temp = File(context.filesDir, "$FILE_NAME.tmp")
-            temp.writeText(json.encodeToString(StoredRanking.serializer(), StoredRanking.of(ranking, modelVersion)))
+            val stored = StoredRanking.of(
+                ranking,
+                modelVersion,
+            ).copy(inputsKey = inputsKey.orEmpty(), featureCount = featureCount)
+            temp.writeText(json.encodeToString(StoredRanking.serializer(), stored))
             temp.renameTo(file)
         }
     }
@@ -50,6 +67,10 @@ private data class StoredRanking(
     val computedAt: Long,
     val unratedCount: Int,
     val modelVersion: String = "",
+    /** 当时的画像输入指纹；空 = 没记（旧文件），不能当最新结果直接用。 */
+    val inputsKey: String = "",
+    /** 当时作品库（有资料的动画）的部数。 */
+    val featureCount: Int = -1,
 ) {
     fun toDomain() = TasteRanking(items.map { it.toDomain() }, poolSize, computedAt, unratedCount)
 
