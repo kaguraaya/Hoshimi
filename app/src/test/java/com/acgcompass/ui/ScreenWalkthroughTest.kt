@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
@@ -204,6 +205,41 @@ class ScreenWalkthroughTest {
         // 再来一批回到第 1 张。
         compose.onNodeWithText("再来一批").performClick()
         compose.onNodeWithText("1 / 3").assertIsDisplayed()
+    }
+
+    /** 推荐偏好：选预设「社区低估」→ 出现社区分上限 → 改成 7.5 → 冷门调到「高」→ 恢复默认。 */
+    @Test
+    fun recommendPreferencesFlow() {
+        var prefs by mutableStateOf(com.acgcompass.domain.recommend.RecommendPreferences.DEFAULT)
+        compose.setContent {
+            AcgCompassTheme(darkTheme = false, dynamicColor = false) {
+                com.acgcompass.feature.settings.RecommendPreferencesScreen(
+                    prefs = prefs,
+                    onBack = {},
+                    onChange = { transform -> prefs = transform(prefs) },
+                    onReset = { prefs = com.acgcompass.domain.recommend.RecommendPreferences.DEFAULT },
+                )
+            }
+        }
+        compose.onNodeWithText("当前：均衡（默认）。平常的排序。").assertIsDisplayed()
+        compose.onNodeWithText("社区低估").performClick()
+        assertTrue(prefs.underrated)
+        assertEquals(2, prefs.taste)
+        compose.onNode(androidx.compose.ui.test.hasScrollToNodeAction())
+            .performScrollToNode(androidx.compose.ui.test.hasText("7.5 分"))
+        shot("recommend-preferences")
+        compose.onNodeWithText("7.5 分").performClick()
+        assertEquals(75, prefs.underratedBelow)
+        compose.onNode(androidx.compose.ui.test.hasScrollToNodeAction())
+            .performScrollToNode(androidx.compose.ui.test.hasText("冷门"))
+        compose.onAllNodes(
+            androidx.compose.ui.test.hasText("高"),
+        ).let { it[it.fetchSemanticsNodes().lastIndex] }.performClick()
+        assertEquals(3, prefs.obscurity)
+        compose.onNode(androidx.compose.ui.test.hasScrollToNodeAction())
+            .performScrollToNode(androidx.compose.ui.test.hasText("恢复默认"))
+        compose.onNodeWithText("恢复默认").performClick()
+        assertTrue(prefs.isDefault)
     }
 
     /** 评分预测块 + 分歧画像（浅色）。 */

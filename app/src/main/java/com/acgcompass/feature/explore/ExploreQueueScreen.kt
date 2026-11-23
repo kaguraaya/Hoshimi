@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -104,6 +105,7 @@ private val FRONT_COVER_HEIGHT = 176.dp
 fun ExploreQueueRoute(
     onOpenWork: (String) -> Unit,
     onBack: () -> Unit,
+    onOpenPreferences: () -> Unit = {},
     viewModel: ExploreQueueViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -115,6 +117,7 @@ fun ExploreQueueRoute(
         onOpenWork = onOpenWork,
         onEnsureSynopsis = viewModel::loadSynopsis,
         onBack = onBack,
+        onOpenPreferences = onOpenPreferences,
     )
 }
 
@@ -123,6 +126,7 @@ fun ExploreQueueRoute(
  * 口味匹配度为视觉核心（大字 + 进度条），社区评分弱化到详情页。
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList") // 页面骨架：状态与回调逐个传入，便于截图测试。
 @Composable
 fun ExploreQueueScreen(
     state: ExploreQueueUiState,
@@ -133,12 +137,17 @@ fun ExploreQueueScreen(
     onEnsureSynopsis: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenPreferences: () -> Unit = {},
 ) {
     var showSwipeHelp by remember { mutableStateOf(false) }
     if (showSwipeHelp) SwipeHelpDialog(onDismiss = { showSwipeHelp = false })
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { ExploreTopBar(onBack = onBack, onHelp = { showSwipeHelp = true }) },
+        topBar = {
+            Column {
+                ExploreTopBar(onBack = onBack, onHelp = { showSwipeHelp = true }, onOpenPreferences = onOpenPreferences)
+            }
+        },
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -585,7 +594,7 @@ private fun ExploreCardFront(card: ExploreCardUiModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExploreTopBar(onBack: () -> Unit, onHelp: () -> Unit) {
+private fun ExploreTopBar(onBack: () -> Unit, onHelp: () -> Unit, onOpenPreferences: () -> Unit) {
     TopAppBar(
         expandedHeight = AcgTopBarHeight,
         title = { Text("探索队列", fontWeight = FontWeight.Bold) },
@@ -595,6 +604,9 @@ private fun ExploreTopBar(onBack: () -> Unit, onHelp: () -> Unit) {
             }
         },
         actions = {
+            IconButton(onClick = onOpenPreferences) {
+                Icon(Icons.Outlined.Tune, contentDescription = "推荐偏好")
+            }
             IconButton(onClick = onHelp) {
                 Icon(Icons.Outlined.Info, contentDescription = "左右滑说明")
             }

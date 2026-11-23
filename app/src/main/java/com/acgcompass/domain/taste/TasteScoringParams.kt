@@ -539,6 +539,9 @@ object TasteScoringParams {
     /** 主气质冲突惩罚：作品的主气质与所选意图相冲（选校园恋爱日常，作品主打超能力战斗）。 */
     const val TONIGHT_W_DOMINANT_CONFLICT: Double = 0.18
 
+    /** 深夜模式：轻松日常的作品往前。 */
+    const val TONIGHT_W_CALM: Double = 0.06
+
     // endregion
 
     /** 全部可调参数（名称 → 当前值），供算法模板（[TasteAlgorithmConfig.scoring]）导出与核对。 */
@@ -606,5 +609,6 @@ object TasteScoringParams {
         "TONIGHT_W_FRANCHISE_PENALTY" to TONIGHT_W_FRANCHISE_PENALTY.toDouble(),
         "TONIGHT_W_EXAM_RISK" to TONIGHT_W_EXAM_RISK.toDouble(),
         "TONIGHT_W_DOMINANT_CONFLICT" to TONIGHT_W_DOMINANT_CONFLICT.toDouble(),
+        "TONIGHT_W_CALM" to TONIGHT_W_CALM,
     )
 }

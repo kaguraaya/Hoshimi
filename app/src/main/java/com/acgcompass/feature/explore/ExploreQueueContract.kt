@@ -59,11 +59,16 @@ data class ExploreCardUiModel(
  * 将 12 维匹配结果和作品映射为探索卡片；理由只呈现题材、组合和情节维度，
  * 引擎无结果时退化为「探索尝试 / 按热度」措辞（绝不伪造匹配度）。
  */
-internal fun Work.toExploreCard(match: TasteMatchResult?, discovery: Boolean = false): ExploreCardUiModel {
+internal fun Work.toExploreCard(
+    match: TasteMatchResult?,
+    discovery: Boolean = false,
+    prefsNote: String? = null,
+): ExploreCardUiModel {
     val parts = listOfNotNull(
         units.episodes?.let { "$it 话" },
         year?.toString(),
         mediaTypeLabel(mediaType),
+        prefsNote,
     )
     val reason = exploreReason(match, discovery)
     val score = match?.score

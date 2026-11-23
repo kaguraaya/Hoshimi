@@ -231,6 +231,7 @@ fun AppNavHost(
             com.acgcompass.feature.explore.ExploreQueueRoute(
                 onOpenWork = { workId -> navController.navigateOnce(detailRoute(workId)) },
                 onBack = { navController.popBackOnce() },
+                onOpenPreferences = { navController.navigateOnce(AppDestination.RecommendPreferences.route) },
             )
         }
         composable(AppDestination.Backlog.route) {
@@ -384,6 +385,7 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
             onOpenWork = { workId ->
                 navController.navigateOnce(detailRoute(workId))
             },
+            onOpenPreferences = { navController.navigateOnce(AppDestination.RecommendPreferences.route) },
         )
     }
     composable(
@@ -424,7 +426,11 @@ private fun NavGraphBuilder.nestedRoutes(navController: NavHostController) {
             onClearCache = { navController.navigateOnce(AppDestination.CacheManagement.route) },
             onOpenCacheManagement = { navController.navigateOnce(AppDestination.CacheManagement.route) },
             onOpenDataSafety = { navController.navigateOnce(AppDestination.DataSafety.route) },
+            onOpenRecommendPreferences = { navController.navigateOnce(AppDestination.RecommendPreferences.route) },
         )
+    }
+    composable(AppDestination.RecommendPreferences.route) {
+        com.acgcompass.feature.settings.RecommendPreferencesRoute(onBack = { navController.popBackOnce() })
     }
     composable(AppDestination.BackgroundTasks.route) {
         com.acgcompass.feature.tasks.BackgroundTasksRoute(onBack = { navController.popBackOnce() })

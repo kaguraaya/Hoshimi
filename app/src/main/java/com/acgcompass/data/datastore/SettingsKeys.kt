@@ -45,6 +45,9 @@ internal object SettingsKeys {
     val AUTO_SYNC_INTERVAL_MINUTES = intPreferencesKey("auto_sync_interval_minutes")
     val BACKLOG_GRID_MODE = booleanPreferencesKey("backlog_grid_mode")
     val SEARCH_HISTORY_ENABLED = booleanPreferencesKey("search_history_enabled")
+
+    /** 推荐偏好（探索队列与今晚看什么），[com.acgcompass.domain.recommend.RecommendPreferences.encode] 的文本。 */
+    val RECOMMEND_PREFERENCES = stringPreferencesKey("recommend_preferences")
     val LOCAL_POOL_EXPAND_OFFSET = intPreferencesKey("local_pool_expand_offset")
     val TASTE_RANK_HINT_DISMISSED = booleanPreferencesKey("taste_rank_hint_dismissed")
     val RECOMMEND_MIN_COMMUNITY_SCORE = floatPreferencesKey("recommend_min_community_score")

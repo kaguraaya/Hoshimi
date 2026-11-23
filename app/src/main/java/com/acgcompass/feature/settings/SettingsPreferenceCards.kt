@@ -225,6 +225,7 @@ internal fun AutoSyncSettings(card: PrivacyCardState, actions: SettingsActions) 
 
 @Composable
 internal fun RecommendationSettings(card: PrivacyCardState, actions: SettingsActions) {
+    RecommendPreferencesEntry(actions)
     val branch = TasteMatchBranch.fromKey(card.tasteMatchBranch)
     OptionList(
         title = "口味匹配度算法",
@@ -279,6 +280,18 @@ internal fun RecommendationSettings(card: PrivacyCardState, actions: SettingsAct
         onCheckedChange = { actions.onToggleChange(ToggleKeys.SCORE_DIFF_AUTO_BACKFILL, it) },
     )
     AiDailyDrawToggle(card, actions)
+}
+
+/** 「推荐偏好」入口（探索队列和今晚看什么共用的排序偏好）。 */
+@Composable
+private fun RecommendPreferencesEntry(actions: SettingsActions) {
+    SettingsSummaryRow(
+        title = "推荐偏好",
+        statusText = "探索队列和今晚看什么看重什么：口味、口碑、新番、冷门，或专找社区低估的作品",
+        lastTestedAtText = null,
+        onClick = actions.onOpenRecommendPreferences,
+    )
+    FlatDivider()
 }
 
 /** 首页「今日补番签」由 AI 生成：配置了 AI 提供商之后才能打开。 */

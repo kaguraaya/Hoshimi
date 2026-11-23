@@ -63,8 +63,8 @@ object ExploreRanker {
 
     private const val DIVERSITY_WEIGHT = 0.18
 
-    /** 每批跨界名额占比。 */
-    private const val DISCOVERY_SHARE = 0.3
+    /** 每批跨界名额占比（推荐偏好里可以调，见 [RecommendPreferences.discoveryShare]）。 */
+    const val DISCOVERY_SHARE = 0.3
 
     /** 跨界候选的门槛：口碑分与票数都得站得住，且画像对它不熟、也没有明确反感。 */
     private const val DISCOVERY_MIN_COMMUNITY = 7.2
@@ -154,6 +154,7 @@ object ExploreRanker {
      * 最后把跨界卡片均匀穿插进主力序列（不会一上来就是陌生题材，也不会全堆在最后没人看到）。
      */
     /**
+     * @param discoveryShare 跨界名额占比（推荐偏好）。
      * @param random 不为 null 时在更宽的高分段里按效用加权随机挑（Gumbel 噪声，分数越高越容易被挑中），
      *   每次进来的顺序不再和「为你排行」一模一样；为 null 时完全确定（测试用）。
      */
@@ -162,9 +163,10 @@ object ExploreRanker {
         model: FeedbackModel,
         batchSize: Int,
         random: kotlin.random.Random? = null,
+        discoveryShare: Double = DISCOVERY_SHARE,
     ): List<Ranked> {
         if (candidates.isEmpty() || batchSize <= 0) return emptyList()
-        val discoverySlots = (batchSize * DISCOVERY_SHARE).toInt()
+        val discoverySlots = (batchSize * discoveryShare.coerceIn(0.0, 1.0)).toInt()
         val byUtility = candidates
             .map { it to utility(it, model) }
             .sortedWith(compareByDescending<Pair<Candidate, Double>> { it.second }.thenBy { it.first.id })
