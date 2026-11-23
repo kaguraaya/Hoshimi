@@ -29,6 +29,15 @@ object TagClassifier {
         val sourceNames: Set<String> = emptySet(),
         val titleVariants: Set<String> = emptySet(),
     ) {
+        /** 标题、人名切好的词：一部作品的几十个标签共用，不用每个标签都把名字重新切一遍。 */
+        private val titleFragments by lazy { NameFragments(titleVariants) }
+        private val personFragments by lazy { NameFragments(staffNames + characterNames + cvNames + sourceNames) }
+        internal val contextualNames: Set<String> by lazy { characterNames + cvNames + staffNames + sourceNames }
+
+        internal fun isTitleFragment(tag: String): Boolean = titleFragments.contains(tag)
+
+        internal fun isPersonFragment(tag: String): Boolean = personFragments.contains(tag)
+
         companion object {
             val EMPTY = Context()
 
@@ -60,18 +69,19 @@ object TagClassifier {
         context: Context = Context.EMPTY,
         overrides: Map<String, TasteCategory> = emptyMap(),
     ): TasteCategory {
-        val t = clean(rawTag)
+        val f = factsOf(rawTag)
+        val t = f.cleaned
         if (t.length < MIN_LEN) return TasteCategory.NOISE
 
         // 2-a. self-title 泄漏：标签与作品标题变体相同 → 噪声（如《未来日记》条目里的「未来日记」标签）。
         if (t in context.titleVariants) return TasteCategory.NOISE
-        if (isNameFragment(t, context.titleVariants)) return TasteCategory.NOISE
+        if (context.isTitleFragment(t)) return TasteCategory.NOISE
 
         // 1. 规则层：时间标签。
-        if (TIME_REGEX.matches(t)) return TasteCategory.TIME
+        if (f.time) return TasteCategory.TIME
 
         // 1. 规则层：改编来源（正则）。
-        if (SOURCE_REGEX.containsMatchIn(t)) return TasteCategory.SOURCE
+        if (f.source) return TasteCategory.SOURCE
 
         // 2-b. 交叉验证：命中真实角色 / CV / staff 名。
         if (t in context.characterNames) return TasteCategory.CHARACTER
@@ -79,12 +89,10 @@ object TagClassifier {
         if (t in context.staffNames) return TasteCategory.STAFF
         if (t in context.sourceNames || t in KNOWN_SOURCE_NAMES) return TasteCategory.SOURCE
         // 标题、人名的罗马音碎片不是语义题材；例如 Steins / Gate 不能进入 TOPIC。
-        if (isNameFragment(t, context.staffNames + context.characterNames + context.cvNames + context.sourceNames)) {
-            return TasteCategory.NOISE
-        }
+        if (context.isPersonFragment(t)) return TasteCategory.NOISE
 
         // 1. 规则层 + 2-c. 交叉验证：制作公司 / 厂牌。
-        if (isStudioTag(t)) {
+        if (f.studio) {
             // 社区联想厂牌但真实 staff 不含该厂牌 → 噪声（如「京阿尼」联想标签，实际并非京阿尼制作）。
             return if (context.staffNames.isEmpty() || studioMatchesStaff(t, context.staffNames)) {
                 TasteCategory.SOURCE
@@ -94,16 +102,50 @@ object TagClassifier {
         }
 
         // 3. 字典层（越具体越靠前：梗 > XP > 情节装置 > 题材）。
-        if (t in MEME_TAGS) return TasteCategory.MEME
-        if (t in XP_TAGS) return TasteCategory.XP
-        if (t in DEVICE_TAGS) return TasteCategory.DEVICE
-        if (t in TasteTagTaxonomy.GENRE_TAGS) return TasteCategory.TOPIC
+        f.dictionary?.let { return it }
 
         // 其余非内容元数据（媒介格式/放送状态/地区等）→ 噪声。
-        if (TasteTagTaxonomy.isMeta(rawTag)) return TasteCategory.NOISE
+        if (f.meta) return TasteCategory.NOISE
         // 对「其余视为题材」兜底的未知标签，若 AI 升维缓存命中则用更精确维度；未命中仍归题材（与原行为一致）。
         overrides[t]?.let { return it }
         return TasteCategory.TOPIC
+    }
+
+    /**
+     * 一个标签不看作品上下文就能定的那些判断（清洗、时间 / 来源正则、厂牌、字典、元数据）。标签反复出现在成千上万部作品里，
+     * 这些结果按原始标签缓存起来，[classify] 只剩查表和上下文比对，结果和逐次计算完全一样。
+     */
+    private class TagFacts(
+        val cleaned: String,
+        val time: Boolean,
+        val source: Boolean,
+        val studio: Boolean,
+        val dictionary: TasteCategory?,
+        val meta: Boolean,
+    )
+
+    private val factsCache = java.util.concurrent.ConcurrentHashMap<String, TagFacts>()
+
+    private fun factsOf(rawTag: String): TagFacts {
+        factsCache[rawTag]?.let { return it }
+        val t = clean(rawTag)
+        val facts = TagFacts(
+            cleaned = t,
+            time = TIME_REGEX.matches(t),
+            source = SOURCE_REGEX.containsMatchIn(t),
+            studio = isStudioTag(t),
+            dictionary = when {
+                t in MEME_TAGS -> TasteCategory.MEME
+                t in XP_TAGS -> TasteCategory.XP
+                t in DEVICE_TAGS -> TasteCategory.DEVICE
+                t in TasteTagTaxonomy.GENRE_TAGS -> TasteCategory.TOPIC
+                else -> null
+            },
+            meta = TasteTagTaxonomy.isMeta(rawTag),
+        )
+        if (factsCache.size >= CACHE_LIMIT) factsCache.clear()
+        factsCache[rawTag] = facts
+        return facts
     }
 
     /**
@@ -112,27 +154,61 @@ object TagClassifier {
      * 补充升维的候选；其余标签本地已能精确分类，无需（也不应）交给 AI。判定顺序与 [classify] 保持一致。
      */
     fun isUnknownTopicFallback(rawTag: String, context: Context = Context.EMPTY): Boolean {
-        val t = clean(rawTag)
+        val f = factsOf(rawTag)
+        val t = f.cleaned
         if (t.length < MIN_LEN) return false
         if (t in context.titleVariants) return false
-        if (isNameFragment(t, context.titleVariants)) return false
-        if (TIME_REGEX.matches(t)) return false
-        if (SOURCE_REGEX.containsMatchIn(t)) return false
-        val contextualNames =
-            context.characterNames + context.cvNames + context.staffNames + context.sourceNames
-        if (t in contextualNames) return false
+        if (context.isTitleFragment(t)) return false
+        if (f.time || f.source) return false
+        if (t in context.contextualNames) return false
         if (t in KNOWN_SOURCE_NAMES) return false
-        if (isNameFragment(t, contextualNames)) return false
-        if (isStudioTag(t)) return false
-        if (t in MEME_TAGS || t in XP_TAGS || t in DEVICE_TAGS) return false
-        if (t in TasteTagTaxonomy.GENRE_TAGS) return false
-        if (TasteTagTaxonomy.isMeta(rawTag)) return false
+        if (context.isPersonFragment(t)) return false
+        if (f.studio) return false
+        if (f.dictionary != null) return false
+        if (f.meta) return false
         return true
     }
 
-    /** 标签清洗：下划线/连字符转空格、折叠空白、trim、小写（与 [TasteTagTaxonomy] 口径一致）。 */
-    fun clean(raw: String): String =
-        raw.replace('_', ' ').replace('-', ' ').trim().replace(Regex("\\s+"), " ").lowercase()
+    /** 标签清洗：下划线/连字符转空格、折叠空白、trim、小写（与 [TasteTagTaxonomy] 口径一致）。结果按原文缓存。 */
+    fun clean(raw: String): String {
+        cleanCache[raw]?.let { return it }
+        val cleaned = raw.replace('_', ' ').replace('-', ' ').trim().replace(WHITESPACE, " ").lowercase()
+        if (cleanCache.size >= CACHE_LIMIT) cleanCache.clear()
+        cleanCache[raw] = cleaned
+        return cleaned
+    }
+
+    private val cleanCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val WHITESPACE = Regex("\\s+")
+
+    /** 缓存条目上限：超过就整张清空（标签和人名的种类有限，正常用不到这么多）。 */
+    private const val CACHE_LIMIT = 50_000
+
+    /**
+     * 一组名字（标题变体或人名）切好的词，判断「标签是不是其中某个名字的一个词」：和 [isNameFragment] 结果相同，
+     * 只是名字只切一次。
+     */
+    private class NameFragments(names: Collection<String>) {
+        private val nameSet: Set<String> = names.mapTo(HashSet()) { clean(it) }
+
+        /** 词 → 含这个词的不同名字有几个。 */
+        private val tokenCounts: Map<String, Int> = HashMap<String, Int>().also { counts ->
+            for (name in nameSet) {
+                tokensOf(name).forEach { token -> counts[token] = (counts[token] ?: 0) + 1 }
+            }
+        }
+
+        fun contains(rawTag: String): Boolean {
+            val tag = clean(rawTag)
+            if (tag.length < MIN_NAME_FRAGMENT_LEN || !tag.any(Char::isLetter)) return false
+            // 和标签完全相同的那个名字不算（[isNameFragment] 里 `filter { it != tag }`）。
+            val self = if (tag in nameSet && tag in tokensOf(tag)) 1 else 0
+            return (tokenCounts[tag] ?: 0) - self > 0
+        }
+
+        private fun tokensOf(name: String): Set<String> =
+            name.split(NAME_TOKEN_SEPARATOR).filterTo(HashSet()) { it.length >= MIN_NAME_FRAGMENT_LEN }
+    }
 
     /** True when a Latin-like tag is only one token taken from a title/person name. */
     fun isNameFragment(cleanedTag: String, names: Collection<String>): Boolean {

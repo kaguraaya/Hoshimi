@@ -17,6 +17,7 @@ import com.acgcompass.domain.taste.BuildTasteProfileUseCase
 import com.acgcompass.domain.taste.ComputeTasteMatchUseCase
 import com.acgcompass.domain.taste.DivergenceOptions
 import com.acgcompass.domain.taste.ImplicitSignal
+import com.acgcompass.domain.taste.LightScore
 import com.acgcompass.domain.taste.LocalRankedWork
 import com.acgcompass.domain.taste.LocalRanking
 import com.acgcompass.domain.taste.TasteAlgorithmConfigSource
@@ -78,6 +79,7 @@ class TasteEngine @Inject constructor(
     private val ratingDao: RatingDao,
     private val settingsDataStore: SettingsDataStore,
     private val algorithmConfig: TasteAlgorithmConfigSource,
+    private val lightScoreCache: LightScoreCache,
     private val dispatchers: DispatcherProvider,
     @com.acgcompass.core.common.ApplicationScope private val appScope: kotlinx.coroutines.CoroutineScope,
 ) {
@@ -94,6 +96,25 @@ class TasteEngine @Inject constructor(
     }.getOrDefault(emptyMap())
 
     private val profileState = MutableStateFlow<AdvancedTasteProfile?>(null)
+
+    /** 当前画像的输入指纹（[com.acgcompass.domain.taste.TasteInputsKey]）；没有画像或画像为空时为 null。 */
+    @Volatile
+    private var inputsKeyBase: String? = null
+
+    /**
+     * 当前画像「算出来的分数」的指纹：输入指纹 + 模型版本 + 匹配度分支 + 应用版本。相同就说明分数和上次一样，
+     * 为你排行、探索队列可以直接沿用存下来的结果。没有可用画像时为 null。
+     */
+    fun inputsKey(): String? {
+        val base = inputsKeyBase
+        val profile = profileState.value?.takeIf { it.isUsable }
+        return if (base == null || profile == null) {
+            null
+        } else {
+            "$base|${TasteModelVersion.ledger(profile) ?: TasteModelVersion.match(profile)}|" +
+                com.acgcompass.BuildConfig.VERSION_CODE
+        }
+    }
 
     /** 当前口味画像流（`null` = 尚未构建）。详情页 / 推荐页可观察以驱动刷新。 */
     fun observeProfile(): StateFlow<AdvancedTasteProfile?> = profileState.asStateFlow()
@@ -180,6 +201,7 @@ class TasteEngine @Inject constructor(
             val rated = userCollectionDao.getAll().filter { it.rating != null && it.sourceItemId.isNotBlank() }
             if (rated.isEmpty()) {
                 val empty = AdvancedTasteProfile(generatedAt = now)
+                inputsKeyBase = null
                 profileState.value = empty
                 return@withContext empty
             }
@@ -221,6 +243,7 @@ class TasteEngine @Inject constructor(
             // 在详情页拿不到显式评分锚（rating 查不到）→ 仍会塌到个位数。用完整评分表覆盖 ratedSubjectScores。
             val allRatedScores = rated.mapNotNull { c -> c.rating?.let { c.sourceItemId to it } }.toMap()
             val finalProfile = withMatchBranch(profile.withRatedScores(allRatedScores))
+            inputsKeyBase = com.acgcompass.domain.taste.TasteInputsKey.of(inputs)
             profileState.value = finalProfile
             startBacktest(inputs)
             if (networkBudget > 0) refreshProgressState.value = null
@@ -568,11 +591,9 @@ class TasteEngine @Inject constructor(
         }.getOrDefault(emptyList())
             .filter { it.hasSignal && it.isAnimeForTaste }
         val overrides = loadTagOverrides()
-        val scored = parallelMap(pool) { f ->
-            val match =
-                computeMatch(f, profile, rated[f.subjectId], overrides, withNeighbors = false, withReasons = false)
-            f to match.score
-        }.sortedByDescending { it.second }
+        val light = lightScores(profile, pool.associateBy { it.subjectId }, overrides)
+        val scored = pool.mapNotNull { f -> light[f.subjectId]?.let { f to it.score } }
+            .sortedByDescending { it.second }
         val (ratedScored, unratedScored) = scored.partition { it.first.subjectId in rated }
         val top = unratedScored.take(detailedUnrated) + ratedScored.take(detailedRated)
         val entries = parallelMap(top) { (f, _) ->
@@ -580,6 +601,36 @@ class TasteEngine @Inject constructor(
             LocalRankedWork(f, computeMatch(f, profile, mine, overrides, withNeighbors = false), mine)
         }.sortedByDescending { it.match.score }
         LocalRanking(entries, poolSize = pool.size, unratedCount = unratedScored.size)
+    }
+
+    /**
+     * 一批作品的轻量分（[LightScore]，不带推荐理由，分数和完整打分相同）：先查缓存（画像输入没变时重启应用也能命中），
+     * 缺的才算。为你排行、探索队列、今晚看什么的粗排共用。画像不可用时返回空表。
+     */
+    suspend fun lightScores(features: Map<String, WorkFeature>): Map<String, LightScore> = withContext(dispatchers.io) {
+        if (features.isEmpty()) return@withContext emptyMap()
+        val profile = profileState.value ?: rebuildFromCache()
+        if (profile == null || !profile.isUsable) return@withContext emptyMap()
+        lightScores(profile, features, loadTagOverrides())
+    }
+
+    private suspend fun lightScores(
+        profile: AdvancedTasteProfile,
+        features: Map<String, WorkFeature>,
+        overrides: Map<String, TasteCategory>,
+    ): Map<String, LightScore> {
+        // AI 标签分类会在画像重建之间变化，也影响分数：一起放进缓存键。
+        val overridesKey = overrides.entries.sortedBy { it.key }.joinToString(",") { "${it.key}=${it.value.key}" }
+        val key = inputsKey()?.takeIf { profileState.value === profile }?.let { "$it|${overridesKey.hashCode()}" }
+        val cached = key?.let { lightScoreCache.lookup(it, features) }.orEmpty()
+        val todo = features.filterKeys { it !in cached }
+        if (todo.isEmpty()) return cached
+        val computed = parallelMap(todo.values.toList()) { f ->
+            val match = computeMatch(f, profile, null, overrides, withNeighbors = false, withReasons = false)
+            f.subjectId to (f to LightScore.of(match))
+        }.toMap()
+        if (key != null) lightScoreCache.store(key, computed)
+        return cached + computed.mapValues { it.value.second }
     }
 
     /** 分块并行映射（纯计算，结果顺序与输入一致）。 */
